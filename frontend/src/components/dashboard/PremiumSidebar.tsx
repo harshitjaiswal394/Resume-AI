@@ -1,13 +1,13 @@
 "use client";
 
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Briefcase, 
-  Sparkles, 
-  Settings, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  FileText,
+  Briefcase,
+  Sparkles,
+  Settings,
+  LogOut,
   Trash2,
   Zap
 } from 'lucide-react';
@@ -47,37 +47,37 @@ export function PremiumSidebar({
 
       {/* Nav */}
       <nav className="flex-1 px-4 space-y-2">
-        <NavItem 
-          icon={<LayoutDashboard />} 
-          label="Dashboard" 
-          active={activeTab === 'dashboard'} 
-          onClick={() => setActiveTab('dashboard')} 
+        <NavItem
+          icon={<LayoutDashboard />}
+          label="Dashboard"
+          active={activeTab === 'dashboard'}
+          onClick={() => setActiveTab('dashboard')}
         />
-        <NavItem 
-          icon={<FileText />} 
-          label="My Resume" 
-          active={activeTab === 'resume'} 
-          onClick={() => setActiveTab('resume')} 
+        <NavItem
+          icon={<FileText />}
+          label="My Resume"
+          active={activeTab === 'resume'}
+          onClick={() => setActiveTab('resume')}
         />
-        <NavItem 
-          icon={<Briefcase />} 
-          label="Job Matches" 
-          active={activeTab === 'jobs'} 
-          onClick={() => setActiveTab('jobs')} 
+        <NavItem
+          icon={<Briefcase />}
+          label="Job Matches"
+          active={activeTab === 'jobs'}
+          onClick={() => setActiveTab('jobs')}
           count={jobCount}
         />
-        <NavItem 
-          icon={<Sparkles />} 
-          label="AI Suggestions" 
-          active={activeTab === 'ai'} 
-          onClick={() => setActiveTab('ai')} 
+        <NavItem
+          icon={<Sparkles />}
+          label="AI Suggestions"
+          active={activeTab === 'ai'}
+          onClick={() => setActiveTab('ai')}
           count={suggestionCount}
         />
-        <NavItem 
-          icon={<Settings />} 
-          label="Settings" 
-          active={activeTab === 'settings'} 
-          onClick={() => setActiveTab('settings')} 
+        <NavItem
+          icon={<Settings />}
+          label="Settings"
+          active={activeTab === 'settings'}
+          onClick={() => setActiveTab('settings')}
         />
       </nav>
 
@@ -92,27 +92,27 @@ export function PremiumSidebar({
           <p className="text-[11px] text-white/80 mb-4 font-medium leading-relaxed">
             Unlimited analyses, AI rewrites, cover letters
           </p>
-          <button 
+          <button
             onClick={onPlanUpgrade}
             className="w-full bg-white text-indigo-600 h-9 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors shadow-sm"
           >
             Start Pro — ₹299/mo
           </button>
         </div>
-        
+
         <div className="pt-2">
-          <button 
+          <button
             onClick={onDeleteResume}
             className="flex items-center gap-3 px-4 py-2.5 w-full text-sm font-semibold text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
           >
-            <Trash2 className="h-4 w-4" /> 
+            <Trash2 className="h-4 w-4" />
             <span>Delete Resume</span>
           </button>
-          <button 
+          <button
             onClick={onLogout}
             className="flex items-center gap-3 px-4 py-2.5 w-full text-sm font-semibold text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
           >
-            <LogOut className="h-4 w-4" /> 
+            <LogOut className="h-4 w-4" />
             <span>Sign Out</span>
           </button>
         </div>
@@ -121,16 +121,16 @@ export function PremiumSidebar({
   );
 }
 
-function NavItem({ 
-  icon, 
-  label, 
-  active, 
-  onClick, 
-  count 
-}: { 
-  icon: React.ReactNode, 
-  label: string, 
-  active: boolean, 
+function NavItem({
+  icon,
+  label,
+  active,
+  onClick,
+  count
+}: {
+  icon: React.ReactNode,
+  label: string,
+  active: boolean,
   onClick: () => void,
   count?: number
 }) {
@@ -139,8 +139,8 @@ function NavItem({
       onClick={onClick}
       className={`
         flex items-center justify-between px-4 py-3 w-full rounded-2xl transition-all duration-200
-        ${active 
-          ? 'bg-indigo-50/50 text-indigo-600 shadow-sm' 
+        ${active
+          ? 'bg-indigo-50/50 text-indigo-600 shadow-sm'
           : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
       `}
     >

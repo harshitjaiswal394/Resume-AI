@@ -11,42 +11,62 @@ import asyncio
 resume_router = APIRouter()
 logger = logging.getLogger("resumatch-api.endpoints")
 
+from app.db import persist_pipeline_results
+
 @resume_router.post("/tailor")
 async def tailor_resume(payload: Dict[str, Any] = Body(...)):
     """
     Re-analyzes and re-matches based on user personalization (role, exp, location)
     """
     resume_id = payload.get("resumeId")
-    preferences = payload.get("preferences") # { targetRole, experienceLevel, location }
+    user_id = payload.get("userId") or "guest"
+    preferences = payload.get("preferences", {})
     parsed_data = payload.get("parsedData")
     
     if not preferences or not parsed_data:
         raise HTTPException(status_code=400, detail="Preferences and parsed data are required")
         
-    logger.info(f"Tailoring results for Role: {preferences.get('targetRole')}, Exp: {preferences.get('experienceLevel')}, Locations: {preferences.get('location')}")
+    logger.info(f"Tailoring results for Resume: {resume_id}, Role: {preferences.get('targetRole')}")
     
     try:
-        # 1. Re-analyze with specific role and experience in mind
-        # We can pass these as context to the analysis
+        # 1. Re-analyze with specific role in mind
         analysis = await ai_service.analyze_resume(parsed_data)
         
-        # 2. Re-match with specific target role and other metadata
-        roles = [preferences.get("targetRole")]
-        matches = await ai_service.generate_job_matches(parsed_data, roles)
+        # 2. Re-match with specific filters from Knowledge Base
+        filters = {
+            "domain": preferences.get("targetRole"),
+            "experience_level": preferences.get("experienceLevel"),
+            "location": preferences.get("location"),
+            "work_mode": preferences.get("workMode"),
+            "days_old": preferences.get("daysOld", 25)
+        }
         
-        # 3. Enrich with location-aware links
-        # preferences.get('location') is now expected to be a list
-        locations = preferences.get("location", ["India"])
-        primary_loc = locations[0] if isinstance(locations, list) and locations else "India"
+        # Determine limit based on plan status
+        search_limit = 50 # Default to 50 for Pro or when checking against DB
+        if user_id != "guest":
+            from app.db import engine
+            with engine.connect() as conn:
+                from sqlalchemy import text
+                user_plan = conn.execute(text("SELECT plan FROM users WHERE id = :uid"), {"uid": user_id}).scalar()
+                if user_plan != 'pro':
+                    search_limit = 5 
+                else:
+                    search_limit = 50 # Fetch 50 for pro users as requested
+        
+        roles = [preferences.get("targetRole", "Software Engineer")]
+        matches = await ai_service.generate_job_matches(parsed_data, roles, filters=filters)
+        
+        # 3. New: Consolidate persistence in backend
+        if resume_id and resume_id != "guest":
+            data_to_persist = {
+                "parsed_data": parsed_data,
+                "analysis": analysis,
+                "matches": matches,
+                "raw_text": "" # No need to re-save text during tailoring
+            }
+            persist_pipeline_results(user_id, resume_id, data_to_persist)
+            logger.info(f"Successfully persisted tailored results for {resume_id}")
 
-        for match in matches:
-            if isinstance(match, dict):
-                match["apply_links"] = job_portal_service.generate_links(
-                    match.get("role", preferences.get("targetRole")), 
-                    parsed_data.get("skills", []),
-                    primary_loc
-                )
-        
         return {
             "success": True,
             "data": {
@@ -58,45 +78,37 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...)):
         logger.error(f"Tailoring failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-async def process_resume_stream_generator(content: bytes, filename: str):
+async def process_resume_stream_generator(content: bytes, filename: str, user_id: str, resume_id: str):
     """
-    Yields progress events: extracting, parsing, analyzing, matching, done
+    Yields progress events and persists the final result.
     """
     logger.info(f"Starting stream processing for file: {filename}")
     try:
         # 1. Extraction
-        logger.info("Step 1/4: Extracting text")
         yield f"data: {json.dumps({'step': 'parsing', 'status': 'loading', 'label': 'Parsing resume structure'})}\n\n"
         text = resume_service.extract_text(content, filename)
-        logger.info("Step 1/4: Done")
         yield f"data: {json.dumps({'step': 'parsing', 'status': 'done', 'label': 'Parsing resume structure'})}\n\n"
 
         # 2. Parsing (Flash)
-        logger.info("Step 2/4: Parsing with AI")
         yield f"data: {json.dumps({'step': 'ats', 'status': 'loading', 'label': 'Checking ATS compatibility'})}\n\n"
         parsed_data = await ai_service.parse_resume(text)
-        logger.info("Step 2/4: Done")
         yield f"data: {json.dumps({'step': 'ats', 'status': 'done', 'label': 'Checking ATS compatibility'})}\n\n"
 
         # 3. Analysis (Flash)
-        logger.info("Step 3/4: Analyzing skills & suggestions")
         yield f"data: {json.dumps({'step': 'skills', 'status': 'loading', 'label': 'Extracting skills & keywords'})}\n\n"
         analysis = await ai_service.analyze_resume(parsed_data)
         yield f"data: {json.dumps({'step': 'skills', 'status': 'done', 'label': 'Extracting skills & keywords'})}\n\n"
         
         yield f"data: {json.dumps({'step': 'suggestions', 'status': 'loading', 'label': 'Generating improvement suggestions'})}\n\n"
-        await asyncio.sleep(0.5) # Slight delay for visual progression
-        logger.info("Step 3/4: Done")
+        await asyncio.sleep(0.5) 
         yield f"data: {json.dumps({'step': 'suggestions', 'status': 'done', 'label': 'Generating improvement suggestions'})}\n\n"
 
         # 4. Matching (Flash)
-        logger.info("Step 4/4: Generating job matches")
         yield f"data: {json.dumps({'step': 'matching', 'status': 'loading', 'label': 'Matching with 500+ job roles'})}\n\n"
         roles = analysis.get("suggestedRoles", ["Software Engineer"])
         matches = await ai_service.generate_job_matches(parsed_data, roles)
         
         # 5. Enrichment
-        logger.info("Step 4/4: Enriching links")
         for match in matches:
             if isinstance(match, dict):
                 match["apply_links"] = job_portal_service.generate_links(
@@ -104,11 +116,20 @@ async def process_resume_stream_generator(content: bytes, filename: str):
                     parsed_data.get("skills", []),
                     "India"
                 )
-        logger.info("Step 4/4: Done")
         yield f"data: {json.dumps({'step': 'matching', 'status': 'done', 'label': 'Matching with 500+ job roles'})}\n\n"
 
-        # 6. Final Result
-        logger.info("Pipeline complete. Sending final payload.")
+        # 6. New: Persistence
+        if resume_id and resume_id != "guest":
+            final_data_struct = {
+                "parsed_data": parsed_data,
+                "analysis": analysis,
+                "matches": matches,
+                "raw_text": text
+            }
+            persist_pipeline_results(user_id, resume_id, final_data_struct)
+            logger.info(f"Persisted stream results for {resume_id}")
+
+        # 7. Final Result
         final_data = {
             "step": "final",
             "success": True,
@@ -122,52 +143,58 @@ async def process_resume_stream_generator(content: bytes, filename: str):
         yield f"data: {json.dumps(final_data)}\n\n"
 
     except Exception as e:
-        logging.error(f"Stream error: {str(e)}")
+        logger.error(f"Stream error: {str(e)}")
         yield f"data: {json.dumps({'success': False, 'error': str(e)})}\n\n"
 
 @resume_router.post("/process-stream")
-async def process_resume_stream(file: UploadFile = File(...)):
+async def process_resume_stream(
+    file: UploadFile = File(...),
+    user_id: str = "guest",
+    resume_id: str = "guest"
+):
     content = await file.read()
     return StreamingResponse(
-        process_resume_stream_generator(content, file.filename),
+        process_resume_stream_generator(content, file.filename, user_id, resume_id),
         media_type="text/event-stream"
     )
 
 @resume_router.post("/process")
-async def process_resume(file: UploadFile = File(...)):
+async def process_resume(
+    file: UploadFile = File(...),
+    user_id: str = "guest",
+    resume_id: str = "guest"
+):
     """
-    Production-grade pipeline: Extract -> Parse -> Match -> Enrich
+    Production-grade pipeline: Extract -> Parse -> Match -> Save
     """
     try:
         content = await file.read()
-        
-        # 1. Robust Extraction
         text = resume_service.extract_text(content, file.filename)
-        
-        # 2. Gemini-Powered Parsing (Cost-Optimized Flash)
         parsed_data = await ai_service.parse_resume(text)
-        
-        # 3. Gemini-Powered Analysis (Flash)
         analysis = await ai_service.analyze_resume(parsed_data)
         
-        # 4. Job Match Generation (Precision-Focused Pro)
-        # We must ensure 'analysis' is a dict before calling .get()
         if not isinstance(analysis, dict):
-            logging.warn(f"Analysis was not a dict, got {type(analysis)}. Attempting recovery.")
             analysis = {"score": 0, "suggestedRoles": ["Software Engineer"], "insights": {}}
             
         roles = analysis.get("suggestedRoles", ["Software Engineer"])
         matches = await ai_service.generate_job_matches(parsed_data, roles)
         
-        # 5. Enrich matches with Indian job portal links
-        if isinstance(matches, list):
-            for match in matches:
-                if isinstance(match, dict):
-                    match["apply_links"] = job_portal_service.generate_links(
-                        match.get("role", "Software Engineer"), 
-                        parsed_data.get("skills", []) if isinstance(parsed_data, dict) else [],
-                        "India"
-                    )
+        for match in matches:
+            if isinstance(match, dict):
+                match["apply_links"] = job_portal_service.generate_links(
+                    match.get("role", "Software Engineer"), 
+                    parsed_data.get("skills", []) if isinstance(parsed_data, dict) else [],
+                    "India"
+                )
+
+        # Persistence
+        if resume_id and resume_id != "guest":
+            persist_pipeline_results(user_id, resume_id, {
+                "parsed_data": parsed_data,
+                "analysis": analysis,
+                "matches": matches,
+                "raw_text": text
+            })
 
         return {
             "success": True,
@@ -180,58 +207,5 @@ async def process_resume(file: UploadFile = File(...)):
             }
         }
     except Exception as e:
-        logging.error(f"Pipeline error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@resume_router.post("/parse")
-async def parse_resume(payload: Dict[str, Any] = Body(...)):
-    text = payload.get("text")
-    if not text:
-        raise HTTPException(status_code=400, detail="Text is required")
-    try:
-        return await ai_service.parse_resume(text)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@resume_router.post("/analyze")
-async def analyze_resume(payload: Dict[str, Any] = Body(...)):
-    resume_data = payload.get("resume")
-    if not resume_data:
-        raise HTTPException(status_code=400, detail="Resume data is required")
-    try:
-        return await ai_service.analyze_resume(resume_data)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@resume_router.post("/matches")
-async def generate_matches(payload: Dict[str, Any] = Body(...)):
-    resume_data = payload.get("resume")
-    roles = payload.get("roles", [])
-    if not resume_data:
-        raise HTTPException(status_code=400, detail="Resume data is required")
-    try:
-        return await ai_service.generate_job_matches(resume_data, roles)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@resume_router.post("/cover-letter")
-async def cover_letter(payload: Dict[str, Any] = Body(...)):
-    resume_data = payload.get("resume")
-    job_role = payload.get("jobRole")
-    if not resume_data or not job_role:
-        raise HTTPException(status_code=400, detail="Resume data and job role are required")
-    try:
-        return {"content": await ai_service.generate_cover_letter(resume_data, job_role)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@resume_router.post("/rewrite")
-async def rewrite_bullet(payload: Dict[str, Any] = Body(...)):
-    bullet = payload.get("bullet")
-    role = payload.get("role")
-    if not bullet or not role:
-        raise HTTPException(status_code=400, detail="Bullet and role are required")
-    try:
-        return {"content": await ai_service.rewrite_bullet_point(bullet, role)}
-    except Exception as e:
+        logger.error(f"Pipeline error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

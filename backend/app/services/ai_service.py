@@ -52,37 +52,63 @@ class AIService:
             logger.error(f"Analysis failed: {str(e)}")
             return {"score": 75, "insights": {"strengths": ["Parsed via Nvidia NIM"], "weaknesses": []}, "suggestedRoles": ["Software Engineer"]}
 
-    async def generate_job_matches(self, resume_data: Dict[str, Any], roles: List[str]) -> List[Dict[str, Any]]:
+    async def generate_job_matches(self, resume_data: Dict[str, Any], roles: List[str], filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
-        FULL NVIDIA NIM PIPELINE:
-        1. Embedding (Embed-1B)
-        2. Vector Search (Top 20)
-        3. Reasoning (Super-120B) for Top 5
-        4. Re-ranking (Rerank-1B) for Final Order
+        KNOWLEDGE BASE PIPELINE:
+        1. Multi-modal Embedding (Resume + Context)
+        2. Vector DB Filtered Search (Top 50)
+        3. Native Skillset Gap Analysis (Fastest)
+        4. Match Percentage Alignment
         """
-        logger.info(f"Starting NVIDIA NIM matching pipeline for roles: {roles}")
+        logger.info(f"Starting Knowledge Base matching for roles: {roles}")
         
-        # 1. Generate Profile Embedding
-        profile_text = f"{' '.join(roles)} {' '.join(resume_data.get('skills', []))} {resume_data.get('summary', '')}"
+        # 1. Generate Weighted Profile Embedding
+        # Limit to top 3 roles and top 10 skills for faster embedding
+        top_roles = roles[:3]
+        top_skills = resume_data.get('skills', [])[:10]
+        profile_text = f"{' '.join(top_roles)} {' '.join(top_skills)}"
         embedding = await nvidia_service.generate_embedding(profile_text)
         
-        # 2. Vector Similarity Search from DB (Top 20 candidates)
-        candidates = execute_vector_search(embedding, limit=20)
+        # 2. Vector Similarity Search from Knowledge Base (Top 50)
+        candidates = execute_vector_search(embedding, limit=50, filters=filters)
+        
         if not candidates:
-            logger.warning("No job candidates found in database.")
+            logger.warning("No job candidates found in Knowledge Base.")
             return []
 
-        # 3. Reasoning for Top 5 (Deep Analysis)
-        top_5_with_reasoning = await nvidia_service.get_match_reasoning(resume_data, candidates[:5])
+        # 3. Native Skill-Gap Analysis & Scoring
+        # We calculate this in Python to provide instant results for 50 jobs
+        user_skills = set([s.lower() for s in resume_data.get('skills', [])])
         
-        # 4. Re-rank results (Combine reasoning results with rest of candidates)
-        remaining_candidates = candidates[5:]
-        all_candidates = top_5_with_reasoning + remaining_candidates
-        
-        # Perform final re-ranking against the original query
-        final_results = await nvidia_service.rerank_jobs(profile_text, all_candidates)
-        
-        return final_results
+        processed_matches = []
+        for job in candidates:
+            job_skills = set([s.lower() for s in job.get('skills', [])])
+            
+            # Intersection for matching
+            matching = list(job_skills.intersection(user_skills))
+            missing = list(job_skills.difference(user_skills))
+            
+            # Calculate a blended match score (60% vector similarity, 40% keyword match)
+            keyword_score = (len(matching) / len(job_skills)) * 100 if job_skills else 0
+            
+            # Defensive check for similarity type (SQL similarity vs potential sequence bug)
+            raw_similarity = job.get('similarity', 0.5)
+            if isinstance(raw_similarity, (list, tuple)):
+                raw_similarity = raw_similarity[0] if raw_similarity else 0.5
+            
+            vector_score = float(raw_similarity) * 100
+            
+            final_score = int((vector_score * 0.7) + (keyword_score * 0.3))
+            
+            job.update({
+                "match_score": min(final_score, 100),
+                "matching_skills": matching[:10],
+                "missing_skills": missing[:10],
+                "reasoning": f"Strong match for {job['title']} based on your background in {', '.join(matching[:2])}." if matching else f"Potential match for {job['title']} in {job['location']}."
+            })
+            processed_matches.append(job)
+            
+        return processed_matches
 
     async def generate_cover_letter(self, resume_data: Dict[str, Any], job_role: str) -> str:
         """Uses Nemotron-3-Super for high-quality professional content."""

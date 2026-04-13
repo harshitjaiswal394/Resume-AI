@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { 
-  AlertTriangle, 
-  Sparkles, 
-  CheckCircle2, 
+import {
+  AlertTriangle,
+  Sparkles,
+  CheckCircle2,
   AlertCircle
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
@@ -31,7 +31,7 @@ export function ScoreAnalytics({
       {/* 1. Score Gauge Card */}
       <div className="bg-white rounded-[32px] p-10 flex flex-col items-center justify-center text-center shadow-sm border border-slate-50">
         <span className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">Resume Score</span>
-        
+
         <div className="relative h-48 w-48 flex items-center justify-center">
           <svg className="h-full w-full transform -rotate-90" viewBox="0 0 100 100">
             <circle
@@ -76,7 +76,7 @@ export function ScoreAnalytics({
 
       {/* 2. Detailed Metrics Section */}
       <div className="lg:col-span-2 space-y-6">
-        <MetricRow 
+        <MetricRow
           icon={<AlertTriangle className="h-5 w-5 text-amber-500" />}
           title="ATS Compatibility"
           score={atsScore}
@@ -84,8 +84,8 @@ export function ScoreAnalytics({
           feedback={scoreBreakdown?.weaknesses?.[0] || "Missing standard section headers. Use 'Work Experience', 'Education', 'Skills'."}
           bgColor="bg-amber-50"
         />
-        
-        <MetricRow 
+
+        <MetricRow
           icon={<Sparkles className="h-5 w-5 text-indigo-500" />}
           title="Keyword Optimization"
           score={keywordScore}
@@ -94,7 +94,7 @@ export function ScoreAnalytics({
           bgColor="bg-indigo-50"
         />
 
-        <MetricRow 
+        <MetricRow
           icon={<CheckCircle2 className="h-5 w-5 text-emerald-500" />}
           title="Readability"
           score={readabilityScore}
@@ -119,7 +119,7 @@ function MetricRow({ icon, title, score, color, feedback, bgColor }: any) {
       </div>
 
       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-        <motion.div 
+        <motion.div
           className={`h-full ${color}`}
           initial={{ width: 0 }}
           animate={{ width: `${score}%` }}

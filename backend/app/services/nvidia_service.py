@@ -252,23 +252,43 @@ Respond with ONLY the JSON object:"""
 
     async def generate_embedding(self, text: str) -> List[float]:
         """
-        Generate a 1024-dimension embedding using llama-nemotron-embed-1b-v2.
+        Generate embedding using llama-nemotron-embed-1b-v2.
+        Uses async httpx with 30s timeout to avoid 504 gateway hangs.
         """
         logger.info("Generating embedding using llama-nemotron-embed-1b-v2")
+        
+        # Truncate to 512 chars for speed — embeddings don't need full text
+        truncated = text[:512]
+        
         try:
-            client = OpenAI(
-                base_url="https://integrate.api.nvidia.com/v1",
-                api_key=self.api_key_embedding
-            )
-            response = client.embeddings.create(
-                input=[text[:2000]], # Embeddings usually have a limit
-                model=os.getenv("NIM_MODEL_EMBEDDING", "nvidia/llama-nemotron-embed-1b-v2"),
-                extra_body={"input_type": "query", "truncate": "NONE"}
-            )
-            return response.data[0].embedding
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://integrate.api.nvidia.com/v1/embeddings",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key_embedding}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "input": [truncated],
+                        "model": os.getenv("NIM_MODEL_EMBEDDING", "nvidia/llama-nemotron-embed-1b-v2"),
+                        "input_type": "query",
+                        "truncate": "NONE"
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data["data"][0]["embedding"]
+                else:
+                    logger.error(f"Embedding API returned {response.status_code}: {response.text[:200]}")
+                    return [0.0] * 2048
+                    
+        except httpx.TimeoutException:
+            logger.warning("Embedding request timed out after 30s — using zero vector fallback")
+            return [0.0] * 2048
         except Exception as e:
             logger.error(f"Embedding generation failed: {str(e)}")
-            return [0.0] * 2048 # Match DB dimension (2048)
+            return [0.0] * 2048
 
     async def rerank_jobs(self, query: str, jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

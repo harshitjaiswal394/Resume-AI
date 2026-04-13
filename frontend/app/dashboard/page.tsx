@@ -9,19 +9,19 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { 
-  Upload, 
-  FileText, 
-  Search, 
-  AlertCircle, 
-  CheckCircle2, 
-  Loader2, 
-  ExternalLink, 
-  LayoutDashboard, 
-  Briefcase, 
-  Sparkles, 
-  Settings, 
-  LogOut, 
+import {
+  Upload,
+  FileText,
+  Search,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  ExternalLink,
+  LayoutDashboard,
+  Briefcase,
+  Sparkles,
+  Settings,
+  LogOut,
   Trash2,
   ChevronRight,
   IndianRupee,
@@ -87,6 +87,31 @@ export default function Dashboard() {
     { id: 'suggestions', label: 'Generating improvement suggestions', status: 'pending' },
     { id: 'matching', label: 'Matching with 500+ job roles', status: 'pending' },
   ]);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Elapsed time counter during analysis
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isAnalyzing) {
+      setElapsedSeconds(0);
+      timer = setInterval(() => setElapsedSeconds(prev => prev + 1), 1000);
+    }
+    return () => { if (timer) clearInterval(timer); };
+  }, [isAnalyzing]);
+
+  const formatElapsed = (s: number) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
+  const getStatusMessage = () => {
+    if (elapsedSeconds < 15) return 'Starting AI analysis...';
+    if (elapsedSeconds < 45) return 'Parsing your resume with AI...';
+    if (elapsedSeconds < 90) return 'Analyzing skills & generating insights...';
+    if (elapsedSeconds < 150) return 'Matching with job database — this takes a moment...';
+    return 'Almost there — finalizing your results...';
+  };
 
   const updateStepStatus = (id: string, status: 'pending' | 'loading' | 'done') => {
     setAnalysisSteps(prev => prev.map(step => step.id === id ? { ...step, status } : step));
@@ -136,10 +161,10 @@ export default function Dashboard() {
 
   const handleTailor = async (newPrefs: any) => {
     if (!selectedResume) return;
-    
+
     setIsTailoring(true);
     setPreferences(newPrefs);
-    
+
     try {
       const response = await fetch('/api/resume/tailor', {
         method: 'POST',
@@ -150,7 +175,7 @@ export default function Dashboard() {
           parsedData: selectedResume.parsed_data || { skills: [], summary: "" }
         })
       });
-      
+
       const result = await response.json();
       if (result.success) {
         // Update the local state to reflect the tailored results
@@ -159,7 +184,7 @@ export default function Dashboard() {
           resume_score: result.data.analysis.score || result.data.analysis.matchScore,
           score_breakdown: result.data.analysis
         };
-        
+
         setSelectedResume(updatedResume);
         setJobMatches(result.data.matches);
         toast.success('Analysis tailored to your goals');
@@ -222,46 +247,65 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${backendUrl}/api/resume/process-stream`, {
+      const response = await fetch(`${backendUrl}/api/resume/process-stream?user_id=${user!.id}&resume_id=${resumeId}`, {
         method: 'POST',
         body: formData,
       });
+
 
       if (!response.ok) throw new Error('Backend processing failed');
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let done = false;
 
+      let buffer = '';
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
+
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const messages = chunk.split('\n\n');
-          for (const message of messages) {
-            if (message.startsWith('data: ')) {
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process full frames from the buffer
+          let frames = buffer.split('\n\n');
+
+          // Keep the last partial frame in the buffer
+          buffer = frames.pop() || '';
+
+          for (const frame of frames) {
+            if (frame.startsWith('data: ')) {
               try {
-                const event = JSON.parse(message.replace('data: ', ''));
+                const event = JSON.parse(frame.replace('data: ', ''));
+
                 if (event.step === 'final') {
-                  // Persistence
-                  const persistenceResult = await completeResumeAnalysis(user!.id, resumeId, event.data);
-                  if (!persistenceResult.success) throw new Error(persistenceResult.error);
-                  
-                  // Update UI with new data
-                  const { data: newResume } = await supabase.from('resumes').select('*').eq('id', resumeId).single();
-                  const { data: newMatches } = await supabase.from('job_matches').select('*').eq('resume_id', resumeId);
-                  
-                  setResumes(prev => [newResume, ...prev]);
-                  setSelectedResume(newResume);
-                  setJobMatches(newMatches || []);
+                  const resultData = event.data;
+
+                  // Update UI immediately with the data we just received
+                  setSelectedResume(prev => ({
+                    ...prev,
+                    status: 'complete',
+                    parsedData: resultData.parsed_data,
+                    resumeScore: resultData.analysis.score,
+                    scoreBreakdown: resultData.analysis.insights,
+                    rawText: resultData.raw_text
+                  }));
+
+                  setJobMatches(resultData.matches || []);
                   setAnalysisProgress(100);
                   toast.success('Analysis complete!');
-                  setTimeout(() => setIsAnalyzing(false), 800);
+
+                  // Hide analysis modal after a short delay
+                  setTimeout(() => {
+                    setIsAnalyzing(false);
+                    // Refresh the resumes list in the background
+                    supabase.from('resumes').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
+                      .then(({ data }) => { if (data) setResumes(data); });
+                  }, 800);
                 } else if (event.step) {
                   updateStepStatus(event.step, 'done');
                   const stepMap: any = { 'parsing': 20, 'ats': 40, 'skills': 60, 'suggestions': 80, 'matching': 95 };
                   if (stepMap[event.step]) setAnalysisProgress(stepMap[event.step]);
-                  
+
                   // Move next step to loading
                   const stepsSet = ['parsing', 'ats', 'skills', 'suggestions', 'matching'];
                   const currentIndex = stepsSet.indexOf(event.step);
@@ -269,11 +313,14 @@ export default function Dashboard() {
                     updateStepStatus(stepsSet[currentIndex + 1], 'loading');
                   }
                 }
-              } catch (e) { console.warn('SSE Chunk Error:', e); }
+              } catch (e) {
+                console.warn('Incomplete frame or parsing error:', e);
+              }
             }
           }
         }
       }
+
     } catch (err: any) {
       toast.error(err.message || 'Analysis failed');
       setIsAnalyzing(false);
@@ -295,12 +342,12 @@ export default function Dashboard() {
       .from('job_matches')
       .update({ is_saved: isSaved })
       .eq('id', jobId);
-      
+
     if (error) {
       toast.error('Failed to update job');
       return;
     }
-    
+
     setJobMatches(prev => prev.map(m => m.id === jobId ? { ...m, is_saved: isSaved } : m));
     toast.success(isSaved ? 'Job saved!' : 'Removed from saved jobs');
   };
@@ -314,8 +361,8 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
-      <PremiumSidebar 
-        activeTab={activeTab} 
+      <PremiumSidebar
+        activeTab={activeTab}
         setActiveTab={setActiveTab}
         jobCount={jobMatches.length}
         suggestionCount={5}
@@ -336,28 +383,28 @@ export default function Dashboard() {
               <Badge className="bg-amber-50 text-amber-600 border-amber-100 ml-2">Free Plan</Badge>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
-            <Button 
-                onClick={() => handleTailor(preferences)}
-                disabled={isTailoring}
-                variant="outline" 
-                className="h-11 px-6 rounded-xl border-slate-200 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
+            <Button
+              onClick={() => handleTailor(preferences)}
+              disabled={isTailoring}
+              variant="outline"
+              className="h-11 px-6 rounded-xl border-slate-200 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
             >
               {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Re-analyze'}
             </Button>
-            <Button 
-                onClick={() => fileInputRef.current?.click()}
-                className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white shadow-lg shadow-indigo-100 transition-all"
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white shadow-lg shadow-indigo-100 transition-all"
             >
               Upload New
             </Button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              accept=".pdf,.docx,.doc" 
-              onChange={handleFileSelect} 
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".pdf,.docx,.doc"
+              onChange={handleFileSelect}
             />
           </div>
         </header>
@@ -367,7 +414,7 @@ export default function Dashboard() {
             <>
               {/* Personalization Section */}
               <section>
-                <PersonalizationCard 
+                <PersonalizationCard
                   onApply={handleTailor}
                   isLoading={isTailoring}
                   initialPreferences={preferences}
@@ -377,7 +424,7 @@ export default function Dashboard() {
               {/* Main Analytics Grid */}
               <div className="flex flex-col lg:flex-row gap-8">
                 <div className="flex-1">
-                  <ScoreAnalytics 
+                  <ScoreAnalytics
                     score={selectedResume?.resume_score || 0}
                     atsScore={selectedResume?.score_breakdown?.components?.atsScore || 64}
                     keywordScore={selectedResume?.score_breakdown?.components?.keywordScore || 82}
@@ -386,7 +433,7 @@ export default function Dashboard() {
                   />
                 </div>
                 <div className="w-full lg:w-[320px]">
-                  <StatsColumn 
+                  <StatsColumn
                     keywordsFound={`${jobMatches[0]?.matching_skills?.length || 0} skills`}
                     resumeLength={selectedResume?.raw_text ? `${Math.max(1, Math.ceil(selectedResume.raw_text.length / 3000))} page(s)` : "1 page"}
                     skillGaps={jobMatches[0]?.missing_skills?.length || 0}
@@ -399,8 +446,8 @@ export default function Dashboard() {
 
           {activeTab === 'jobs' && (
             <section className="pt-6">
-              <MatchResults 
-                matches={jobMatches} 
+              <MatchResults
+                matches={jobMatches}
                 isPro={profile?.plan === 'pro'}
                 onUpgrade={() => initiatePayment(299, 'Pro Plan')}
                 onSave={handleSaveJob}
@@ -443,24 +490,24 @@ export default function Dashboard() {
                 <h3 className="text-xl font-black text-slate-900 mb-6">Cover Letter Generator</h3>
                 <div className={`${profile?.plan !== 'pro' ? 'blur-[2px] opacity-20 pointer-events-none' : ''}`}>
                   <div className="flex flex-col gap-4">
-                     <p className="text-sm text-slate-600">Select a matched job from the Job Matches tab to generate a highly tailored cover letter using AI.</p>
-                     <Button 
-                       disabled={jobMatches.length === 0}
-                       onClick={() => setActiveTab('jobs')}
-                       className="rounded-xl bg-indigo-600 w-fit"
-                     >
-                        View Job Matches
-                     </Button>
+                    <p className="text-sm text-slate-600">Select a matched job from the Job Matches tab to generate a highly tailored cover letter using AI.</p>
+                    <Button
+                      disabled={jobMatches.length === 0}
+                      onClick={() => setActiveTab('jobs')}
+                      className="rounded-xl bg-indigo-600 w-fit"
+                    >
+                      View Job Matches
+                    </Button>
                   </div>
                 </div>
                 {profile?.plan !== 'pro' && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-white/40 backdrop-blur-[2px]">
-                     <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
-                        <Lock className="h-7 w-7 text-indigo-600" />
-                     </div>
-                     <h4 className="font-black text-slate-900 mb-2">Pro Feature</h4>
-                     <p className="text-sm font-medium text-slate-500 mb-6">Generate tailored cover letters for any role in seconds</p>
-                     <Button className="rounded-xl bg-indigo-600 px-8" onClick={() => initiatePayment(299, 'Pro Plan')}>Upgrade to Pro</Button>
+                    <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+                      <Lock className="h-7 w-7 text-indigo-600" />
+                    </div>
+                    <h4 className="font-black text-slate-900 mb-2">Pro Feature</h4>
+                    <p className="text-sm font-medium text-slate-500 mb-6">Generate tailored cover letters for any role in seconds</p>
+                    <Button className="rounded-xl bg-indigo-600 px-8" onClick={() => initiatePayment(299, 'Pro Plan')}>Upgrade to Pro</Button>
                   </div>
                 )}
               </div>
@@ -478,9 +525,9 @@ export default function Dashboard() {
 
           {activeTab === 'settings' && (
             <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
-               <h3 className="text-xl font-black text-slate-900 mb-6">Account Settings</h3>
-               <p className="text-slate-500">Logged in as {user.email}</p>
-               <Button onClick={handleLogout} variant="destructive" className="mt-4 rounded-xl">Sign Out</Button>
+              <h3 className="text-xl font-black text-slate-900 mb-6">Account Settings</h3>
+              <p className="text-slate-500">Logged in as {user.email}</p>
+              <Button onClick={handleLogout} variant="destructive" className="mt-4 rounded-xl">Sign Out</Button>
             </section>
           )}
         </div>
@@ -488,13 +535,13 @@ export default function Dashboard() {
         {/* Analyzing Overlay */}
         <AnimatePresence>
           {isAnalyzing && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-md flex items-center justify-center p-6"
             >
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 className="max-w-4xl w-full bg-white rounded-[40px] shadow-2xl border border-slate-100 p-12 overflow-hidden"
@@ -502,7 +549,7 @@ export default function Dashboard() {
                 <div className="flex flex-col lg:flex-row gap-12">
                   <div className="lg:w-1/2 flex items-center justify-center bg-indigo-50/30 rounded-[32px] p-8">
                     <div className="relative">
-                      <motion.div 
+                      <motion.div
                         animate={{ y: [0, -10, 0] }}
                         transition={{ duration: 3, repeat: Infinity }}
                       >
@@ -513,7 +560,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="lg:w-1/2 space-y-8 flex flex-col justify-center">
                     <div className="space-y-3">
                       <h2 className="text-4xl font-black text-slate-900 leading-none tracking-tight">Analyzing...</h2>
@@ -521,28 +568,33 @@ export default function Dashboard() {
                     </div>
 
                     <div className="space-y-3">
-                      <div className="flex justify-between items-end text-xs font-black text-indigo-600 tracking-widest uppercase">
-                        <span>Progress</span>
-                        <span>{analysisProgress}%</span>
+                      <div className="flex justify-between items-end text-xs font-black tracking-widest uppercase">
+                        <span className="text-indigo-600">Progress</span>
+                        <span className="text-slate-400">Elapsed: {formatElapsed(elapsedSeconds)}</span>
                       </div>
                       <Progress value={analysisProgress} className="h-3 bg-slate-100" />
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                        </span>
+                        <span className="text-xs font-semibold text-slate-500">{getStatusMessage()}</span>
+                      </div>
                     </div>
 
                     <div className="space-y-5">
                       {analysisSteps.map((step) => (
                         <div key={step.id} className="flex items-center gap-4">
-                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all ${
-                            step.status === 'done' ? 'bg-emerald-50 text-emerald-500' : 
-                            step.status === 'loading' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300'
-                          }`}>
-                            {step.status === 'done' ? <CheckCircle2 className="h-6 w-6" /> : 
-                             step.status === 'loading' ? <Loader2 className="h-5 w-5 animate-spin" /> : 
-                             <div className="h-2 w-2 rounded-full bg-current opacity-25" />}
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all ${step.status === 'done' ? 'bg-emerald-50 text-emerald-500' :
+                              step.status === 'loading' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300'
+                            }`}>
+                            {step.status === 'done' ? <CheckCircle2 className="h-6 w-6" /> :
+                              step.status === 'loading' ? <Loader2 className="h-5 w-5 animate-spin" /> :
+                                <div className="h-2 w-2 rounded-full bg-current opacity-25" />}
                           </div>
-                          <span className={`text-lg font-bold ${
-                            step.status === 'done' ? 'text-slate-900' : 
-                            step.status === 'loading' ? 'text-indigo-600' : 'text-slate-300'
-                          }`}>{step.label}</span>
+                          <span className={`text-lg font-bold ${step.status === 'done' ? 'text-slate-900' :
+                              step.status === 'loading' ? 'text-indigo-600' : 'text-slate-300'
+                            }`}>{step.label}</span>
                         </div>
                       ))}
                     </div>
@@ -553,7 +605,7 @@ export default function Dashboard() {
           )}
         </AnimatePresence>
 
-        <CoverLetterModal 
+        <CoverLetterModal
           isOpen={isCoverLetterOpen}
           onClose={() => setIsCoverLetterOpen(false)}
           resume={selectedResume}
@@ -566,11 +618,10 @@ export default function Dashboard() {
 
 function SidebarItem({ icon, label, active, onClick, count }: any) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-        active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/50'
-      }`}
+      className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all ${active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/50'
+        }`}
     >
       <div className="flex items-center gap-3">
         {React.cloneElement(icon, { className: 'h-5 w-5' })}

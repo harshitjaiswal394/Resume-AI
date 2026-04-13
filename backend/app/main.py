@@ -8,6 +8,7 @@ load_dotenv("../.env") # checks root .env
 
 import os
 import logging
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,8 +21,24 @@ logging.basicConfig(
 logger = logging.getLogger("resumatch-api")
 
 from app.api.endpoints import resume_router
+from app.api.auth_routes import auth_router
+from app.services.knowledge_base_seeder import job_seeder
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = FastAPI(title="ResuMatch AI API")
+
+# Setup Background Scheduler
+scheduler = BackgroundScheduler()
+
+@app.on_event("startup")
+async def startup_event():
+    # Automatic seeding disabled as requested. 
+    # Use 'python scripts/seed_kb.py' to run it manually.
+    logger.info("Backend started. Automatic Knowledge Base seeding is DISABLED.")
+
+@app.on_event("shutdown")
+def shutdown_event():
+    scheduler.shutdown()
 
 # Configure CORS
 app.add_middleware(
@@ -33,6 +50,7 @@ app.add_middleware(
 )
 
 app.include_router(resume_router, prefix="/api/resume", tags=["resume"])
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 
 @app.get("/health")
 async def health_check():
