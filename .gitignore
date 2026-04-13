@@ -1,0 +1,100 @@
+# =========================
+# GLOBAL / ENVIRONMENT SECRETS
+# =========================
+# Never commit environment configurations from ANY folder
+**/.env
+**/.env.*
+!**/.env.example
+
+# OS / Misc
+**/.DS_Store
+**/.DS_Store?
+**/._*
+**/.Spotlight-V100
+**/.Trashes
+**/ehthumbs.db
+**/Thumbs.db
+
+# IDE configurations
+**/.vscode/
+**/.idea/
+
+# =========================
+# FRONTEND (Next.js / Node)
+# =========================
+# dependencies
+/frontend/node_modules/
+/frontend/.pnp
+/frontend/.pnp.js
+
+# testing
+/frontend/coverage/
+
+# next.js
+/frontend/.next/
+/frontend/out/
+/frontend/build/
+
+# debug
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+/frontend/.pnpm-debug.log*
+
+# vercel
+/frontend/.vercel
+
+# typescript
+/frontend/*.tsbuildinfo
+/frontend/next-env.d.ts
+
+# =========================
+# BACKEND (FastAPI / Python)
+# =========================
+# Byte-compiled / optimized / DLL files
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+
+# C extensions
+**/*.so
+
+# Distribution / packaging
+/backend/.Python
+/backend/develop-eggs/
+/backend/dist/
+/backend/downloads/
+/backend/eggs/
+/backend/.eggs/
+/backend/lib/
+/backend/lib64/
+/backend/parts/
+/backend/sdist/
+/backend/var/
+/backend/wheels/
+/backend/share/python-wheels/
+/backend/*.egg-info/
+/backend/.installed.cfg
+/backend/*.egg
+/backend/MANIFEST
+
+# Virtual environments
+/backend/venv/
+/backend/env/
+/backend/ENV/
+/backend/env.bak/
+/backend/venv.bak/
+
+# Type checking, MyPy, etc
+/backend/.mypy_cache/
+/backend/.dmypy.json
+/backend/dmypy.json
+/backend/.pyre/
+/backend/.pytype/
+
+# Pytest
+/backend/.pytest_cache/
+/backend/coverage.xml
+/backend/htmlcov/
+/backend/.coverage
+/backend/.coverage.*

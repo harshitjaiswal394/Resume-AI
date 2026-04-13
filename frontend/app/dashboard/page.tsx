@@ -1,0 +1,609 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { supabase } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
+import { 
+  Upload, 
+  FileText, 
+  Search, 
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2, 
+  ExternalLink, 
+  LayoutDashboard, 
+  Briefcase, 
+  Sparkles, 
+  Settings, 
+  LogOut, 
+  Trash2,
+  ChevronRight,
+  IndianRupee,
+  MapPin,
+  Clock,
+  AlertTriangle,
+  Lightbulb,
+  Linkedin,
+  Shield,
+  User,
+  Bookmark,
+  BookmarkCheck,
+  Lock
+} from 'lucide-react';
+import { AuthModal } from '@/components/common/AuthModal';
+import { ScoreGauge } from '@/components/resume/ScoreGauge';
+import { SkeletonCard, SkeletonGauge, SkeletonJobCard, SkeletonText } from '@/components/ui/skeleton';
+import { CoverLetterModal } from '@/components/resume/CoverLetterModal';
+import { motion, AnimatePresence } from 'motion/react';
+import { extractTextFromFile } from '@/lib/pdf';
+import { rewriteBulletPoint } from '@/lib/ai';
+import { startResumeAnalysis, completeResumeAnalysis } from '@/app/actions/resume';
+import { generateJobLinks } from '@/lib/job-portals';
+import { WhyRejectedSection } from '@/components/resume/WhyRejectedSection';
+import { ImproveResumeSection } from '@/components/resume/ImproveResumeSection';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useRazorpay } from '@/lib/razorpay';
+
+import { PremiumSidebar } from '@/components/dashboard/PremiumSidebar';
+import { ScoreAnalytics } from '@/components/dashboard/ScoreAnalytics';
+import { StatsColumn } from '@/components/dashboard/StatsColumn';
+import { MatchResults } from '@/components/dashboard/MatchResults';
+import { PersonalizationCard } from '@/components/dashboard/PersonalizeCard';
+
+export default function Dashboard() {
+  const { user, profile, isAuthReady } = useAuth();
+  const router = useRouter();
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const { initiatePayment } = useRazorpay();
+  const [resumes, setResumes] = useState<any[]>([]);
+  const [selectedResume, setSelectedResume] = useState<any>(null);
+  const [jobMatches, setJobMatches] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isCoverLetterOpen, setIsCoverLetterOpen] = useState(false);
+  const [activeJobMatch, setActiveJobMatch] = useState<any>(null);
+  const [isTailoring, setIsTailoring] = useState(false);
+  const [preferences, setPreferences] = useState<any>({
+    targetRole: '',
+    experienceLevel: '1-3 years',
+    location: ['Bangalore', 'Remote']
+  });
+
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisSteps, setAnalysisSteps] = useState([
+    { id: 'parsing', label: 'Parsing resume structure', status: 'pending' },
+    { id: 'ats', label: 'Checking ATS compatibility', status: 'pending' },
+    { id: 'skills', label: 'Extracting skills & keywords', status: 'pending' },
+    { id: 'suggestions', label: 'Generating improvement suggestions', status: 'pending' },
+    { id: 'matching', label: 'Matching with 500+ job roles', status: 'pending' },
+  ]);
+
+  const updateStepStatus = (id: string, status: 'pending' | 'loading' | 'done') => {
+    setAnalysisSteps(prev => prev.map(step => step.id === id ? { ...step, status } : step));
+  };
+
+  useEffect(() => {
+    if (isAuthReady && !user) {
+      router.push('/');
+    }
+  }, [user, isAuthReady, router]);
+
+  useEffect(() => {
+    if (!user || !isAuthReady) return;
+
+    const fetchResumes = async () => {
+      const { data, error } = await supabase
+        .from('resumes')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setResumes(data);
+        if (data.length > 0 && !selectedResume) setSelectedResume(data[0]);
+      }
+    };
+
+    fetchResumes();
+  }, [user, isAuthReady]);
+
+  useEffect(() => {
+    if (!selectedResume) return;
+    const fetchMatches = async () => {
+      const { data, error } = await supabase
+        .from('job_matches')
+        .select('*')
+        .eq('resume_id', selectedResume.id);
+      if (!error) setJobMatches(data || []);
+    };
+    fetchMatches();
+  }, [selectedResume]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
+  const handleTailor = async (newPrefs: any) => {
+    if (!selectedResume) return;
+    
+    setIsTailoring(true);
+    setPreferences(newPrefs);
+    
+    try {
+      const response = await fetch('/api/resume/tailor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resumeId: selectedResume.id,
+          preferences: newPrefs,
+          parsedData: selectedResume.parsed_data || { skills: [], summary: "" }
+        })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        // Update the local state to reflect the tailored results
+        const updatedResume = {
+          ...selectedResume,
+          resume_score: result.data.analysis.score || result.data.analysis.matchScore,
+          score_breakdown: result.data.analysis
+        };
+        
+        setSelectedResume(updatedResume);
+        setJobMatches(result.data.matches);
+        toast.success('Analysis tailored to your goals');
+      }
+    } catch (err) {
+      toast.error('Failed to update analysis');
+    } finally {
+      setIsTailoring(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const processFile = async (file: File) => {
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword'
+    ];
+    if (!allowedTypes.includes(file.type) && !file.name.endsWith('.pdf') && !file.name.endsWith('.docx')) {
+      toast.error('Please upload a PDF or DOCX file');
+      return;
+    }
+
+    setFileName(file.name);
+    setIsAnalyzing(true);
+    setAnalysisProgress(10);
+    setAnalysisSteps(prev => prev.map(s => ({ ...s, status: 'pending' })));
+
+    try {
+      // 1. Storage Upload
+      const filePath = `resumes/${user!.id}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
+
+      // 2. Database Record
+      const { data: resumeData, error: resumeError } = await supabase
+        .from('resumes')
+        .insert({
+          user_id: user!.id,
+          file_name: file.name,
+          file_url: publicUrl,
+          file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
+          file_size_bytes: file.size,
+          status: 'parsing',
+        })
+        .select()
+        .single();
+
+      if (resumeError) throw resumeError;
+      const resumeId = resumeData.id;
+
+      // 3. Streaming Backend call
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${backendUrl}/api/resume/process-stream`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Backend processing failed');
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          const messages = chunk.split('\n\n');
+          for (const message of messages) {
+            if (message.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(message.replace('data: ', ''));
+                if (event.step === 'final') {
+                  // Persistence
+                  const persistenceResult = await completeResumeAnalysis(user!.id, resumeId, event.data);
+                  if (!persistenceResult.success) throw new Error(persistenceResult.error);
+                  
+                  // Update UI with new data
+                  const { data: newResume } = await supabase.from('resumes').select('*').eq('id', resumeId).single();
+                  const { data: newMatches } = await supabase.from('job_matches').select('*').eq('resume_id', resumeId);
+                  
+                  setResumes(prev => [newResume, ...prev]);
+                  setSelectedResume(newResume);
+                  setJobMatches(newMatches || []);
+                  setAnalysisProgress(100);
+                  toast.success('Analysis complete!');
+                  setTimeout(() => setIsAnalyzing(false), 800);
+                } else if (event.step) {
+                  updateStepStatus(event.step, 'done');
+                  const stepMap: any = { 'parsing': 20, 'ats': 40, 'skills': 60, 'suggestions': 80, 'matching': 95 };
+                  if (stepMap[event.step]) setAnalysisProgress(stepMap[event.step]);
+                  
+                  // Move next step to loading
+                  const stepsSet = ['parsing', 'ats', 'skills', 'suggestions', 'matching'];
+                  const currentIndex = stepsSet.indexOf(event.step);
+                  if (currentIndex < stepsSet.length - 1) {
+                    updateStepStatus(stepsSet[currentIndex + 1], 'loading');
+                  }
+                }
+              } catch (e) { console.warn('SSE Chunk Error:', e); }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Analysis failed');
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleDeleteResume = async () => {
+    if (selectedResume && window.confirm('Delete this resume?')) {
+      await supabase.from('resumes').delete().eq('id', selectedResume.id);
+      setResumes(prev => prev.filter(r => r.id !== selectedResume.id));
+      setSelectedResume(null);
+      toast.success('Resume deleted');
+    }
+  };
+
+  const handleSaveJob = async (jobId: string, isSaved: boolean) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('job_matches')
+      .update({ is_saved: isSaved })
+      .eq('id', jobId);
+      
+    if (error) {
+      toast.error('Failed to update job');
+      return;
+    }
+    
+    setJobMatches(prev => prev.map(m => m.id === jobId ? { ...m, is_saved: isSaved } : m));
+    toast.success(isSaved ? 'Job saved!' : 'Removed from saved jobs');
+  };
+
+  const handleOpenCoverLetter = (match: any) => {
+    setActiveJobMatch(match);
+    setIsCoverLetterOpen(true);
+  };
+
+  if (!isAuthReady || !user) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin" /></div>;
+
+  return (
+    <div className="flex min-h-screen bg-[#f8fafc]">
+      <PremiumSidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab}
+        jobCount={jobMatches.length}
+        suggestionCount={5}
+        onLogout={handleLogout}
+        onDeleteResume={handleDeleteResume}
+        onPlanUpgrade={() => initiatePayment(299, 'Pro Plan')}
+      />
+
+      <main className="flex-1 overflow-y-auto">
+        {/* Header */}
+        <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10 sticky top-0 z-10">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Resume Analysis</h1>
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+              <span className="text-slate-600 truncate max-w-[200px]">{selectedResume?.file_name || 'Loading...'}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <span>Last analyzed: Today, 6:41 PM</span>
+              <Badge className="bg-amber-50 text-amber-600 border-amber-100 ml-2">Free Plan</Badge>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Button 
+                onClick={() => handleTailor(preferences)}
+                disabled={isTailoring}
+                variant="outline" 
+                className="h-11 px-6 rounded-xl border-slate-200 font-bold text-sm text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
+            >
+              {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Re-analyze'}
+            </Button>
+            <Button 
+                onClick={() => fileInputRef.current?.click()}
+                className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white shadow-lg shadow-indigo-100 transition-all"
+            >
+              Upload New
+            </Button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept=".pdf,.docx,.doc" 
+              onChange={handleFileSelect} 
+            />
+          </div>
+        </header>
+
+        <div className="p-10 max-w-7xl mx-auto space-y-10">
+          {activeTab === 'dashboard' && (
+            <>
+              {/* Personalization Section */}
+              <section>
+                <PersonalizationCard 
+                  onApply={handleTailor}
+                  isLoading={isTailoring}
+                  initialPreferences={preferences}
+                />
+              </section>
+
+              {/* Main Analytics Grid */}
+              <div className="flex flex-col lg:flex-row gap-8">
+                <div className="flex-1">
+                  <ScoreAnalytics 
+                    score={selectedResume?.resume_score || 0}
+                    atsScore={selectedResume?.score_breakdown?.components?.atsScore || 64}
+                    keywordScore={selectedResume?.score_breakdown?.components?.keywordScore || 82}
+                    readabilityScore={selectedResume?.score_breakdown?.components?.readabilityScore || 91}
+                    scoreBreakdown={selectedResume?.score_breakdown}
+                  />
+                </div>
+                <div className="w-full lg:w-[320px]">
+                  <StatsColumn 
+                    keywordsFound={`${jobMatches[0]?.matching_skills?.length || 0} skills`}
+                    resumeLength={selectedResume?.raw_text ? `${Math.max(1, Math.ceil(selectedResume.raw_text.length / 3000))} page(s)` : "1 page"}
+                    skillGaps={jobMatches[0]?.missing_skills?.length || 0}
+                    weakBullets={selectedResume?.score_breakdown?.weaknesses?.length || 0}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'jobs' && (
+            <section className="pt-6">
+              <MatchResults 
+                matches={jobMatches} 
+                isPro={profile?.plan === 'pro'}
+                onUpgrade={() => initiatePayment(299, 'Pro Plan')}
+                onSave={handleSaveJob}
+                onGenerateCoverLetter={handleOpenCoverLetter}
+              />
+            </section>
+          )}
+
+          {activeTab === 'ai' && (
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
+              <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
+                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-indigo-600" /> AI Improvement Suggestions
+                </h3>
+                <div className="space-y-6">
+                  {selectedResume?.score_breakdown?.weaknesses?.map((w: string, i: number) => (
+                    <div key={i} className="bg-rose-50/50 p-6 rounded-[24px] border border-rose-50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-rose-100 text-rose-600 border-none font-black text-[10px] uppercase tracking-tighter">High Priority</Badge>
+                        <span className="text-xs font-bold text-slate-400">Work Experience</span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-700 leading-relaxed">{w}</p>
+                    </div>
+                  ))}
+                  {selectedResume?.score_breakdown?.recommendations?.map((r: string, i: number) => (
+                    <div key={`rec-${i}`} className="bg-indigo-50/50 p-6 rounded-[24px] border border-indigo-50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-indigo-100 text-indigo-600 border-none font-black text-[10px] uppercase tracking-tighter">Suggestion</Badge>
+                      </div>
+                      <p className="text-sm font-medium text-slate-700 leading-relaxed">{r}</p>
+                    </div>
+                  ))}
+                  {(!selectedResume?.score_breakdown?.weaknesses?.length && !selectedResume?.score_breakdown?.recommendations?.length) && (
+                    <p className="text-slate-500 font-medium">No suggestions found. Your resume looks good!</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50 relative overflow-hidden">
+                <h3 className="text-xl font-black text-slate-900 mb-6">Cover Letter Generator</h3>
+                <div className={`${profile?.plan !== 'pro' ? 'blur-[2px] opacity-20 pointer-events-none' : ''}`}>
+                  <div className="flex flex-col gap-4">
+                     <p className="text-sm text-slate-600">Select a matched job from the Job Matches tab to generate a highly tailored cover letter using AI.</p>
+                     <Button 
+                       disabled={jobMatches.length === 0}
+                       onClick={() => setActiveTab('jobs')}
+                       className="rounded-xl bg-indigo-600 w-fit"
+                     >
+                        View Job Matches
+                     </Button>
+                  </div>
+                </div>
+                {profile?.plan !== 'pro' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-white/40 backdrop-blur-[2px]">
+                     <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+                        <Lock className="h-7 w-7 text-indigo-600" />
+                     </div>
+                     <h4 className="font-black text-slate-900 mb-2">Pro Feature</h4>
+                     <p className="text-sm font-medium text-slate-500 mb-6">Generate tailored cover letters for any role in seconds</p>
+                     <Button className="rounded-xl bg-indigo-600 px-8" onClick={() => initiatePayment(299, 'Pro Plan')}>Upgrade to Pro</Button>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {activeTab === 'resume' && (
+            <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
+              <h3 className="text-xl font-black text-slate-900 mb-6">Parsed Resume Data</h3>
+              <pre className="bg-slate-50 p-6 rounded-2xl text-xs overflow-auto max-h-[600px] border border-slate-100">
+                {JSON.stringify(selectedResume?.parsed_data, null, 2)}
+              </pre>
+            </section>
+          )}
+
+          {activeTab === 'settings' && (
+            <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
+               <h3 className="text-xl font-black text-slate-900 mb-6">Account Settings</h3>
+               <p className="text-slate-500">Logged in as {user.email}</p>
+               <Button onClick={handleLogout} variant="destructive" className="mt-4 rounded-xl">Sign Out</Button>
+            </section>
+          )}
+        </div>
+
+        {/* Analyzing Overlay */}
+        <AnimatePresence>
+          {isAnalyzing && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-md flex items-center justify-center p-6"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="max-w-4xl w-full bg-white rounded-[40px] shadow-2xl border border-slate-100 p-12 overflow-hidden"
+              >
+                <div className="flex flex-col lg:flex-row gap-12">
+                  <div className="lg:w-1/2 flex items-center justify-center bg-indigo-50/30 rounded-[32px] p-8">
+                    <div className="relative">
+                      <motion.div 
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                      >
+                        <img src="/assets/scanning.png" alt="Analyzing" className="w-full max-w-xs drop-shadow-2xl opacity-80" />
+                      </motion.div>
+                      <div className="absolute -top-4 -right-4 h-12 w-12 rounded-2xl bg-white shadow-xl flex items-center justify-center">
+                        <FileText className="h-6 w-6 text-indigo-600" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="lg:w-1/2 space-y-8 flex flex-col justify-center">
+                    <div className="space-y-3">
+                      <h2 className="text-4xl font-black text-slate-900 leading-none tracking-tight">Analyzing...</h2>
+                      <p className="text-slate-500 font-medium">Matching <span className="text-indigo-600 font-bold">{fileName}</span> with your career goals.</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-end text-xs font-black text-indigo-600 tracking-widest uppercase">
+                        <span>Progress</span>
+                        <span>{analysisProgress}%</span>
+                      </div>
+                      <Progress value={analysisProgress} className="h-3 bg-slate-100" />
+                    </div>
+
+                    <div className="space-y-5">
+                      {analysisSteps.map((step) => (
+                        <div key={step.id} className="flex items-center gap-4">
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all ${
+                            step.status === 'done' ? 'bg-emerald-50 text-emerald-500' : 
+                            step.status === 'loading' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300'
+                          }`}>
+                            {step.status === 'done' ? <CheckCircle2 className="h-6 w-6" /> : 
+                             step.status === 'loading' ? <Loader2 className="h-5 w-5 animate-spin" /> : 
+                             <div className="h-2 w-2 rounded-full bg-current opacity-25" />}
+                          </div>
+                          <span className={`text-lg font-bold ${
+                            step.status === 'done' ? 'text-slate-900' : 
+                            step.status === 'loading' ? 'text-indigo-600' : 'text-slate-300'
+                          }`}>{step.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <CoverLetterModal 
+          isOpen={isCoverLetterOpen}
+          onClose={() => setIsCoverLetterOpen(false)}
+          resume={selectedResume}
+          jobMatch={activeJobMatch}
+        />
+      </main>
+    </div>
+  );
+}
+
+function SidebarItem({ icon, label, active, onClick, count }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+        active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/50'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        {React.cloneElement(icon, { className: 'h-5 w-5' })}
+        {label}
+      </div>
+      {count !== undefined && (
+        <Badge variant="secondary" className="h-5 min-w-5 px-1 flex items-center justify-center rounded-full bg-muted text-[10px]">
+          {count}
+        </Badge>
+      )}
+    </button>
+  );
+}
+
+function MetricCard({ icon, title, score, color, feedback }: any) {
+  return (
+    <Card className="rounded-3xl border-none shadow-sm">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-[var(--bg-muted)]">{icon}</div>
+            <h4 className="text-h4 font-bold">{title}</h4>
+          </div>
+          <span className="text-h2 font-black">{score}</span>
+        </div>
+        <Progress value={score} className="h-2 mb-4" />
+        <div className="rounded-xl bg-[var(--bg-muted)] p-4 flex gap-3 items-start">
+          <div className="mt-0.5"><AlertCircle className="h-4 w-4 text-subtle" /></div>
+          <p className="text-small text-muted-foreground leading-relaxed">{feedback}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
