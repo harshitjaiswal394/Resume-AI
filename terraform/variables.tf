@@ -6,7 +6,7 @@ variable "project_id" {
 variable "region" {
   description = "GCP region"
   type        = string
-  default     = "us-central1"
+  default     = "us-east1"
 }
 
 variable "domain_name" {
@@ -14,14 +14,34 @@ variable "domain_name" {
   type        = string
 }
 
-variable "db_password" {
-  description = "Password for the database user"
+variable "database_url" {
+  description = "Connection string for the Supabase database"
   type        = string
   sensitive   = true
 }
 
-variable "nvidia_api_key" {
-  description = "NVIDIA NIM API Key"
+variable "nvidia_api_key_reasoning" {
+  description = "NVIDIA Reasoning API Key"
   type        = string
   sensitive   = true
 }
+
+variable "nvidia_api_key_parsing" {
+  description = "NVIDIA Parsing API Key"
+  type        = string
+  sensitive   = true
+}
+
+variable "nvidia_api_key_embedding" {
+  description = "NVIDIA Embedding API Key"
+  type        = string
+  sensitive   = true
+}
+
+variable "nvidia_api_key_reranking" {
+  description = "NVIDIA Reranking API Key"
+  type        = string
+  sensitive   = true
+}
+
+

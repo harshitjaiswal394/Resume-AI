@@ -140,7 +140,7 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
     try:
         # 1. Extraction
         yield f"data: {json.dumps({'step': 'parsing', 'status': 'loading', 'label': 'Parsing resume structure'})}\n\n"
-        text = resume_service.extract_text(content, filename)
+        text = await resume_service.extract_text(content, filename)
         yield f"data: {json.dumps({'step': 'parsing', 'status': 'done', 'label': 'Parsing resume structure'})}\n\n"
 
         # 2. Parsing (Flash)
@@ -203,6 +203,28 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         logger.error(f"Stream error: {str(e)}")
         yield f"data: {json.dumps({'success': False, 'error': str(e)})}\n\n"
 
+@resume_router.post("/save-analysis")
+async def save_analysis(payload: Dict[str, Any] = Body(...)):
+    """
+    Persists pre-existing analysis data to the database.
+    Used for migrating guest analysis results to a user account.
+    """
+    user_id = payload.get("userId")
+    resume_id = payload.get("resumeId")
+    data = payload.get("data")
+
+    if not user_id or not resume_id or not data:
+        raise HTTPException(status_code=400, detail="Missing userId, resumeId, or data")
+
+    try:
+        success = persist_pipeline_results(user_id, resume_id, data)
+        if not success:
+            raise HTTPException(status_code=500, detail="Persistence failed")
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Save analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class RewriteBulletRequest(BaseModel):
     bullet: str
     targetRole: Optional[str] = "Software Engineer"
@@ -244,7 +266,7 @@ async def process_resume(
     """
     try:
         content = await file.read()
-        text = resume_service.extract_text(content, file.filename)
+        text = await resume_service.extract_text(content, file.filename)
         parsed_data = await ai_service.parse_resume(text)
         analysis = await ai_service.analyze_resume(parsed_data)
         

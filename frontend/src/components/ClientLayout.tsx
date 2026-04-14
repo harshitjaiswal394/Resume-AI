@@ -9,15 +9,21 @@ import Footer from "./Footer";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isHome = pathname === "/";
   const isDashboard = pathname?.startsWith("/dashboard");
   const isOnboarding = pathname?.startsWith("/onboarding");
+
+  // Only show the old global Navbar on routes that aren't the home page, onboarding, or dashboard.
+  const showNavbar = !isHome && !isOnboarding && !isDashboard;
+  // Prevent duplicate footers on the home page and dashboard.
+  const showFooter = !isHome && !isDashboard;
 
   return (
     <AuthProvider>
       <div className="min-h-screen bg-background font-sans antialiased flex flex-col">
-        {!isOnboarding && <Navbar />}
+        {showNavbar && <Navbar />}
         <main className="flex-grow">{children}</main>
-        {!isDashboard && <Footer />}
+        {showFooter && <Footer />}
         <Toaster />
       </div>
     </AuthProvider>

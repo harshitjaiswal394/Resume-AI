@@ -27,9 +27,19 @@ export async function startResumeAnalysis(userId: string, resumeId: string, form
 }
 
 export async function completeResumeAnalysis(userId: string, resumeId: string, data: any) {
-  // Logic now handled by the backend's internal persistence.
-  // We just return success as the backend already saved the data.
-  return { success: true };
+  try {
+    const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${backendUrl}/api/resume/save-analysis`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, resumeId, data }),
+    });
+
+    if (!response.ok) throw new Error('Persistence failed');
+    return await response.json();
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 }
 
 export async function tailorResume(userId: string, resumeId: string, preferences: any, parsedData: any) {

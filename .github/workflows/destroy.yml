@@ -1,0 +1,53 @@
+name: Destroy Production Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm'
+        required: true
+        type: string
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-east1
+
+# Required permissions for Workload Identity Federation
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform-destroy:
+    name: "Terraform Destroy"
+    if: ${{ github.event.inputs.confirm_destroy == 'DESTROY' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Google Auth (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Destroy
+        run: |
+          terraform destroy -auto-approve \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="domain_name=jaiswal.shop" \
+            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
+            -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
+            -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
+            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}"
+        working-directory: ./terraform

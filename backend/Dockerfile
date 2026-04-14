@@ -1,12 +1,10 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# Stage 1: Builder
+FROM python:3.11-slim as builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
-ENV PORT 8080
 
-# Set work directory
 WORKDIR /app
 
 # Install system dependencies
@@ -15,13 +13,40 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies into a dedicated directory
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Copy project
+# Stage 2: Final Production Image
+FROM python:3.11-slim
+
+# Copy only the installed packages from the builder stage
+COPY --from=builder /install /usr/local
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+ENV PORT 8090
+
+WORKDIR /app
+
+# Install runtime system dependencies (only libpq for postgres)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy application code
 COPY . .
 
-# Run the application
-# We use 0.0.0.0 and variable port for Cloud Run compatibility
-CMD exec uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# Expose the requested port
+EXPOSE 8090
+
+# High-concurrency production command
+# Using Gunicorn as manager and UvicornWorker for ASGI (FastAPI) compatibility
+CMD ["gunicorn", "app.main:app", \
+     "-b", "0.0.0.0:8090", \
+     "-w", "10", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "--worker-connections", "1000", \
+     "--timeout", "1000000", \
+     "--log-level", "debug"]

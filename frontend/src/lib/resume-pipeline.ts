@@ -88,7 +88,7 @@ export async function processResumePipeline(
     
     if (resumeId !== 'guest') {
       await db.update(resumes)
-        .set({ status: 'failed', updated_at: new Date() })
+        .set({ status: 'failed', updatedAt: new Date() })
         .where(eq(resumes.id, resumeId));
     }
     

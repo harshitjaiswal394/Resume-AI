@@ -234,10 +234,7 @@ export default function Dashboard() {
     setIsTailoring(true);
     setPreferences(newPrefs);
 
-    // Show persistent toast notification
-    const toastId = toast.loading('Re-analyzing your resume with updated preferences...', {
-      description: 'Tailoring job matches to your career goals',
-    });
+    // Removed redundant toast loading as per user request
 
     try {
       const response = await fetch(`${backendUrl}/api/resume/tailor`, {
@@ -268,14 +265,13 @@ export default function Dashboard() {
         setJobMatches(sortedMatches);
 
         toast.success('Analysis updated successfully!', {
-          id: toastId,
           description: `Found ${sortedMatches.length} tailored job matches`,
         });
       } else {
-        toast.error('Failed to update analysis', { id: toastId });
+        toast.error('Failed to update analysis');
       }
     } catch (err) {
-      toast.error('Failed to update analysis. Please try again.', { id: toastId });
+      toast.error('Failed to update analysis. Please try again.');
     } finally {
       setIsTailoring(false);
     }
@@ -284,6 +280,27 @@ export default function Dashboard() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) processFile(file);
+  };
+
+  const cleanupUserStorage = async () => {
+    if (!user) return;
+    try {
+      const { data: files, error: listError } = await supabase.storage
+        .from('resumes')
+        .list(user.id);
+      
+      if (listError) throw listError;
+      if (files && files.length > 0) {
+        const pathsToDelete = files.map(file => `${user.id}/${file.name}`);
+        const { error: deleteError } = await supabase.storage
+          .from('resumes')
+          .remove(pathsToDelete);
+        
+        if (deleteError) throw deleteError;
+      }
+    } catch (err) {
+      console.error('Storage cleanup failed:', err);
+    }
   };
 
   const processFile = async (file: File) => {
@@ -303,6 +320,13 @@ export default function Dashboard() {
     setAnalysisSteps(prev => prev.map(s => ({ ...s, status: 'pending' })));
 
     try {
+      // 0. Single-Resume Policy: Delete all previous records and physical files
+      await cleanupUserStorage();
+      await supabase.from('resumes').delete().eq('user_id', user!.id);
+      setResumes([]);
+      setSelectedResume(null);
+      setJobMatches([]);
+
       // 1. Storage Upload
       const filePath = `resumes/${user!.id}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
@@ -416,12 +440,13 @@ export default function Dashboard() {
   };
 
   const handleDeleteResume = async () => {
-    if (selectedResume && window.confirm('Delete this resume?')) {
-      await supabase.from('resumes').delete().eq('id', selectedResume.id);
-      setResumes(prev => prev.filter(r => r.id !== selectedResume.id));
-      setSelectedResume(null);
-      toast.success('Resume deleted');
-    }
+    // Single-Resume Policy: Wipe database and storage instantly
+    await cleanupUserStorage();
+    await supabase.from('resumes').delete().eq('user_id', user!.id);
+    setResumes([]);
+    setSelectedResume(null);
+    setJobMatches([]);
+    toast.success('All data and files cleared');
   };
 
   const handleSaveJob = async (jobId: string, isSaved: boolean) => {
@@ -475,7 +500,6 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <Button
               onClick={() => {
-                toast.loading('Re-analyzing your resume...', { id: 'reanalyze', description: 'This may take a moment' });
                 handleTailor(preferences);
               }}
               disabled={isTailoring}
@@ -514,8 +538,8 @@ export default function Dashboard() {
               </section>
 
               {/* Main Analytics Grid */}
-              <div className="flex flex-col lg:flex-row gap-8">
-                <div className="flex-1">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <div className="xl:col-span-2 overflow-hidden">
                   <ScoreAnalytics
                     score={selectedResume?.resume_score || selectedResume?.score || 0}
                     atsScore={selectedResume?.score_breakdown?.atsScore || 0}
@@ -524,7 +548,7 @@ export default function Dashboard() {
                     scoreBreakdown={selectedResume?.score_breakdown}
                   />
                 </div>
-                <div className="w-full lg:w-[320px]">
+                <div className="xl:col-span-1">
                   <StatsColumn
                     keywordsFound={`${jobMatches[0]?.matching_skills?.length || 0} skills`}
                     resumeLength={selectedResume?.raw_text ? `${Math.max(1, Math.ceil(selectedResume.raw_text.length / 3000))} page(s)` : "1 page"}
@@ -549,8 +573,8 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'ai' && (
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
-              <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
+            <section className="grid grid-cols-1 xl:grid-cols-3 gap-8 pb-20">
+              <div className="xl:col-span-2 bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
                 <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-indigo-600" /> AI Improvement Suggestions
                 </h3>
@@ -558,8 +582,8 @@ export default function Dashboard() {
                   {selectedResume?.score_breakdown?.weaknesses?.map((w: string, i: number) => (
                     <div key={i} className="bg-rose-50/50 p-6 rounded-[24px] border border-rose-50 space-y-2">
                       <div className="flex items-center gap-2">
-                        <Badge className="bg-rose-100 text-rose-600 border-none font-black text-[10px] uppercase tracking-tighter">High Priority</Badge>
-                        <span className="text-xs font-bold text-slate-400">Work Experience</span>
+                         <Badge className="bg-rose-100 text-rose-600 border-none font-black text-[10px] uppercase tracking-tighter">High Priority</Badge>
+                         <span className="text-xs font-bold text-slate-400">Work Experience</span>
                       </div>
                       <p className="text-sm font-medium text-slate-700 leading-relaxed">{w}</p>
                     </div>
@@ -567,7 +591,7 @@ export default function Dashboard() {
                   {selectedResume?.score_breakdown?.recommendations?.map((r: string, i: number) => (
                     <div key={`rec-${i}`} className="bg-indigo-50/50 p-6 rounded-[24px] border border-indigo-50 space-y-2">
                       <div className="flex items-center gap-2">
-                        <Badge className="bg-indigo-100 text-indigo-600 border-none font-black text-[10px] uppercase tracking-tighter">Suggestion</Badge>
+                         <Badge className="bg-indigo-100 text-indigo-600 border-none font-black text-[10px] uppercase tracking-tighter">Suggestion</Badge>
                       </div>
                       <p className="text-sm font-medium text-slate-700 leading-relaxed">{r}</p>
                     </div>
@@ -578,7 +602,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50 relative overflow-hidden">
+              <div className="xl:col-span-1 bg-white rounded-[32px] p-8 shadow-sm border border-slate-50 relative overflow-hidden">
                 <h3 className="text-xl font-black text-slate-900 mb-6">Cover Letter Generator</h3>
                 <div className={`${profile?.plan !== 'pro' ? 'blur-[2px] opacity-20 pointer-events-none' : ''}`}>
                   <div className="flex flex-col gap-4">
@@ -754,7 +778,7 @@ export default function Dashboard() {
             <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
               <h3 className="text-xl font-black text-slate-900 mb-6">Account Settings</h3>
               <p className="text-slate-500">Logged in as {user.email}</p>
-              <Button onClick={handleLogout} variant="destructive" className="mt-4 rounded-xl">Sign Out</Button>
+              <Button onClick={handleLogout} variant="danger" className="mt-4 rounded-xl">Sign Out</Button>
             </section>
           )}
         </div>

@@ -1,10 +1,12 @@
 import os
+import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger("resumatch-api.db")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)

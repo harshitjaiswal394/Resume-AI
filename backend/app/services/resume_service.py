@@ -3,18 +3,19 @@ from pypdf import PdfReader
 from docx import Document
 from typing import Dict, Any
 import logging
+import asyncio
 
 class ResumeService:
     @staticmethod
-    def extract_text(file_content: bytes, filename: str) -> str:
+    async def extract_text(file_content: bytes, filename: str) -> str:
         """
-        Extract text from PDF or DOCX file content.
+        Extract text from PDF or DOCX file content without blocking the event loop.
         """
         try:
             if filename.endswith('.pdf'):
-                return ResumeService._extract_from_pdf(file_content)
+                return await asyncio.to_thread(ResumeService._extract_from_pdf, file_content)
             elif filename.endswith('.docx'):
-                return ResumeService._extract_from_docx(file_content)
+                return await asyncio.to_thread(ResumeService._extract_from_docx, file_content)
             else:
                 raise ValueError("Unsupported file format. Please upload PDF or DOCX.")
         except Exception as e:

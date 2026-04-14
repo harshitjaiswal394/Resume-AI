@@ -207,7 +207,7 @@ export default function OnboardingFlow() {
                   setFullAnalysisData(event.data);
                   setActiveResumeId(resumeId);
                   const persistenceResult = await completeResumeAnalysis(user?.id || 'guest', resumeId, event.data);
-                  if (!persistenceResult.success) throw new Error(persistenceResult.error);
+                  if (!persistenceResult.success) throw new Error((persistenceResult as any).error || 'Failed to save analysis');
 
                   setUploadProgress(100);
                   toast.success('Analysis complete!');
@@ -489,131 +489,149 @@ export default function OnboardingFlow() {
           {currentStep === 'personalize' && (
             <motion.div
               key="personalize"
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              className="max-w-3xl w-full bg-white rounded-[32px] shadow-2xl shadow-slate-200/60 p-10 space-y-10"
+              className="max-w-4xl w-full"
             >
-              <div className="text-center space-y-4">
-                <h1 className="text-[32px] font-extrabold text-slate-900 tracking-tight">One last thing</h1>
-                <p className="text-slate-500 text-lg">Help us tailor your job matches to the Indian market.</p>
-              </div>
-
-              <div className="space-y-10">
-                {/* 1. Experience Level */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-indigo-600">
-                    <Zap className="h-5 w-5" />
-                    <h3 className="font-bold text-slate-800">Your experience level</h3>
+              <div className="bg-white rounded-[40px] shadow-2xl shadow-indigo-200/40 border border-indigo-50/50 overflow-hidden">
+                <div className="p-12 lg:p-16 space-y-12">
+                  <div className="text-center space-y-4 max-w-2xl mx-auto">
+                    <h1 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">One last thing</h1>
+                    <p className="text-lg text-slate-500 font-medium">Help our AI precisely match your Profile to the Indian tech market.</p>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {[
-                      { id: '0-1', label: 'Fresher (0–1 yr)' },
-                      { id: '1-3', label: '1–3 years' },
-                      { id: '3-6', label: '3–6 years' },
-                      { id: '6-10', label: '6–10 years' },
-                      { id: '10+', label: '10+ years' }
-                    ].map((level) => (
-                      <button
-                        key={level.id}
-                        onClick={() => setPersonalizeData({ ...personalizeData, experienceLevel: level.id })}
-                        className={`
-                          px-4 py-4 rounded-2xl border-2 font-bold text-[15px] transition-all duration-200
-                          ${personalizeData.experienceLevel === level.id
-                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-600 shadow-md'
-                            : 'border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50'}
-                        `}
-                      >
-                        {level.label}
-                      </button>
-                    ))}
+
+                  <div className="grid lg:grid-cols-2 gap-12">
+                    <div className="space-y-10">
+                      {/* 1. Experience Level */}
+                      <div className="space-y-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
+                            <Zap className="h-5 w-5" />
+                          </div>
+                          <h3 className="text-xl font-bold text-slate-900">Your experience level</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { id: '0-1', label: 'Fresher (0–1 yr)' },
+                            { id: '1-3', label: '1–3 years' },
+                            { id: '3-6', label: '3–6 years' },
+                            { id: '6-10', label: '6–10 years' },
+                            { id: '10+', label: '10+ years' }
+                          ].map((level) => (
+                            <button
+                              key={level.id}
+                              onClick={() => setPersonalizeData({ ...personalizeData, experienceLevel: level.id })}
+                              className={`
+                                px-4 py-4 rounded-2xl border-2 font-bold text-sm transition-all duration-300
+                                ${personalizeData.experienceLevel === level.id
+                                  ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                                  : 'border-slate-100 text-slate-500 hover:border-indigo-200 hover:bg-slate-50/50'}
+                              `}
+                            >
+                              {level.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 2. Location */}
+                      <div className="space-y-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
+                            <User className="h-5 w-5" />
+                          </div>
+                          <h3 className="text-xl font-bold text-slate-900">Preferred Location</h3>
+                        </div>
+                        <div className="flex flex-wrap gap-2.5">
+                          {[
+                            'Bengaluru', 'Mumbai', 'Hyderabad', 'Pune', 'Delhi NCR',
+                            'Chennai', 'Gurugram', 'Noida', 'Remote'
+                          ].map((loc) => (
+                            <button
+                              key={loc}
+                              onClick={() => setPersonalizeData({ ...personalizeData, location: loc })}
+                              className={`
+                                px-6 py-3 rounded-full border-2 font-bold text-sm transition-all duration-300
+                                ${personalizeData.location === loc
+                                  ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                                  : 'border-slate-100 text-slate-500 hover:border-indigo-200 hover:bg-slate-50/50'}
+                              `}
+                            >
+                              {loc}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-10">
+                      {/* 3. Target Role */}
+                      <div className="space-y-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
+                            <Briefcase className="h-5 w-5" />
+                          </div>
+                          <h3 className="text-xl font-bold text-slate-900">Target Role</h3>
+                        </div>
+                        <div className="flex flex-wrap gap-2.5">
+                          {[
+                            'Software Engineer', 'Product Manager', 'Data Analyst',
+                            'DevOps Engineer', 'UI/UX Designer', 'Full Stack Developer'
+                          ].map((role) => (
+                            <button
+                              key={role}
+                              onClick={() => setPersonalizeData({ ...personalizeData, targetRole: role })}
+                              className={`
+                                px-6 py-3 rounded-full border-2 font-bold text-sm transition-all duration-300
+                                ${personalizeData.targetRole === role
+                                  ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                                  : 'border-slate-100 text-slate-500 hover:border-indigo-200 hover:bg-slate-50/50'}
+                              `}
+                            >
+                              {role}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="relative group pt-4">
+                          <input
+                            type="text"
+                            placeholder="Or type a custom role..."
+                            className="w-full h-16 px-6 rounded-2xl border-2 border-slate-100 group-hover:border-slate-200 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-slate-700 font-bold bg-slate-50/30"
+                            value={personalizeData.targetRole}
+                            onChange={(e) => setPersonalizeData({ ...personalizeData, targetRole: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-4 flex flex-col gap-4">
+                        <button
+                          disabled={!personalizeData.targetRole || !personalizeData.experienceLevel || !personalizeData.location || isTailoring}
+                          className={`
+                            relative w-full h-20 rounded-2xl text-xl font-black flex items-center justify-center gap-3 transition-all duration-500 overflow-hidden group
+                            ${(personalizeData.targetRole && personalizeData.experienceLevel && personalizeData.location && !isTailoring)
+                              ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 active:scale-95'
+                              : 'bg-slate-100 text-slate-400 cursor-not-allowed'}
+                          `}
+                          onClick={handlePersonalizeComplete}
+                        >
+                          {isTailoring ? (
+                            <>
+                              <Loader2 className="h-7 w-7 animate-spin" />
+                              Optimizing Profile...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-6 w-6 text-indigo-300 group-hover:rotate-12 transition-transform" />
+                              View My Analysis <ArrowRight className="h-6 w-6" />
+                            </>
+                          )}
+                          <div className="absolute top-0 -inset-full h-full w-1/2 z-5 block transform -skew-x-12 bg-gradient-to-r from-transparent to-white/10 opacity-40 group-hover:animate-shine" />
+                        </button>
+                        <p className="text-[10px] text-center font-bold text-slate-400 uppercase tracking-widest px-8">No login required to view initial match results</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                {/* 2. Target Job Role */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-indigo-600">
-                    <Briefcase className="h-5 w-5" />
-                    <h3 className="font-bold text-slate-800">Target job role</h3>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      'Software Engineer', 'Product Manager', 'Data Analyst',
-                      'DevOps Engineer', 'UI/UX Designer', 'Business Analyst',
-                      'Full Stack Developer', 'Data Scientist'
-                    ].map((role) => (
-                      <button
-                        key={role}
-                        onClick={() => setPersonalizeData({ ...personalizeData, targetRole: role })}
-                        className={`
-                          px-5 py-2.5 rounded-full border-2 font-bold text-sm transition-all
-                          ${personalizeData.targetRole === role
-                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-600'
-                            : 'border-slate-100 text-slate-500 hover:border-slate-200'}
-                        `}
-                      >
-                        {role}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="pt-2">
-                    <input
-                      type="text"
-                      placeholder="Or type a custom role..."
-                      className="w-full h-14 px-6 rounded-2xl border-2 border-slate-100 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-slate-700 font-medium"
-                      value={personalizeData.targetRole}
-                      onChange={(e) => setPersonalizeData({ ...personalizeData, targetRole: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Preferred Location */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-indigo-600">
-                    <User className="h-5 w-5" />
-                    <h3 className="font-bold text-slate-800">Preferred location</h3>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      'Bengaluru', 'Mumbai', 'Hyderabad', 'Pune', 'Delhi NCR',
-                      'Chennai', 'Kolkata', 'Gurugram', 'Noida', 'Remote'
-                    ].map((loc) => (
-                      <button
-                        key={loc}
-                        onClick={() => setPersonalizeData({ ...personalizeData, location: loc })}
-                        className={`
-                          px-5 py-2.5 rounded-full border-2 font-bold text-sm transition-all
-                          ${personalizeData.location === loc
-                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-100'
-                            : 'border-slate-100 text-slate-500 hover:border-slate-200'}
-                        `}
-                      >
-                        {loc}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  disabled={!personalizeData.targetRole || !personalizeData.experienceLevel || !personalizeData.location || isTailoring}
-                  className={`
-                    w-full h-16 rounded-[20px] text-lg font-bold flex items-center justify-center gap-2 transition-all duration-300
-                    ${(personalizeData.targetRole && personalizeData.experienceLevel && personalizeData.location && !isTailoring)
-                      ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 hover:scale-[1.02] active:scale-[0.98]'
-                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'}
-                  `}
-                  onClick={handlePersonalizeComplete}
-                >
-                  {isTailoring ? (
-                    <>
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                      Optimizing Analysis...
-                    </>
-                  ) : (
-                    <>
-                      View My Resume Analysis <ArrowRight className="h-6 w-6" />
-                    </>
-                  )}
-                </button>
               </div>
             </motion.div>
           )}
