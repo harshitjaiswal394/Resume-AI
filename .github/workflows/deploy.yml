@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
   push:
     branches: [ "dev", "main" ]
+  workflow_dispatch:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -20,6 +21,7 @@ jobs:
   prep-infra-and-build:
     name: "1. Prep Infra & Build Images"
     runs-on: ubuntu-latest
+    environment:  dev
     
     steps:
       - name: Checkout Code
