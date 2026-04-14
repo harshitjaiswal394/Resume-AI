@@ -20,10 +20,10 @@ interface ScoreAnalyticsProps {
 }
 
 export function ScoreAnalytics({
-  score,
-  atsScore = 64,
-  keywordScore = 82,
-  readabilityScore = 91,
+  score = 0,
+  atsScore = 0,
+  keywordScore = 0,
+  readabilityScore = 0,
   scoreBreakdown
 }: ScoreAnalyticsProps) {
   return (

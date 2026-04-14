@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,25 +22,16 @@ interface PersonalizationCardProps {
   initialPreferences?: any;
 }
 
-const ALL_ROLES = [
-  "Software Engineer", "Frontend Developer", "Backend Developer", "Full Stack Developer", "Mobile App Developer",
-  "DevOps Engineer", "Data Scientist", "Machine Learning Engineer", "Cybersecurity Engineer", "Blockchain Developer",
-  "Cloud Architect", "Data Engineer", "QA Engineer", "Product Manager", "UI/UX Designer", "Site Reliability Engineer",
-  "System Administrator", "Data Analyst", "Android Developer", "iOS Developer", "React Developer", "Python Developer",
-  "Solution Architect", "Technical Architect", "Platform Engineer", "Security Researcher", "Data Warehouse Engineer"
-];
-
-// Indian Tech Hubs Only as requested
-const ALL_LOCATIONS = [
-  "Bangalore", "Hyderabad", "Pune", "Delhi NCR", "Mumbai", "Chennai", "Kolkata", "Gurgaon", "Noida", "Ahmedabad", "Remote"
-];
-
 const EXPERIENCE_LEVELS = ["Entry level", "Mid-Senior", "Director", "Executive"];
 const WORK_MODES = ["Remote", "On-site", "Hybrid"];
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
 export function PersonalizationCard({ onApply, isLoading, initialPreferences }: PersonalizationCardProps) {
   const [role, setRole] = useState(initialPreferences?.targetRole || '');
   const [showRoleSuggestions, setShowRoleSuggestions] = useState(false);
+  const [roleSuggestions, setRoleSuggestions] = useState<string[]>([]);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
 
   const [experience, setExperience] = useState<string[]>(
     Array.isArray(initialPreferences?.experienceLevel)
@@ -48,10 +39,11 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
       : [initialPreferences?.experienceLevel || "Entry level"]
   );
 
-  // Requirement: Default no location selected
   const [locations, setLocations] = useState<string[]>(initialPreferences?.location || []);
   const [locationInput, setLocationInput] = useState('');
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
 
   const [workModes, setWorkModes] = useState<string[]>(
     Array.isArray(initialPreferences?.workMode)
@@ -63,6 +55,8 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
 
   const roleRef = useRef<HTMLDivElement>(null);
   const locationRef = useRef<HTMLDivElement>(null);
+  const roleDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const locDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Click outside logic
   useEffect(() => {
@@ -78,13 +72,45 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredRoles = ALL_ROLES.filter(r =>
-    r.toLowerCase().includes(role.toLowerCase()) && r !== role
-  ).slice(0, 5);
+  // Fetch domains from backend with debounce
+  const fetchDomains = useCallback((query: string) => {
+    if (roleDebounceRef.current) clearTimeout(roleDebounceRef.current);
+    roleDebounceRef.current = setTimeout(async () => {
+      setIsLoadingRoles(true);
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/resume/domains?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        setRoleSuggestions((data.domains || []).filter((d: string) => d !== role));
+      } catch {
+        setRoleSuggestions([]);
+      } finally {
+        setIsLoadingRoles(false);
+      }
+    }, 300);
+  }, [role]);
 
-  const filteredLocations = ALL_LOCATIONS.filter(l =>
-    l.toLowerCase().includes(locationInput.toLowerCase()) && !locations.includes(l)
-  ).slice(0, 5);
+  // Fetch locations from backend with debounce
+  const fetchLocations = useCallback((query: string) => {
+    if (locDebounceRef.current) clearTimeout(locDebounceRef.current);
+    locDebounceRef.current = setTimeout(async () => {
+      setIsLoadingLocations(true);
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/resume/locations?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        setLocationSuggestions((data.locations || []).filter((l: string) => !locations.includes(l)));
+      } catch {
+        setLocationSuggestions([]);
+      } finally {
+        setIsLoadingLocations(false);
+      }
+    }, 300);
+  }, [locations]);
+
+  // Load initial suggestions on mount
+  useEffect(() => {
+    fetchDomains('');
+    fetchLocations('');
+  }, []);
 
   const toggleItem = (list: string[], setList: (l: string[]) => void, item: string) => {
     if (list.includes(item)) {
@@ -136,7 +162,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
             className={`
               rounded-2xl h-14 px-10 font-bold text-base shadow-xl transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed
               ${isFormValid
-                ? 'bg-indigo-700 hover:bg-indigo-800 text-white shadow-indigo-200 animate-pulse'
+                ? 'bg-indigo-700 hover:bg-indigo-800 text-white shadow-indigo-200'
                 : 'bg-slate-200 text-slate-500 shadow-none'}
             `}
           >
@@ -151,7 +177,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          {/* Target Role with Autosuggest */}
+          {/* Target Role with DB Autosuggest */}
           <div className="space-y-3 relative" ref={roleRef}>
             <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <Briefcase className="h-3 w-3" /> Target Role
@@ -163,30 +189,40 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                 onChange={(e) => {
                   setRole(e.target.value);
                   setShowRoleSuggestions(true);
+                  fetchDomains(e.target.value);
                 }}
-                onFocus={() => setShowRoleSuggestions(true)}
+                onFocus={() => {
+                  setShowRoleSuggestions(true);
+                  if (roleSuggestions.length === 0) fetchDomains(role);
+                }}
                 className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-slate-700 placeholder:text-slate-300 focus-visible:ring-2 focus-visible:ring-indigo-500 transition-all shadow-inner"
               />
               <AnimatePresence>
-                {showRoleSuggestions && filteredRoles.length > 0 && (
+                {showRoleSuggestions && (roleSuggestions.length > 0 || isLoadingRoles) && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden"
+                    className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[240px] overflow-y-auto"
                   >
-                    {filteredRoles.map((r) => (
-                      <div
-                        key={r}
-                        onClick={() => {
-                          setRole(r);
-                          setShowRoleSuggestions(false);
-                        }}
-                        className="p-4 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0"
-                      >
-                        {r}
+                    {isLoadingRoles ? (
+                      <div className="p-4 flex items-center justify-center text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                       </div>
-                    ))}
+                    ) : (
+                      roleSuggestions.map((r) => (
+                        <div
+                          key={r}
+                          onClick={() => {
+                            setRole(r);
+                            setShowRoleSuggestions(false);
+                          }}
+                          className="p-4 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0"
+                        >
+                          {r}
+                        </div>
+                      ))
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -207,8 +243,8 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                     type="button"
                     onClick={() => toggleItem(experience, setExperience, level)}
                     className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${isSelected
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                        : 'bg-white text-slate-400 hover:text-slate-600 border border-slate-100'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                      : 'bg-white text-slate-400 hover:text-slate-600 border border-slate-100'
                       }`}
                   >
                     {level}
@@ -232,8 +268,8 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                     type="button"
                     onClick={() => toggleItem(workModes, setWorkModes, mode)}
                     className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${isSelected
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                        : 'bg-white text-slate-400 hover:text-slate-600 border border-slate-100'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                      : 'bg-white text-slate-400 hover:text-slate-600 border border-slate-100'
                       }`}
                   >
                     {mode}
@@ -257,7 +293,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
             />
           </div>
 
-          {/* Locations with Autosuggest & Tags */}
+          {/* Locations with DB Autosuggest & Tags */}
           <div className="space-y-3 relative" ref={locationRef}>
             <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <MapPin className="h-3 w-3" /> Locations
@@ -269,8 +305,12 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                 onChange={(e) => {
                   setLocationInput(e.target.value);
                   setShowLocationSuggestions(true);
+                  fetchLocations(e.target.value);
                 }}
-                onFocus={() => setShowLocationSuggestions(true)}
+                onFocus={() => {
+                  setShowLocationSuggestions(true);
+                  if (locationSuggestions.length === 0) fetchLocations(locationInput);
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && addLocation(locationInput)}
                 className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-slate-700 placeholder:text-slate-300 focus-visible:ring-2 focus-visible:ring-indigo-500 transition-all pr-12 shadow-inner"
               />
@@ -283,22 +323,28 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
               </button>
 
               <AnimatePresence>
-                {showLocationSuggestions && filteredLocations.length > 0 && (
+                {showLocationSuggestions && (locationSuggestions.length > 0 || isLoadingLocations) && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden"
+                    className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[240px] overflow-y-auto"
                   >
-                    {filteredLocations.map((l) => (
-                      <div
-                        key={l}
-                        onClick={() => addLocation(l)}
-                        className="p-4 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0"
-                      >
-                        {l}
+                    {isLoadingLocations ? (
+                      <div className="p-4 flex items-center justify-center text-slate-400">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                       </div>
-                    ))}
+                    ) : (
+                      locationSuggestions.map((l) => (
+                        <div
+                          key={l}
+                          onClick={() => addLocation(l)}
+                          className="p-4 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0"
+                        >
+                          {l}
+                        </div>
+                      ))
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

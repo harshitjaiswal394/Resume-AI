@@ -4,16 +4,16 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { 
-  CheckCircle2, 
-  Zap, 
-  Target, 
-  Shield, 
-  ArrowRight, 
-  Upload, 
-  FileText, 
-  Sparkles, 
-  Search, 
+import {
+  CheckCircle2,
+  Zap,
+  Target,
+  Shield,
+  ArrowRight,
+  Upload,
+  FileText,
+  Sparkles,
+  Search,
   Briefcase,
   ChevronRight,
   Star
@@ -36,7 +36,7 @@ export default function LandingPage() {
           .from('resumes')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id);
-        
+
         if (!error && count !== null) {
           setResumeCount(count);
         }
@@ -79,7 +79,7 @@ export default function LandingPage() {
             <p className="mt-8 text-body text-muted-foreground max-w-xl">
               Analyze your resume in 30 seconds. Match with the right jobs on Naukri, LinkedIn & more. Know exactly what&apos;s holding you back.
             </p>
-            
+
             <div className="mt-10 flex flex-wrap gap-6">
               <div className="flex items-center gap-2 text-small font-medium">
                 <CheckCircle2 className="h-5 w-5 text-accent-500" /> ATS Score
@@ -107,7 +107,7 @@ export default function LandingPage() {
               )}
 
               {!user && (
-                <button 
+                <button
                   onClick={() => setShowAuthModal(true)}
                   className="text-small font-bold text-muted-foreground hover:text-brand-600 transition-colors"
                 >
@@ -115,7 +115,7 @@ export default function LandingPage() {
                 </button>
               )}
             </div>
-            
+
             <p className="mt-6 text-small text-subtle flex items-center gap-2">
               <Shield className="h-4 w-4 text-accent-500" /> आपका डेटा सुरक्षित है — 256-bit encrypted. No spam, ever.
             </p>
@@ -141,7 +141,7 @@ export default function LandingPage() {
                   <Badge variant="outline" className="bg-muted/50">Max 5 MB</Badge>
                 </div>
               </div>
-              
+
               <div className="mt-8 pt-8 border-t">
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">What you&apos;ll get</p>
                 <div className="grid grid-cols-2 gap-4">
@@ -189,37 +189,37 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="grid gap-8 md:grid-cols-3">
-            <FeatureCard 
+            <FeatureCard
               icon={<Target className="h-6 w-6" />}
               title="Resume Score (0–100)"
               description="Get an instant score across ATS compatibility, keyword density, formatting, and readability. Know exactly where you stand."
               isFree
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<Sparkles className="h-6 w-6" />}
               title="Job Match %"
               description="AI compares your resume against live job descriptions and shows how well you match each role — with a percentage score."
               isFree
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<Search className="h-6 w-6" />}
               title="Missing Skills Detection"
               description="See exactly which skills employers are looking for that are absent from your resume — and how to add them effectively."
               isFree
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<Zap className="h-6 w-6" />}
               title="ATS Optimization"
               description="Ensure your resume passes Applicant Tracking Systems used by top Indian companies like TCS, Infosys, and Google."
               isFree
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<Sparkles className="h-6 w-6" />}
               title="AI Bullet Point Rewrites"
               description="Weak bullet points rewritten by AI to be impact-focused, quantified, and action-oriented. Copy with one click."
               isPro
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<FileText className="h-6 w-6" />}
               title="Cover Letter Generator"
               description="Generate a tailored cover letter for any role in seconds. Customized for Indian job market tone and expectations."
@@ -237,7 +237,7 @@ export default function LandingPage() {
             <h2 className="text-4xl font-extrabold tracking-tight sm:text-5xl">From resume to interview in 3 steps</h2>
           </div>
           <div className="flex flex-col md:flex-row items-center justify-center gap-12 max-w-5xl mx-auto">
-            <StepItem 
+            <StepItem
               number="01"
               icon={<Upload className="h-8 w-8 text-white" />}
               title="Upload Your Resume"
@@ -245,7 +245,7 @@ export default function LandingPage() {
               color="bg-indigo-600"
             />
             <ChevronRight className="hidden md:block h-8 w-8 text-muted-foreground/30" />
-            <StepItem 
+            <StepItem
               number="02"
               icon={<Sparkles className="h-8 w-8 text-white" />}
               title="AI Analyzes in 30 Seconds"
@@ -253,7 +253,7 @@ export default function LandingPage() {
               color="bg-purple-600"
             />
             <ChevronRight className="hidden md:block h-8 w-8 text-muted-foreground/30" />
-            <StepItem 
+            <StepItem
               number="03"
               icon={<Briefcase className="h-8 w-8 text-white" />}
               title="Get Matched & Apply"
@@ -307,9 +307,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
       />
     </div>
   );
@@ -356,3 +356,4 @@ function StepItem({ number, icon, title, description, color }: any) {
     </div>
   );
 }
+

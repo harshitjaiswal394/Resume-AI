@@ -16,7 +16,10 @@ export async function POST(req: NextRequest) {
     const response = await fetch(`${BACKEND_URL}/api/resume/cover-letter`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        resume: body.resume,
+        jobRole: body.jobRole,
+      }),
     });
 
     if (!response.ok) {

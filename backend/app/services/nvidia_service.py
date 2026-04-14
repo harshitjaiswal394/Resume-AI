@@ -176,7 +176,17 @@ class NvidiaService:
         # Summary from first 200 chars
         data["summary"] = text[:300].replace('\n', ' ').strip()
         
-        logger.info(f"Fallback extraction found: name={data['fullName']}, email={data['email']}, skills={len(data['skills'])}")
+        # Extract links
+        data["links"] = {
+            "linkedin": (re.search(r'linkedin\.com/in/[a-zA-Z0-9_-]+', text) or {}).get(0, None),
+            "github": (re.search(r'github\.com/[a-zA-Z0-9_-]+', text) or {}).get(0, None),
+            "portfolio": None
+        }
+        
+        # Awards/Certs placeholder
+        data["certifications"] = []
+        
+        logger.info(f"Fallback extraction found: name={data['fullName']}, email={data['email']}, links={list(data['links'].values())}")
         return data
 
     async def parse_resume(self, text: str) -> Dict[str, Any]:
@@ -199,10 +209,16 @@ Required JSON format:
   "fullName": "string",
   "email": "string", 
   "phone": "string",
+  "links": {{
+    "linkedin": "url or null",
+    "github": "url or null",
+    "portfolio": "url or null"
+  }},
   "summary": "2-3 sentence professional summary",
   "skills": ["skill1", "skill2"],
   "experience": [{{"title": "string", "company": "string", "duration": "string", "description": ["achievement1"]}}],
-  "education": [{{"degree": "string", "institution": "string", "year": "string"}}]
+  "education": [{{"degree": "string", "institution": "string", "year": "string"}}],
+  "certifications": ["award or cert 1", "award or cert 2"]
 }}
 
 Respond with ONLY the JSON object:"""
@@ -222,12 +238,16 @@ Respond with ONLY the JSON object:"""
                         {"role": "user", "content": f'Convert to JSON: {{"fullName":"","email":"","phone":"","summary":"","skills":[],"experience":[],"education":[]}}\n\nResume:\n{text[:6000]}\n\nFill in the JSON fields from the resume above. Output ONLY the JSON:'}
                     ]
                 
+                # First attempt: Use fast model (Llama 8B or Nano)
+                # Second attempt (retry): Use powerful model (Llama 70b)
+                current_model = "meta/llama-3.1-8b-instruct" if attempt == 0 else "meta/llama-3.1-70b-instruct"
+                
                 response = self.client.chat.completions.create(
-                    model="meta/llama-3.1-70b-instruct",
+                    model=current_model,
                     messages=messages,
                     temperature=0.05,
                     max_tokens=2048,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"} if "llama-3.1" in current_model else None
                 )
                 
                 content = response.choices[0].message.content
