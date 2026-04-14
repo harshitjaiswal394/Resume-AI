@@ -20,6 +20,7 @@ jobs:
   prep-infra-and-build:
     name: "1. Prep Infra & Build Images"
     runs-on: ubuntu-latest
+    environment: dev
     
     steps:
       - name: Checkout Code
