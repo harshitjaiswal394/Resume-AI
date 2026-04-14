@@ -22,6 +22,7 @@ jobs:
     name: "Terraform Destroy"
     if: ${{ github.event.inputs.confirm_destroy == 'DESTROY' }}
     runs-on: ubuntu-latest
+    environment: dev
     
     steps:
       - name: Checkout Code
