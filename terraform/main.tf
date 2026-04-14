@@ -26,10 +26,10 @@ resource "google_project_service" "services" {
     "dns.googleapis.com",
     "compute.googleapis.com",
     "vpcaccess.googleapis.com",
-    "servicenetworking.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
-    "sts.googleapis.com"
+    "sts.googleapis.com",
+    "cloudresourcemanager.googleapis.com"
   ])
   service = each.key
   disable_on_destroy = false
