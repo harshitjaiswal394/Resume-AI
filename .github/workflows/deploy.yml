@@ -105,6 +105,7 @@ jobs:
     name: "3. Finalize Full Deployment"
     needs: manual-approval
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
