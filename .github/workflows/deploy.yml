@@ -25,6 +25,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Debug Secret Presence
+        run: |
+          if [ -n "${{ secrets.GCP_PROJECT_ID }}" ]; then echo "Project ID is set"; else echo "Project ID is MISSING"; fi
+          if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ]; then echo "Provider is set"; else echo "Provider is MISSING"; fi
+
+
       - name: Google Auth (Workload Identity)
         uses: google-github-actions/auth@v2
         with:
