@@ -165,6 +165,10 @@ export default function LandingPage() {
               try {
                 const event = JSON.parse(message.replace('data: ', ''));
 
+                if (event.type === 'ping') {
+                  continue; // Keep connection alive
+                }
+
                 if (event.step === 'final') {
                   setFullAnalysisData(event.data);
                   setActiveResumeId('guest');

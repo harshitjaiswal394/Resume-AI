@@ -205,11 +205,21 @@ export default function OnboardingFlow() {
               try {
                 const event = JSON.parse(message.replace('data: ', ''));
 
+                if (event.type === 'ping') {
+                  continue; // Keep connection alive
+                }
+
                 if (event.step === 'final') {
                   setFullAnalysisData(event.data);
                   setActiveResumeId(resumeId);
-                  const persistenceResult = await completeResumeAnalysis(user?.id || 'guest', resumeId, event.data);
-                  if (!persistenceResult.success) throw new Error((persistenceResult as any).error || 'Failed to save analysis');
+
+                  // Only persist to DB if we have a real user and resume record
+                  if (user && resumeId !== 'guest') {
+                    const persistenceResult = await completeResumeAnalysis(user.id, resumeId, event.data);
+                    if (!persistenceResult.success) {
+                      console.warn('Database persistence failed, but continuing with local data:', (persistenceResult as any).error);
+                    }
+                  }
 
                   setUploadProgress(100);
                   toast.success('Analysis complete!');

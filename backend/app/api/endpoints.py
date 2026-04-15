@@ -159,9 +159,26 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         analysis_task = ai_service.analyze_resume(parsed_data)
         matches_task = ai_service.generate_job_matches(parsed_data, roles, filters={"days_old": 25})
         
-        # Start both, return results as they come
-        analysis, matches = await asyncio.gather(analysis_task, matches_task)
+        # Start both, but yield heartbeats while waiting (Every 5 seconds)
+        yield f"data: {json.dumps({'type': 'ping'})}\n\n"
         
+        # Wait for tasks with a simplified heartbeat loop
+        pending = {asyncio.create_task(analysis_task), asyncio.create_task(matches_task)}
+        analysis, matches = None, None
+        
+        while pending:
+            done, pending = await asyncio.wait(pending, timeout=5.0)
+            if not done: # Timeout reached, send ping to keep connection alive
+                yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+                continue
+                
+            for task in done:
+                res = task.result()
+                if isinstance(res, dict) and "score" in res:
+                    analysis = res
+                else:
+                    matches = res
+
         yield f"data: {json.dumps({'step': 'skills', 'status': 'done', 'label': 'Analysis complete'})}\n\n"
         yield f"data: {json.dumps({'step': 'suggestions', 'status': 'done', 'label': 'Suggestions generated'})}\n\n"
         
