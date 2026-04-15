@@ -131,7 +131,7 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"
-        value = "https://app.jaiswal.shop/api"
+        value = "https://app.jaiswal.shop"
       }
     }
     vpc_access {
@@ -227,22 +227,4 @@ resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
 }
 
 
-# 8. IAM - Allow public (unauthenticated) access via the Load Balancer
-# Without these, the LB gets 403 Forbidden when forwarding to Cloud Run.
-resource "google_cloud_run_v2_service_iam_member" "backend_public" {
-  project  = var.project_id
-  location = var.region
-  name     = google_cloud_run_v2_service.backend.name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
-
-resource "google_cloud_run_v2_service_iam_member" "frontend_public" {
-  project  = var.project_id
-  location = var.region
-  name     = google_cloud_run_v2_service.frontend.name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
-
-# (Workload Identity Federation is managed manually as a Bootstrap resource)
+# (Workload Identity Federation and Cloud Run IAM are managed manually as Bootstrap resources)
