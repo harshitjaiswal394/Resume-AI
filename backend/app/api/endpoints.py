@@ -183,7 +183,7 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         yield f"data: {json.dumps({'step': 'suggestions', 'status': 'done', 'label': 'Suggestions generated'})}\n\n"
         
         # 4. Enrichment
-        for match in matches:
+        for match in (matches or []):
             if isinstance(match, dict):
                 match["apply_links"] = job_portal_service.generate_links(
                     match.get("role", "Software Engineer"), 
@@ -192,16 +192,19 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
                 )
         yield f"data: {json.dumps({'step': 'matching', 'status': 'done', 'label': 'Matches found'})}\n\n"
 
-        # 6. New: Persistence
-        if resume_id and resume_id != "guest":
-            final_data_struct = {
-                "parsed_data": parsed_data,
-                "analysis": analysis,
-                "matches": matches,
-                "raw_text": text
-            }
-            persist_pipeline_results(user_id, resume_id, final_data_struct)
-            logger.info(f"Persisted stream results for {resume_id}")
+        # 6. Persistence (Only for registered users)
+        if user_id and user_id != "guest" and resume_id and resume_id != "guest":
+            try:
+                final_data_struct = {
+                    "parsed_data": parsed_data,
+                    "analysis": analysis,
+                    "matches": matches,
+                    "raw_text": text
+                }
+                persist_pipeline_results(user_id, resume_id, final_data_struct)
+                logger.info(f"Persisted stream results for {resume_id}")
+            except Exception as pe:
+                logger.error(f"Persistence failed (non-critical): {str(pe)}")
 
         # 7. Final Result
         final_data = {
