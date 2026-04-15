@@ -27,6 +27,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Debug Secret Presence
+        run: |
+          if [ -n "${{ secrets.GCP_PROJECT_ID }}" ]; then echo "Project ID is set"; else echo "Project ID is MISSING"; fi
+          if [ -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ]; then echo "Provider is set"; else echo "Provider is MISSING"; fi
+
+
       - name: Google Auth (Workload Identity)
         uses: google-github-actions/auth@v2
         with:
@@ -67,8 +73,8 @@ jobs:
       - name: Build & Push Frontend (Port 3000)
         run: |
           docker build \
-            --build-arg NEXT_PUBLIC_SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }} \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }} \
             --build-arg NEXT_PUBLIC_BACKEND_API_URL=https://app.jaiswal.shop/api \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ./frontend
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:latest
@@ -99,6 +105,7 @@ jobs:
     name: "3. Finalize Full Deployment"
     needs: manual-approval
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
