@@ -187,6 +187,7 @@ resource "google_compute_backend_service" "backend_service" {
   name      = "backend-api-service"
   protocol  = "HTTP"
   port_name = "http"
+  timeout_sec = 300
 
   log_config {
     enable      = true
@@ -202,7 +203,7 @@ resource "google_compute_backend_service" "frontend_service" {
   name        = "frontend-app-service"
   protocol    = "HTTP"
   port_name   = "http"
-  timeout_sec = 30
+  timeout_sec = 300
 
   backend {
     group = google_compute_region_network_endpoint_group.frontend_neg.id
