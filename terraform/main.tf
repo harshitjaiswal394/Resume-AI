@@ -90,6 +90,12 @@ resource "google_cloud_run_v2_service" "backend" {
       ports {
         container_port = 8090
       }
+      resources {
+        limits = {
+          memory = "1Gi"
+          cpu    = "1"
+        }
+      }
       env {
         name  = "DATABASE_URL"
         value = var.database_url
