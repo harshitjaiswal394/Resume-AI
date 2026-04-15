@@ -808,27 +808,34 @@ export default function Dashboard() {
                 className="max-w-5xl w-full bg-white rounded-[40px] shadow-2xl shadow-indigo-200/50 overflow-hidden"
               >
                 <div className="flex flex-col lg:flex-row">
-                  {/* Left: Illustration */}
-                  <div className="lg:w-1/2 bg-indigo-50/30 p-12 flex flex-col items-center justify-center border-r border-slate-50">
-                    <motion.div
-                      initial={{ y: 10, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ duration: 0.8, delay: 0.2 }}
-                      className="relative"
-                    >
-                      <img
-                        src="/assets/scanning.png"
-                        alt="Analyzing Resume"
-                        className="w-full max-w-sm drop-shadow-2xl"
+                  <div className="lg:w-1/2 bg-indigo-50/30 p-12 flex flex-col items-center justify-center border-r border-slate-50 relative overflow-hidden">
+                    {/* Animated Scanning Effect */}
+                    <div className="relative w-48 h-48">
+                      <motion.div
+                        animate={{ 
+                          scale: [1, 1.3, 1],
+                          opacity: [0.3, 0.1, 0.3]
+                        }}
+                        transition={{ duration: 4, repeat: Infinity }}
+                        className="absolute inset-0 bg-indigo-500/10 rounded-full blur-3xl"
                       />
                       <motion.div
-                        animate={{ y: [0, -10, 0] }}
-                        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                        className="absolute -top-4 -right-4 h-12 w-12 rounded-2xl bg-white shadow-xl flex items-center justify-center"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="relative z-10 w-full h-full rounded-[3rem] bg-white border border-white/80 shadow-[0_25px_60px_rgba(79,70,229,0.12)] flex items-center justify-center"
                       >
-                        <FileText className="h-6 w-6 text-indigo-600" />
+                        <div className="relative">
+                          <FileText className="h-24 w-24 text-indigo-600" />
+                          <motion.div
+                            animate={{ 
+                              top: ["0%", "100%", "0%"]
+                            }}
+                            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                            className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent blur-[1px]"
+                          />
+                        </div>
                       </motion.div>
-                    </motion.div>
+                    </div>
                   </div>
 
                   {/* Right: Progress Content */}

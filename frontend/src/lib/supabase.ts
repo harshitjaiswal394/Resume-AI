@@ -1,27 +1,24 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-// Lazy singleton - createClient is only called on first actual use,
-// never at module evaluation time (which is what crashes SSG/prerendering).
 let _client: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient {
   if (_client) return _client;
 
-  if (supabaseUrl && supabaseAnonKey && supabaseAnonKey.startsWith('eyJ')) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  if (url && key && key.startsWith('eyJ')) {
     try {
-      _client = createClient(supabaseUrl, supabaseAnonKey);
+      _client = createClient(url, key);
       return _client;
     } catch (e) {
       console.warn('Failed to create Supabase client:', e);
     }
   }
 
-  console.warn(
-    'Supabase credentials missing or invalid. Auth and database features will not work until configured.'
-  );
+  const msg = 'Supabase credentials missing or invalid. Auth and database features will not work until configured.';
+  console.warn(msg);
 
   // Return a no-op proxy that won't crash at runtime
   return new Proxy({} as any, {
