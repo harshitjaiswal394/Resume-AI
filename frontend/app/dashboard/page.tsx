@@ -363,7 +363,11 @@ export default function Dashboard() {
       });
 
 
-      if (!response.ok) throw new Error('Backend processing failed');
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'No response body');
+        console.error(`Backend error: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Backend processing failed (${response.status}): ${errorText.substring(0, 200)}`);
+      }
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let done = false;
