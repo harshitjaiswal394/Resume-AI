@@ -2,7 +2,7 @@ name: Production Deployment to app.jaiswal.shop
 
 on:
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
   push:
     branches: [ "dev", "main" ]
   workflow_dispatch:

@@ -132,7 +132,13 @@ function MetricRow({ icon, title, score, color, feedback, bgColor }: any) {
           <AlertCircle className={`h-4 w-4 ${color.replace('bg-', 'text-')}`} />
         </div>
         <p className={`text-sm font-medium leading-relaxed ${color.replace('bg-', 'text-')}`}>
-          {feedback}
+          {typeof feedback === 'string' 
+            ? feedback 
+            : Array.isArray(feedback) 
+              ? feedback[0] 
+              : typeof feedback === 'object' && feedback !== null
+                ? (feedback.message || feedback.text || "Insight generated")
+                : (feedback || "Optimization in progress...")}
         </p>
       </div>
     </div>

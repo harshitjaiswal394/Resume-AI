@@ -254,7 +254,7 @@ export default function Dashboard() {
       if (result.success) {
         const updatedResume = {
           ...selectedResume,
-          resume_score: result.data.analysis.score || result.data.analysis.matchScore,
+          resume_score: result.data.analysis.score,
           score_breakdown: result.data.analysis
         };
 
@@ -399,8 +399,8 @@ export default function Dashboard() {
                     ...prev,
                     status: 'complete',
                     parsedData: resultData.parsed_data,
-                    resumeScore: resultData.analysis.score,
-                    scoreBreakdown: resultData.analysis.insights,
+                    resume_score: resultData.analysis.score,
+                    score_breakdown: resultData.analysis,
                     rawText: resultData.raw_text
                   }));
 
@@ -591,7 +591,9 @@ export default function Dashboard() {
                          <Badge className="bg-rose-100 text-rose-600 border-none font-black text-[10px] uppercase tracking-tighter">High Priority</Badge>
                          <span className="text-xs font-bold text-slate-400">Work Experience</span>
                       </div>
-                      <p className="text-sm font-medium text-slate-700 leading-relaxed">{w}</p>
+                      <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                        {typeof w === 'string' ? w : JSON.stringify(w)}
+                      </p>
                     </div>
                   ))}
                   {selectedResume?.score_breakdown?.recommendations?.map((r: string, i: number) => (
@@ -599,7 +601,9 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                          <Badge className="bg-indigo-100 text-indigo-600 border-none font-black text-[10px] uppercase tracking-tighter">Suggestion</Badge>
                       </div>
-                      <p className="text-sm font-medium text-slate-700 leading-relaxed">{r}</p>
+                      <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                        {typeof r === 'string' ? r : JSON.stringify(r)}
+                      </p>
                     </div>
                   ))}
                   {(!selectedResume?.score_breakdown?.weaknesses?.length && !selectedResume?.score_breakdown?.recommendations?.length) && (
