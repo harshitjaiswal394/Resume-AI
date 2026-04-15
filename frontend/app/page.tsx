@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, useRef } from 'react';
 import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
