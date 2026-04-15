@@ -8,6 +8,16 @@ function getClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+  // Diagnostic Log for Production Debugging (Non-sensitive)
+  if (typeof window !== 'undefined') {
+    console.log('Supabase check:', {
+      hasUrl: !!url,
+      hasKey: !!key,
+      urlPrefix: url ? url.substring(0, 15) + '...' : 'NONE',
+      keyType: key ? (key.startsWith('eyJ') ? 'JWT/Valid' : 'Invalid Format') : 'NONE'
+    });
+  }
+
   if (url && key && key.startsWith('eyJ')) {
     try {
       _client = createClient(url, key);

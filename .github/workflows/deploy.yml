@@ -25,6 +25,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Secret Sanity Check
+        run: |
+          ERROR=0
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then echo "::error::SUPABASE_URL secret is MISSING in environment 'dev'"; ERROR=1; fi
+          if [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then echo "::error::SUPABASE_ANON_KEY secret is MISSING in environment 'dev'"; ERROR=1; fi
+          if [ "$ERROR" -eq 1 ]; then exit 1; fi
+          echo "Secret check PASSED."
+
       - name: Google Auth
         uses: google-github-actions/auth@v2
         with:
@@ -68,9 +76,9 @@ jobs:
       - name: Build & Push Frontend
         run: |
           docker build \
-            --build-arg NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL || secrets.SUPABASE_URL }} \
-            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }} \
-            --build-arg NEXT_PUBLIC_BACKEND_API_URL=https://app.jaiswal.shop \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://app.jaiswal.shop" \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ./frontend
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:latest
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend --all-tags
