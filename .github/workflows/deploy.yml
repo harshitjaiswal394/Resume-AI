@@ -50,7 +50,9 @@ jobs:
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
-            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}"
+            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -var="supabase_url=${{ secrets.SUPABASE_URL }}"
         working-directory: ./terraform
 
       - name: Configure Docker
@@ -103,5 +105,7 @@ jobs:
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
-            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}"
+            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -var="supabase_url=${{ secrets.SUPABASE_URL }}"
         working-directory: ./terraform
