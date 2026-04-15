@@ -193,6 +193,19 @@ export default function LandingPage() {
           }
         }
       }
+
+      // Safety Valve: If stream ended but we have data and haven't transitioned yet
+      if (fullAnalysisData && isAnalyzing) {
+        setUploadProgress(100);
+        setTimeout(() => {
+          setIsAnalyzing(false);
+          setIsPersonalizing(true);
+        }, 800);
+      } else if (!fullAnalysisData && isAnalyzing) {
+         // Something went wrong, stream ended without data
+         throw new Error('Analysis stream ended prematurely');
+      }
+
     } catch (error: any) {
       console.error('Analysis failed', error);
       toast.error('Failed to process resume. Please try again.');
