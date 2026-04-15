@@ -37,7 +37,8 @@ import {
   Mail,
   Phone,
   GraduationCap,
-  Award
+  Award,
+  Wand2
 } from 'lucide-react';
 import { AuthModal } from '@/components/common/AuthModal';
 import { ScoreGauge } from '@/components/resume/ScoreGauge';
@@ -514,6 +515,22 @@ export default function Dashboard() {
             >
               {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {isTailoring ? 'Analyzing...' : 'Re-analyze'}
+            </Button>
+            <Button
+              onClick={() => router.push('/dashboard/builder')}
+              variant="outline"
+              className="h-11 px-6 rounded-xl border-indigo-200 text-indigo-600 font-bold text-sm bg-indigo-50/50 hover:bg-indigo-600 hover:text-white transition-all gap-2"
+            >
+              <Wand2 className="h-4 w-4" />
+              AI Builder
+            </Button>
+            <Button
+              onClick={() => router.push('/dashboard/cover-letter')}
+              variant="outline"
+              className="h-11 px-6 rounded-xl border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Smart Cover Letter
             </Button>
             <Button
               onClick={() => fileInputRef.current?.click()}

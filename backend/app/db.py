@@ -123,6 +123,7 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                     resume_score = :score,
                     score_breakdown = :breakdown,
                     raw_text = :text,
+                    original_score = COALESCE(original_score, :score),
                     updated_at = NOW()
                 WHERE id = :id AND user_id = :user_id
             """),

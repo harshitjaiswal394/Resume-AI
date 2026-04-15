@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import asyncio
+import time
 import google.generativeai as genai
 from typing import List, Dict, Any, Optional
 
@@ -12,7 +13,12 @@ from app.db import execute_vector_search
 
 class AIService:
     def __init__(self):
-        logger.info("AIService initialized with NVIDIA NIM Pipeline Engine")
+        self.models = {
+            "primary": os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
+            "fallback": "meta/llama-3.1-70b-instruct",
+            "parsing": os.getenv("NIM_MODEL_PARSING", "meta/llama-3.1-8b-instruct")
+        }
+        logger.info("AIService initialized with NVIDIA NIM Pipeline Engine and Tiered Fallback")
 
     async def parse_resume(self, text: str) -> Dict[str, Any]:
         """
@@ -42,6 +48,47 @@ class AIService:
             logger.error(f"Error extracting completion content: {str(e)}")
             
         return None
+
+    async def _call_ai_with_fallback(self, prompt: str, system_prompt: str = None, temperature: float = 0.5) -> str:
+        """Hierarchical NVIDIA NIM fallback with deep logging."""
+        from app.services.nvidia_service import nvidia_service
+        
+        models_to_try = [self.models["primary"], self.models["fallback"]]
+        last_error = None
+        
+        for model in models_to_try:
+            start_time = time.time()
+            try:
+                logger.debug(f"AI_PROCESS_START - Model: {model} - Prompt Length: {len(prompt)}")
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt})
+                
+                response = nvidia_service.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=2048
+                )
+                
+                content = self._get_completion_content(response)
+                latency = time.time() - start_time
+                
+                if content:
+                    logger.info(f"AI_PROCESS_SUCCESS - Model: {model} - Latency: {latency:.2f}s")
+                    return content.strip().strip('"')
+                
+                raise Exception("Empty response from AI")
+                
+            except Exception as e:
+                latency = time.time() - start_time
+                logger.warning(f"AI_PROCESS_FAIL - Model: {model} - Latency: {latency:.2f}s - Error: {str(e)}")
+                last_error = e
+                continue
+                
+        logger.error(f"AI_PROCESS_CRITICAL - All models failed. Last error: {str(last_error)}")
+        return ""
 
     async def analyze_resume(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyzes profile and provides insights/score using Nemotron-3-Super."""
@@ -199,39 +246,144 @@ class AIService:
             logger.error(f"Cover letter failed: {str(e)}")
             return "Professional Cover Letter: [Generation error, original text preserved]"
 
+    async def generate_smart_cover_letter(self, resume_data: Dict[str, Any], jd_text: str) -> str:
+        """Generates a tailored letter matching candidate skills with JD using hierarchical fallback."""
+        prompt = f"""
+        You are a professional recruiter. Generate a tailored cover letter (150-200 words).
+        
+        CANDIDATE DATA:
+        {json.dumps(resume_data)}
+        
+        JOB DESCRIPTION:
+        {jd_text[:5000]}
+        
+        Requirements:
+        - Professional tone.
+        - Highlight impact and specific matching skills.
+        - No generic content.
+        - Return ONLY the letter body text.
+        """
+        
+        content = await self._call_ai_with_fallback(prompt, temperature=0.7)
+        return content or "Professional Cover Letter: [Generation error]"
+
     async def rewrite_bullet_point(self, bullet: str, role: str) -> str:
         """Impactful rewriting using reasoning model with strict format enforcement."""
+        system_prompt = "You are a world-class professional resume writer. Return ONLY the final rewritten bullet point text. Do not provide explanations, do not use quotes, and do not include any reasoning. One bullet point only."
+        prompt = f"Example:\nOriginal: Developed a website.\nOutput: Engineered a responsive web platform using modern frameworks, improving user engagement by 15%.\n\nNow rewrite this for a {role} position:\nOriginal: {bullet}\nOutput:"
+        
+        content = await self._call_ai_with_fallback(prompt, system_prompt=system_prompt)
+        return content or bullet
+
+    async def generate_smart_summary(self, profile_data: Dict[str, Any], target_role: str) -> str:
+        """Generates a professional summary based on the profile using fallback logic."""
+        prompt = f"Write a professional resume summary for a {target_role} position based on this data: {json.dumps(profile_data)}. Keep it under 50 words, impactful and recruiter-friendly. Return only the summary text."
+        
+        content = await self._call_ai_with_fallback(prompt, temperature=0.6)
+        return content or "Professional summary: [Generation error]"
+
+    async def optimize_work_experience(self, experience: Dict[str, Any], target_role: str, years: int) -> Dict[str, Any]:
+        """Deeply optimizes a work experience block for ATS & target role."""
+        prompt = f"""
+        Optimize this work experience block for a {target_role} position ({years} years experience).
+        Focus on:
+        1. Action verbs.
+        2. Quantifiable metrics.
+        3. Recruiter-friendly clarity.
+        
+        Return ONLY a VALID JSON object with:
+        {{
+            "title": "Optimized Job Title",
+            "company": "Company Name",
+            "duration": "Duration",
+            "description": ["Optimized bullet 1", "Optimized bullet 2"]
+        }}
+        
+        Input: {json.dumps(experience)}
+        """
+        
+        content = await self._call_ai_with_fallback(prompt, temperature=0.4)
+        if content:
+             parsed = nvidia_service._clean_json(content)
+             if parsed: return parsed
+             
+        return experience
+
+    async def optimize_work_experience(self, experience: Dict[str, Any], target_role: str, years_of_exp: int) -> Dict[str, Any]:
+        """
+        Enhances work experience bullet points for maximum ATS impact.
+        Focuses on action verbs, metrics, and seniority-appropriate tone.
+        """
+        bullets = experience.get("description", [])
+        if not bullets:
+            return experience
+
+        optimized_bullets = []
+        for bullet in bullets:
+            # For work experience, we use the reasoning model (Llama 3.1 70B) for maximum quality
+            optimized = await self.rewrite_bullet_point(bullet, target_role)
+            optimized_bullets.append(optimized)
+            
+        experience["description"] = optimized_bullets
+        return experience
+
+    async def generate_smart_summary(self, profile_data: Dict[str, Any], target_role: str) -> str:
+        """Generates a high-impact professional summary."""
+        prompt = f"""
+        Generate a compelling 3-sentence professional summary for a {target_role} position.
+        Candidate Data: {json.dumps(profile_data)}
+        
+        Guidelines:
+        - Sentence 1: Hard-hitting intro with years of specific experience.
+        - Sentence 2: Key technical achievement or specialization.
+        - Sentence 3: Value proposition/Goal.
+        - Tone: Executive and professional.
+        Return ONLY the summary text.
+        """
         try:
             from app.services.nvidia_service import nvidia_service
-            messages = [
-                {
-                    "role": "system", 
-                    "content": "You are a world-class professional resume writer. Return ONLY the final rewritten bullet point text. Do not provide explanations, do not use quotes, and do not include any reasoning. One bullet point only."
-                },
-                {
-                    "role": "user", 
-                    "content": f"Example:\nOriginal: Developed a website.\nOutput: Engineered a responsive web platform using modern frameworks, improving user engagement by 15%.\n\nNow rewrite this for a {role} position:\nOriginal: {bullet}\nOutput:"
-                }
-            ]
-            
             response = nvidia_service.client.chat.completions.create(
-                model="meta/llama-3.1-8b-instruct",
-                messages=messages,
-                temperature=0.1,  # Lower temperature for strict instruction following
-                max_tokens=256
+                model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=512
             )
             content = self._get_completion_content(response)
-            
-            if content:
-                # Clean up any potential conversational leftovers
-                clean_content = content.replace('Output:', '').replace('Rewritten:', '').strip().strip('"')
-                if len(clean_content) > 5:
-                    return clean_content
-                    
-            return bullet
+            return content.strip().strip('"') if content else "Highly motivated professional..."
         except Exception as e:
-            logger.error(f"Bullet optimization failed: {str(e)}")
-            return bullet
+            logger.error(f"Summary generation failed: {str(e)}")
+            return "Experienced professional with a strong background in technology."
+
+    async def parse_job_url(self, html_content: str) -> Dict[str, Any]:
+        """Extracts structured JD data from raw HTML using Nemotron-Nano."""
+        # This will be called after scraper_service fetches the HTML
+        prompt = f"""
+        Extract the following job details from this HTML content as JSON:
+        - title
+        - company
+        - location
+        - description (clean text)
+        - requirements (list)
+        - skills (list)
+        
+        HTML: {html_content[:15000]}
+        
+        Return ONLY valid JSON.
+        """
+        try:
+            from app.services.nvidia_service import nvidia_service
+            response = nvidia_service.client.chat.completions.create(
+                model="meta/llama-3.1-8b-instruct",
+                messages=[{"role": "system", "content": "You are a job data extraction API. Output ONLY JSON."},
+                         {"role": "user", "content": prompt}],
+                temperature=0.1,
+                response_format={"type": "json_object"}
+            )
+            content = self._get_completion_content(response)
+            return nvidia_service._clean_json(content) if content else {}
+        except Exception as e:
+            logger.error(f"JD Parsing failed: {str(e)}")
+            return {}
 
     async def generate_embedding(self, text: str) -> List[float]:
         return await nvidia_service.generate_embedding(text)
