@@ -226,48 +226,23 @@ resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
   ip_address = google_compute_global_address.lb_ip.address
 }
 
-# 9. Workload Identity Federation (Secure GitHub Auth)
-resource "google_iam_workload_identity_pool" "pool" {
-  workload_identity_pool_id = "resumatch-github-pool"
-  display_name              = "ResuMatch GitHub Pool"
-  description               = "Identity pool for GitHub Actions to deploy ResuMatch AI"
-  depends_on                = [google_project_service.services]
+
+# 8. IAM - Allow public (unauthenticated) access via the Load Balancer
+# Without these, the LB gets 403 Forbidden when forwarding to Cloud Run.
+resource "google_cloud_run_v2_service_iam_member" "backend_public" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.backend.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
-resource "google_iam_workload_identity_pool_provider" "provider" {
-  workload_identity_pool_id          = google_iam_workload_identity_pool.pool.workload_identity_pool_id
-  workload_identity_pool_provider_id = "resumatch-github-provider"
-  display_name                       = "ResuMatch GitHub Provider"
-  description                       = "OIDC identity pool provider for GitHub Actions"
-  
-  attribute_mapping = {
-    "google.subject"             = "assertion.sub"
-    "attribute.repository"       = "assertion.repository"
-    "attribute.owner"            = "assertion.repository_owner"
-    "attribute.refs"             = "assertion.ref"
-  }
-
-  oidc {
-    issuer_uri = "https://token.actions.githubusercontent.com"
-  }
+resource "google_cloud_run_v2_service_iam_member" "frontend_public" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.frontend.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
-# 9.2 Service Account for Deployment (Dedicated)
-resource "google_service_account" "deployer" {
-  account_id   = "resumatch-github-deployer"
-  display_name = "ResuMatch GitHub Deployer Service Account"
-}
-
-# 9.3 Bindings: Allow GitHub to Impersonate the Service Account
-resource "google_service_account_iam_member" "wif_binding" {
-  service_account_id = google_service_account.deployer.name
-  role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.pool.name}/attribute.repository/harshitjaiswal394/Resume-AI"
-}
-
-# 9.4 Grant Deployer SA necessary permissions
-resource "google_project_iam_member" "deployer_editor" {
-  project = var.project_id
-  role    = "roles/editor"
-  member  = "serviceAccount:${google_service_account.deployer.email}"
-}
+# (Workload Identity Federation is managed manually as a Bootstrap resource)
