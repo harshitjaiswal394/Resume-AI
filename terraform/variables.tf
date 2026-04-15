@@ -55,3 +55,9 @@ variable "supabase_service_role_key" {
   type        = string
   sensitive   = true
 }
+
+variable "image_tag" {
+  description = "The tag of the docker image to deploy"
+  type        = string
+  default     = "latest"
+}
