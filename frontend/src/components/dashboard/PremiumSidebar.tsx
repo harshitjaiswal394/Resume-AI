@@ -39,9 +39,9 @@ export function PremiumSidebar({
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <aside className={`border-r bg-white flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}>
+    <aside className={`border-r bg-white hidden lg:flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}>
       {/* Brand */}
-      <div className={`p-6 ${isCollapsed ? 'flex justify-center' : 'p-8'}`}>
+      <div className={`p-6 ${isCollapsed ? 'flex justify-center' : 'p-6 lg:p-8'}`}>
         <Link href="/" className="flex items-center gap-3 group">
           <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">
             <Sparkles className="h-6 w-6 text-white" />
@@ -103,8 +103,8 @@ export function PremiumSidebar({
             </button>
           </div>
 
-          {/* Collapse Button */}
-          <div className={`pt-2 border-t border-slate-100 flex ${isCollapsed ? 'justify-center' : 'justify-start'}`}>
+          {/* Collapse Button - Desktop Only */}
+          <div className={`pt-2 border-t border-slate-100 hidden lg:flex ${isCollapsed ? 'justify-center' : 'justify-start'}`}>
               <button 
                 onClick={() => setIsCollapsed(!isCollapsed)}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-600 transition-colors"

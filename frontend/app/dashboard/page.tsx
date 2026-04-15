@@ -56,6 +56,7 @@ import { useRouter } from 'next/navigation';
 import { useRazorpay } from '@/lib/razorpay';
 
 import { PremiumSidebar } from '@/components/dashboard/PremiumSidebar';
+import { MobileNav } from '@/components/dashboard/MobileNav';
 import { ScoreAnalytics } from '@/components/dashboard/ScoreAnalytics';
 import { StatsColumn } from '@/components/dashboard/StatsColumn';
 import { MatchResults } from '@/components/dashboard/MatchResults';
@@ -480,7 +481,17 @@ export default function Dashboard() {
   if (!isAuthReady || !user) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#f8fafc]">
+      <MobileNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        jobCount={jobMatches.length}
+        suggestionCount={5}
+        onLogout={handleLogout}
+        onDeleteResume={handleDeleteResume}
+        onPlanUpgrade={() => initiatePayment(299, 'Pro Plan')}
+      />
+      
       <PremiumSidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -491,9 +502,9 @@ export default function Dashboard() {
         onPlanUpgrade={() => initiatePayment(299, 'Pro Plan')}
       />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-x-hidden">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10 sticky top-0 z-10">
+        <header className="min-h-20 bg-white border-b border-slate-100 flex flex-col md:flex-row items-center justify-between px-4 md:px-10 py-4 md:py-0 sticky top-0 z-40 gap-4">
           <div className="space-y-1">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Resume Analysis</h1>
             <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
@@ -504,22 +515,22 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-center md:justify-end w-full md:w-auto">
             <Button
               onClick={() => {
                 handleTailor(preferences);
               }}
               disabled={isTailoring}
               variant="outline"
-              className="h-11 px-6 rounded-xl border-slate-200 font-bold text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 gap-2"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-slate-200 font-bold text-xs md:text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 gap-2 flex-grow sm:flex-grow-0"
             >
               {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isTailoring ? 'Analyzing...' : 'Re-analyze'}
+              {isTailoring ? 'Analysing...' : 'Re-analyze'}
             </Button>
             <Button
               onClick={() => router.push('/dashboard/builder')}
               variant="outline"
-              className="h-11 px-6 rounded-xl border-indigo-200 text-indigo-600 font-bold text-sm bg-indigo-50/50 hover:bg-indigo-600 hover:text-white transition-all gap-2"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-indigo-200 text-indigo-600 font-bold text-xs md:text-sm bg-indigo-50/50 hover:bg-indigo-600 hover:text-white transition-all gap-2 flex-grow sm:flex-grow-0"
             >
               <Wand2 className="h-4 w-4" />
               AI Builder
@@ -527,16 +538,16 @@ export default function Dashboard() {
             <Button
               onClick={() => router.push('/dashboard/cover-letter')}
               variant="outline"
-              className="h-11 px-6 rounded-xl border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all gap-2"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-slate-200 text-slate-600 font-bold text-xs md:text-sm hover:bg-slate-50 transition-all gap-2 flex-grow sm:flex-grow-0"
             >
               <FileText className="h-4 w-4" />
-              Smart Cover Letter
+              Cover Letter
             </Button>
             <Button
               onClick={() => fileInputRef.current?.click()}
-              className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white shadow-lg shadow-indigo-100 transition-all"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs md:text-sm text-white shadow-lg shadow-indigo-100 transition-all flex-grow sm:flex-grow-0"
             >
-              Upload New
+              Upload
             </Button>
             <input
               type="file"
@@ -548,7 +559,7 @@ export default function Dashboard() {
           </div>
         </header>
 
-        <div className="p-10 max-w-7xl mx-auto space-y-10">
+        <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-6 md:space-y-10">
           {activeTab === 'dashboard' && (
             <>
               {/* Personalization Section */}

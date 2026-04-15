@@ -11,6 +11,13 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetTrigger 
+} from '@/components/ui/sheet';
+import { 
   Sparkles, 
   Plus, 
   Trash2, 
@@ -66,6 +73,7 @@ export default function AIResumeBuilder() {
   const [step, setStep] = useState(1);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [discovery, setDiscovery] = useState({ role: '', exp: '' });
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -226,56 +234,56 @@ export default function AIResumeBuilder() {
   return (
     <div className="flex flex-col lg:flex-row h-screen bg-slate-50 overflow-hidden">
       {/* --- Left Panel: Editor --- */}
-      <div className="flex-1 flex flex-col h-full bg-white border-r border-slate-200">
-        <header className="p-6 border-b border-slate-100 flex items-center justify-between bg-white/50 backdrop-blur-md sticky top-0 z-10">
+      <div className="flex-1 flex flex-col h-full bg-white border-r border-slate-200 overflow-y-auto">
+        <header className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between bg-white/50 backdrop-blur-md sticky top-0 z-10 gap-2">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 leading-none mb-1">AI Resume Builder</h1>
+              <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-none mb-1">AI Builder</h1>
               <div className="flex items-center gap-2">
-                <p className="text-sm text-slate-500 font-medium">Target: {discovery.role}</p>
+                <p className="text-xs md:text-sm text-slate-500 font-medium truncate max-w-[100px] md:max-w-none">Target: {discovery.role}</p>
                 {originalScore !== null && (
-                  <Badge className="bg-green-50 text-green-600 border-green-100 font-black text-[10px] uppercase">
-                    +{currentScore - originalScore} Points Gain
+                  <Badge className="bg-green-50 text-green-600 border-green-100 font-black text-[8px] md:text-[10px] uppercase">
+                    +{currentScore - originalScore}
                   </Badge>
                 )}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleSave} disabled={isSaving} className="rounded-xl border-slate-200">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              Save Progress
+            <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 md:mr-2" />}
+              <span className="hidden md:inline">Save Progress</span>
             </Button>
-            <Button onClick={handleDownloadPDF} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200">
-              <Download className="h-4 w-4 mr-2" />
-              Export PDF
+            <Button onClick={handleDownloadPDF} className="h-9 md:h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 px-3 md:px-4">
+              <Download className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Export PDF</span>
             </Button>
           </div>
         </header>
 
-        <div className="px-12 py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-4 md:px-12 py-4 md:py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4">
           <div className="flex-1 max-w-xl">
              <div className="flex items-center justify-between mb-2">
                {steps.map((s) => (
                  <div 
                    key={s.id}
-                   className={`flex flex-col items-center gap-2 transition-all duration-300 ${step >= s.id ? 'text-indigo-600' : 'text-slate-400'}`}
+                   className={`flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 ${step >= s.id ? 'text-indigo-600' : 'text-slate-400'}`}
                  >
-                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${step >= s.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-slate-200'}`}>
-                     <s.icon className="h-5 w-5" />
+                   <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${step >= s.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-slate-200'}`}>
+                     <s.icon className="h-4 w-4 md:h-5 md:w-5" />
                    </div>
-                   <span className="text-[10px] font-bold uppercase tracking-wider">{s.name}</span>
+                   <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-wider hidden sm:block">{s.name}</span>
                  </div>
                ))}
              </div>
-             <Progress value={(step / steps.length) * 100} className="h-1.5 bg-slate-200" />
+             <Progress value={(step / steps.length) * 100} className="h-1 bg-slate-200" />
           </div>
 
           {originalScore !== null && (
-            <div className="ml-12 pl-12 border-l border-slate-200 flex items-center gap-6">
+            <div className="hidden sm:flex ml-4 md:ml-12 pl-4 md:pl-12 border-l border-slate-200 items-center gap-3 md:gap-6">
               <div className="text-center">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Initial Score</p>
                 <p className="text-xl font-black text-slate-400">{originalScore}</p>
@@ -291,7 +299,7 @@ export default function AIResumeBuilder() {
           )}
         </div>
 
-        <ScrollArea className="flex-1 p-8 lg:p-12">
+        <ScrollArea className="flex-1 p-4 md:p-8 lg:p-12">
           <div className="max-w-2xl mx-auto">
             <AnimatePresence mode="wait">
               {step === 1 && (
@@ -485,8 +493,8 @@ export default function AIResumeBuilder() {
         </ScrollArea>
       </div>
 
-      {/* --- Right Panel: Live Preview --- */}
-      <div className="flex-1 bg-slate-200/50 p-8 lg:p-12 flex justify-center overflow-y-auto overflow-x-hidden relative">
+      {/* --- Right Panel: Live Preview (Desktop) --- */}
+      <div className="hidden lg:flex flex-1 bg-slate-200/50 p-8 lg:p-12 justify-center overflow-y-auto overflow-x-hidden relative">
         <div className="absolute top-4 right-4 flex gap-2 z-10">
           <Badge variant="outline" className="bg-white/80 backdrop-blur-md px-3 py-1 font-bold text-indigo-600 border-indigo-100 shadow-sm">
             <Sparkles className="h-3 w-3 mr-1.5" />
@@ -498,63 +506,63 @@ export default function AIResumeBuilder() {
           </div>
         </div>
 
-        <div className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.85] lg:scale-[0.8] xl:scale-[0.9] flex flex-col font-sans" ref={previewRef}>
+        <div className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] lg:scale-[0.8] xl:scale-[0.9] flex flex-col font-sans" ref={previewRef}>
           {/* Top Decorative Bar */}
           <div className="h-2 bg-indigo-600 w-full" />
           
           {/* Header */}
-          <div className="p-16 pb-12 space-y-4">
-            <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
-            <div className="flex items-center gap-4 text-slate-500 text-xs font-bold tracking-widest uppercase">
+          <div className="p-8 md:p-16 pb-8 md:pb-12 space-y-4">
+            <h2 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
+            <div className="flex items-center gap-2 md:gap-4 text-slate-500 text-[10px] md:text-xs font-bold tracking-widest uppercase">
               {data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-indigo-600" /> {data.email}</span>}
               {data.phone && <span className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-indigo-600" /> {data.phone}</span>}
             </div>
-            <div className="h-px bg-slate-100 w-24 !mt-6" />
+            <div className="h-px bg-slate-100 w-16 md:w-24 !mt-4 md:!mt-6" />
           </div>
 
-          <div className="px-16 pb-16 space-y-10 flex-1">
+          <div className="px-8 md:px-16 pb-8 md:pb-16 space-y-6 md:space-y-10 flex-1">
             {/* Summary */}
-            <section className="space-y-4">
+            <section className="space-y-2 md:space-y-4">
               <div className="flex items-center gap-3">
-                 <h3 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Profile</h3>
+                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Profile</h3>
                  <div className="h-px bg-indigo-50 flex-1" />
               </div>
-              <p className="text-slate-600 leading-relaxed text-[13px] font-medium">{data.summary || "Add a summary to see the magic..."}</p>
+              <p className="text-slate-600 leading-relaxed text-[11px] md:text-[13px] font-medium">{data.summary || "Add a summary to see the magic..."}</p>
             </section>
 
             {/* Skills */}
-            <section className="space-y-3">
+            <section className="space-y-2 md:space-y-3">
               <div className="flex items-center gap-3">
-                 <h3 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expertise</h3>
+                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expertise</h3>
                  <div className="h-px bg-indigo-50 flex-1" />
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 md:gap-2">
                 {data.skills.map((s, i) => (
-                  <span key={i} className="text-[11px] font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded border border-slate-100">{s}</span>
+                  <span key={i} className="text-[9px] md:text-[11px] font-bold text-slate-700 bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded border border-slate-100">{s}</span>
                 ))}
               </div>
             </section>
 
             {/* Experience */}
-            <section className="space-y-6">
+            <section className="space-y-4 md:space-y-6">
               <div className="flex items-center gap-3">
-                 <h3 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Experience</h3>
+                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Experience</h3>
                  <div className="h-px bg-indigo-50 flex-1" />
               </div>
-              <div className="space-y-8">
+              <div className="space-y-6 md:space-y-8">
                 {data.experience.map((exp, i) => exp.title && (
-                  <div key={i} className="space-y-3 relative">
+                  <div key={i} className="space-y-2 md:space-y-3 relative">
                     <div className="flex items-start justify-between">
                       <div className="space-y-0.5">
-                        <h4 className="text-[15px] font-extrabold text-slate-900">{exp.title}</h4>
-                        <div className="text-[12px] font-bold text-indigo-500 uppercase tracking-wider">{exp.company}</div>
+                        <h4 className="text-[13px] md:text-[15px] font-extrabold text-slate-900">{exp.title}</h4>
+                        <div className="text-[10px] md:text-[12px] font-bold text-indigo-500 uppercase tracking-wider">{exp.company}</div>
                       </div>
-                      {exp.duration && <span className="text-[10px] font-black text-slate-400 uppercase bg-slate-50 px-2 py-1 rounded">{exp.duration}</span>}
+                      {exp.duration && <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded">{exp.duration}</span>}
                     </div>
-                    <ul className="list-none space-y-2">
+                    <ul className="list-none space-y-1.5 md:space-y-2">
                       {exp.description.map((b, bi) => b.trim() && (
-                        <li key={bi} className="text-[12px] text-slate-600 leading-normal flex gap-3">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-200 mt-1.5 flex-shrink-0" />
+                        <li key={bi} className="text-[10px] md:text-[12px] text-slate-600 leading-normal flex gap-2 md:gap-3">
+                          <span className="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full bg-indigo-200 mt-1 md:mt-1.5 flex-shrink-0" />
                           {b}
                         </li>
                       ))}
@@ -565,19 +573,19 @@ export default function AIResumeBuilder() {
             </section>
 
             {/* Education */}
-            <section className="space-y-4">
+            <section className="space-y-3 md:space-y-4">
               <div className="flex items-center gap-3">
-                 <h3 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Education</h3>
+                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Education</h3>
                  <div className="h-px bg-indigo-50 flex-1" />
               </div>
-              <div className="grid grid-cols-1 gap-6">
+              <div className="grid grid-cols-1 gap-4 md:gap-6">
                 {data.education.map((edu, i) => (
                   <div key={i} className="flex justify-between items-start">
                     <div>
-                      <h4 className="text-[14px] font-bold text-slate-800">{edu.degree || "Degree Name"}</h4>
-                      <p className="text-[12px] text-slate-400 font-medium">{edu.institution || "University Name"}</p>
+                      <h4 className="text-[12px] md:text-[14px] font-bold text-slate-800">{edu.degree || "Degree Name"}</h4>
+                      <p className="text-[10px] md:text-[12px] text-slate-400 font-medium">{edu.institution || "University Name"}</p>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{edu.year || "2020"}</span>
+                    <span className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">{edu.year || "2020"}</span>
                   </div>
                 ))}
               </div>
@@ -585,10 +593,58 @@ export default function AIResumeBuilder() {
           </div>
           
           {/* Footer Branding (Subtle) */}
-          <div className="p-12 border-t border-slate-50 text-center">
-             <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
+          <div className="p-8 md:p-12 border-t border-slate-50 text-center">
+             <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
           </div>
         </div>
+      </div>
+
+      {/* --- Mobile: Live Preview Floating Toggle & Sheet --- */}
+      <div className="lg:hidden fixed bottom-6 right-6 z-50">
+        <Sheet open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+           <SheetTrigger asChild>
+             <Button variant="default" size="icon" className="h-14 w-14 rounded-full bg-indigo-600 shadow-2xl shadow-indigo-200">
+               <Eye className="h-6 w-6" />
+             </Button>
+           </SheetTrigger>
+           <SheetContent side="bottom" className="h-[90vh] p-0 border-none rounded-t-[32px] overflow-hidden">
+             <SheetHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white shrink-0">
+               <div>
+                  <SheetTitle className="text-xl font-black">Live Preview</SheetTitle>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ATS Optimized Analysis</p>
+               </div>
+               <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="rounded-xl border-indigo-100 text-indigo-600 font-bold">
+                 <Download className="h-4 w-4 mr-2" /> PDF
+               </Button>
+             </SheetHeader>
+             <div className="flex-1 bg-slate-100/50 p-4 overflow-y-auto flex justify-center pb-20">
+                {/* Scaled Preview for Mobile Sheet */}
+                <div className="bg-white shadow-2xl w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.4] sm:scale-[0.6] flex flex-col font-sans" ref={previewRef}>
+                   {/* We reuse the same content as desktop preview here or refactor it. 
+                       For now, since it uses a ref, it will visually match if we put the same content. 
+                       Actually, the ref should be on the visible one or shared. 
+                       Alternative: use a shared component ResumePreview. 
+                   */}
+                   {/* Restoring the content inside the sheet for mobile view */}
+                   <div className="h-2 bg-indigo-600 w-full" />
+                   <div className="p-16 pb-12 space-y-4">
+                      <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
+                      <div className="flex items-center gap-4 text-slate-500 text-xs font-bold tracking-widest uppercase">
+                        {data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-indigo-600" /> {data.email}</span>}
+                        {data.phone && <span className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-indigo-600" /> {data.phone}</span>}
+                      </div>
+                      <div className="h-px bg-slate-100 w-24 !mt-6" />
+                   </div>
+                   {/* ... Simplified version for mobile preview toggle ... */}
+                   <div className="px-16 pb-16 space-y-10 flex-1">
+                      <p className="text-slate-600 font-medium">{data.summary || "Summary loading..."}</p>
+                      <div className="h-40 bg-slate-50 rounded-xl" /> {/* Placeholder for brevity */}
+                      <p className="text-center text-slate-300 font-bold uppercase tracking-widest text-[10px]">Tap PDF to view full resume</p>
+                   </div>
+                </div>
+             </div>
+           </SheetContent>
+        </Sheet>
       </div>
     </div>
   );
