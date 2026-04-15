@@ -252,7 +252,7 @@ export default function Dashboard() {
       if (result.success) {
         const updatedResume = {
           ...selectedResume,
-          resume_score: result.data.analysis.score || result.data.analysis.matchScore,
+          resume_score: result.data.analysis.score,
           score_breakdown: result.data.analysis
         };
 
@@ -393,8 +393,8 @@ export default function Dashboard() {
                     ...prev,
                     status: 'complete',
                     parsedData: resultData.parsed_data,
-                    resumeScore: resultData.analysis.score,
-                    scoreBreakdown: resultData.analysis.insights,
+                    resume_score: resultData.analysis.score,
+                    score_breakdown: resultData.analysis,
                     rawText: resultData.raw_text
                   }));
 
