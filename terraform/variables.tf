@@ -44,4 +44,14 @@ variable "nvidia_api_key_reranking" {
   sensitive   = true
 }
 
+variable "supabase_url" {
+  description = "Supabase project URL"
+  type        = string
+  sensitive   = true
+}
 
+variable "supabase_service_role_key" {
+  description = "Supabase service role key (server-side only)"
+  type        = string
+  sensitive   = true
+}
