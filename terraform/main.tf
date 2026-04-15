@@ -90,7 +90,6 @@ resource "google_cloud_run_v2_service" "backend" {
       ports {
         container_port = 8090
       }
-      timeout = "300s"
       resources {
         limits = {
           memory = "1Gi"
@@ -130,7 +129,7 @@ resource "google_cloud_run_v2_service" "backend" {
       connector = google_vpc_access_connector.connector.id
       egress    = "PRIVATE_RANGES_ONLY"
     }
-    timeout = "600s"
+    timeout = "300s"
   }
 }
 
@@ -145,7 +144,6 @@ resource "google_cloud_run_v2_service" "frontend" {
       ports {
         container_port = 3000
       }
-      timeout = "300s"
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"
         value = "https://app.jaiswal.shop"
@@ -159,6 +157,7 @@ resource "google_cloud_run_v2_service" "frontend" {
       connector = google_vpc_access_connector.connector.id
       egress    = "PRIVATE_RANGES_ONLY"
     }
+    timeout = "300s"
   }
 }
 
