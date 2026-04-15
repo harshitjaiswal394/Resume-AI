@@ -48,5 +48,5 @@ CMD ["gunicorn", "app.main:app", \
      "-w", "2", \
      "-k", "uvicorn.workers.UvicornWorker", \
      "--worker-connections", "1000", \
-     "--timeout", "300", \
+     "--timeout", "600", \
      "--log-level", "info"]

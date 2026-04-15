@@ -129,6 +129,7 @@ resource "google_cloud_run_v2_service" "backend" {
       connector = google_vpc_access_connector.connector.id
       egress    = "ALL_TRAFFIC"
     }
+    timeout = "600s"
   }
 }
 
@@ -145,6 +146,10 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"
+        value = "https://app.jaiswal.shop"
+      }
+      env {
+        name  = "BACKEND_API_URL"
         value = "https://app.jaiswal.shop"
       }
     }
@@ -179,10 +184,14 @@ resource "google_compute_region_network_endpoint_group" "frontend_neg" {
 }
 
 resource "google_compute_backend_service" "backend_service" {
-  name        = "backend-api-service"
-  protocol    = "HTTP"
-  port_name   = "http"
-  timeout_sec = 30
+  name      = "backend-api-service"
+  protocol  = "HTTP"
+  port_name = "http"
+
+  log_config {
+    enable      = true
+    sample_rate = 1.0
+  }
 
   backend {
     group = google_compute_region_network_endpoint_group.backend_neg.id
@@ -241,4 +250,18 @@ resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
 }
 
 
-# (Workload Identity Federation and Cloud Run IAM are managed manually as Bootstrap resources)
+# 8. DNS Configuration
+resource "google_dns_managed_zone" "primary" {
+  name        = "resumatch-zone"
+  dns_name    = "${var.domain_name}."
+  description = "Managed zone for ResuMatch AI"
+}
+
+resource "google_dns_record_set" "app" {
+  name         = "app.${google_dns_managed_zone.primary.dns_name}"
+  managed_zone = google_dns_managed_zone.primary.name
+  type         = "A"
+  ttl          = 300
+  rrdatas      = [google_compute_global_address.lb_ip.address]
+}
+

@@ -10,3 +10,8 @@ output "load_balancer_ip" {
   value = google_compute_global_address.lb_ip.address
   description = "The IP address of the Global Load Balancer. Point app.jaiswal.shop to this IP."
 }
+
+output "dns_nameservers" {
+  value = google_dns_managed_zone.primary.name_servers
+  description = "The nameservers for the managed DNS zone. Update your registrar to use these."
+}

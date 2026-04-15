@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 export async function startResumeAnalysis(userId: string, resumeId: string, formData: FormData) {
   try {
     const file = formData.get('file') as File;
-    const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
     
     const backendFormData = new FormData();
     backendFormData.append('file', file);
@@ -28,7 +28,7 @@ export async function startResumeAnalysis(userId: string, resumeId: string, form
 
 export async function completeResumeAnalysis(userId: string, resumeId: string, data: any) {
   try {
-    const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
     const response = await fetch(`${backendUrl}/api/resume/save-analysis`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -44,7 +44,7 @@ export async function completeResumeAnalysis(userId: string, resumeId: string, d
 
 export async function tailorResume(userId: string, resumeId: string, preferences: any, parsedData: any) {
   try {
-    const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
     const response = await fetch(`${backendUrl}/api/resume/tailor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
