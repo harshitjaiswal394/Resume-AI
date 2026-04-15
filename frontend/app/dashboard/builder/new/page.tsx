@@ -148,7 +148,7 @@ export default function AIResumeBuilder() {
       {
         loading: 'Llama 3.1 is optimizing your bullets...',
         success: (msg) => { setIsOptimizing(false); return msg; },
-        error: (err) => { setIsOptimizing(false); return str(err); }
+        error: (err) => { setIsOptimizing(false); return String(err); }
       }
     );
   };
