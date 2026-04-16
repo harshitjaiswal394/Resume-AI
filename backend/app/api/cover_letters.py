@@ -12,6 +12,31 @@ import time
 router = APIRouter()
 logger = logging.getLogger("resumatch-api.cover_letters")
 
+@router.post("/fetch-jd")
+async def fetch_job_description(payload: Dict[str, Any] = Body(...)):
+    """
+    Stand-alone JD fetching endpoint for the frontend.
+    Returns clean text from a URL.
+    """
+    jd_url = payload.get("jdUrl")
+    if not jd_url:
+        raise HTTPException(status_code=400, detail="Job URL is required")
+    
+    logger.info(f"Fetching JD for preview: {jd_url}")
+    try:
+        raw_text = await scraper_service.fetch_job_content(jd_url)
+        if not raw_text or len(raw_text) < 150:
+             raise HTTPException(status_code=422, detail="Scraping failed or content too short")
+             
+        # Optional: Use AI to clean up the scraped Markdown/Text if it looks messy
+        # For now, return the raw text as Jina does a great job.
+        return {"success": True, "jdText": raw_text}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Fetch JD failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Could not retrieve job description from this URL")
+
 @router.post("/generate")
 async def generate_smart_cover_letter(payload: Dict[str, Any] = Body(...)):
     """
@@ -22,18 +47,18 @@ async def generate_smart_cover_letter(payload: Dict[str, Any] = Body(...)):
     user_id = payload.get("userId", "guest")
     resume_id = payload.get("resumeId")
     resume_data = payload.get("resumeData")
-    jd_text = payload.get("jdText", "")
-    jd_url = payload.get("jdUrl", "")
+    jd_text = payload.get("jdText", "").strip()
+    jd_url = payload.get("jdUrl", "").strip()
     
     logger.info(f"GEN_COVER_LETTER_START - User: {user_id} - Resume: {resume_id}")
     
     if not resume_data and not resume_id:
         raise HTTPException(status_code=400, detail="Resume data or ID is required")
-        
-    # 1. Fetch JD if URL provided
+    
+    # Prioritize jd_text (explicit manual paste or already fetched) over jd_url
     target_jd = jd_text
-    if jd_url and not jd_text:
-        logger.info(f"Fetching JD from URL for cover letter: {jd_url}")
+    if not target_jd and jd_url:
+        logger.info(f"Fetching JD from URL (fallback): {jd_url}")
         target_jd = await scraper_service.fetch_job_content(jd_url) or ""
         
     if not target_jd:

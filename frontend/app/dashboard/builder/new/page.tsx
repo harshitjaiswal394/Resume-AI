@@ -10,20 +10,20 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle, 
-  SheetTrigger 
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger
 } from '@/components/ui/sheet';
-import { 
-  Sparkles, 
-  Plus, 
-  Trash2, 
-  Save, 
-  Download, 
-  ChevronLeft, 
+import {
+  Sparkles,
+  Plus,
+  Trash2,
+  Save,
+  Download,
+  ChevronLeft,
   ChevronRight,
   User,
   List,
@@ -92,12 +92,12 @@ export default function AIResumeBuilder() {
   useEffect(() => {
     const saved = sessionStorage.getItem('builder_discovery');
     if (saved) setDiscovery(jsonParseSafe(saved));
-    
+
     // If we have a resume ID in the URL, fetch its data including original_score
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
     if (id && user) {
-       fetchResume(id);
+      fetchResume(id);
     }
   }, [user]);
 
@@ -107,7 +107,7 @@ export default function AIResumeBuilder() {
       .select('*')
       .eq('id', id)
       .single();
-    
+
     if (resume) {
       setData(resume.parsed_data || data);
       setOriginalScore(resume.original_score);
@@ -145,10 +145,10 @@ export default function AIResumeBuilder() {
           const newExp = [...data.experience];
           newExp[index] = result.optimized;
           setData({ ...data, experience: newExp });
-          
+
           // Update current score (mock calculation for now, or fetch from backend if available)
-          setCurrentScore(prev => Math.min(95, prev + 5)); 
-          
+          setCurrentScore(prev => Math.min(95, prev + 5));
+
           return 'Work experience optimized for ATS!';
         }
         throw new Error('Optimization failed');
@@ -266,20 +266,20 @@ export default function AIResumeBuilder() {
 
         <div className="px-4 md:px-12 py-4 md:py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4">
           <div className="flex-1 max-w-xl">
-             <div className="flex items-center justify-between mb-2">
-               {steps.map((s) => (
-                 <div 
-                   key={s.id}
-                   className={`flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 ${step >= s.id ? 'text-indigo-600' : 'text-slate-400'}`}
-                 >
-                   <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${step >= s.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-slate-200'}`}>
-                     <s.icon className="h-4 w-4 md:h-5 md:w-5" />
-                   </div>
-                   <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-wider hidden sm:block">{s.name}</span>
-                 </div>
-               ))}
-             </div>
-             <Progress value={(step / steps.length) * 100} className="h-1 bg-slate-200" />
+            <div className="flex items-center justify-between mb-2">
+              {steps.map((s) => (
+                <div
+                  key={s.id}
+                  className={`flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 ${step >= s.id ? 'text-indigo-600' : 'text-slate-400'}`}
+                >
+                  <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${step >= s.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-slate-200'}`}>
+                    <s.icon className="h-4 w-4 md:h-5 md:w-5" />
+                  </div>
+                  <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-wider hidden sm:block">{s.name}</span>
+                </div>
+              ))}
+            </div>
+            <Progress value={(step / steps.length) * 100} className="h-1 bg-slate-200" />
           </div>
 
           {originalScore !== null && (
@@ -303,21 +303,21 @@ export default function AIResumeBuilder() {
           <div className="max-w-2xl mx-auto">
             <AnimatePresence mode="wait">
               {step === 1 && (
-                <motion.div 
-                  key="step1" 
-                  initial={{ opacity: 0, x: 20 }} 
-                  animate={{ opacity: 1, x: 0 }} 
+                <motion.div
+                  key="step1"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   className="space-y-6"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700">Full Name</label>
-                      <Input value={data.fullName} onChange={(e) => setData({...data, fullName: e.target.value})} placeholder="Jane Doe" className="h-12 rounded-xl" />
+                      <Input value={data.fullName} onChange={(e) => setData({ ...data, fullName: e.target.value })} placeholder="Jane Doe" className="h-12 rounded-xl" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700">Email Address</label>
-                      <Input value={data.email} onChange={(e) => setData({...data, email: e.target.value})} placeholder="jane@example.com" className="h-12 rounded-xl" />
+                      <Input value={data.email} onChange={(e) => setData({ ...data, email: e.target.value })} placeholder="jane@example.com" className="h-12 rounded-xl" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -328,10 +328,10 @@ export default function AIResumeBuilder() {
                         AI Generate
                       </Button>
                     </div>
-                    <Textarea 
-                      value={data.summary} 
-                      onChange={(e) => setData({...data, summary: e.target.value})} 
-                      placeholder="High-impact 3-sentence summary..." 
+                    <Textarea
+                      value={data.summary}
+                      onChange={(e) => setData({ ...data, summary: e.target.value })}
+                      placeholder="High-impact 3-sentence summary..."
                       className="min-h-[120px] rounded-xl resize-none"
                     />
                   </div>
@@ -343,15 +343,15 @@ export default function AIResumeBuilder() {
                   <div className="space-y-4">
                     <label className="text-sm font-semibold text-slate-700">Skills & Expertise</label>
                     <div className="flex gap-2">
-                      <Input 
+                      <Input
                         id="skill-input"
-                        placeholder="e.g. React, Python, Product Management" 
+                        placeholder="e.g. React, Python, Product Management"
                         className="h-12 rounded-xl"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             const val = (e.target as HTMLInputElement).value;
                             if (val) {
-                              setData({...data, skills: [...data.skills, val]});
+                              setData({ ...data, skills: [...data.skills, val] });
                               (e.target as HTMLInputElement).value = '';
                             }
                           }
@@ -360,7 +360,7 @@ export default function AIResumeBuilder() {
                       <Button onClick={() => {
                         const el = document.getElementById('skill-input') as HTMLInputElement;
                         if (el.value) {
-                          setData({...data, skills: [...data.skills, el.value]});
+                          setData({ ...data, skills: [...data.skills, el.value] });
                           el.value = '';
                         }
                       }} className="h-12 px-6 rounded-xl bg-slate-900">Add</Button>
@@ -370,7 +370,7 @@ export default function AIResumeBuilder() {
                         <div key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold flex items-center gap-2 border border-indigo-100">
                           {s}
                           <button onClick={() => {
-                            const newSkills = [...data.skills]; newSkills.splice(i, 1); setData({...data, skills: newSkills});
+                            const newSkills = [...data.skills]; newSkills.splice(i, 1); setData({ ...data, skills: newSkills });
                           }}><Trash2 className="h-3 w-3" /></button>
                         </div>
                       ))}
@@ -386,48 +386,48 @@ export default function AIResumeBuilder() {
                       <CardContent className="p-6 space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <Input placeholder="Job Title" value={exp.title} onChange={(e) => {
-                            const newExp = [...data.experience]; newExp[idx].title = e.target.value; setData({...data, experience: newExp});
+                            const newExp = [...data.experience]; newExp[idx].title = e.target.value; setData({ ...data, experience: newExp });
                           }} className="h-10 border-none bg-slate-50 font-bold" />
                           <Input placeholder="Company" value={exp.company} onChange={(e) => {
-                            const newExp = [...data.experience]; newExp[idx].company = e.target.value; setData({...data, experience: newExp});
+                            const newExp = [...data.experience]; newExp[idx].company = e.target.value; setData({ ...data, experience: newExp });
                           }} className="h-10 border-none bg-slate-50" />
                         </div>
                         <div className="flex items-center justify-between">
-                           <label className="text-xs font-bold text-slate-400 uppercase">Key Achievements</label>
-                           <Button 
-                             onClick={() => handleOptimizeExperience(idx)}
-                             variant="outline" size="sm" 
-                             className="h-8 rounded-lg border-indigo-100 text-indigo-600 hover:bg-indigo-50 font-bold"
-                            >
-                             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                             Optimize Bullet Points
-                           </Button>
+                          <label className="text-xs font-bold text-slate-400 uppercase">Key Achievements</label>
+                          <Button
+                            onClick={() => handleOptimizeExperience(idx)}
+                            variant="outline" size="sm"
+                            className="h-8 rounded-lg border-indigo-100 text-indigo-600 hover:bg-indigo-50 font-bold"
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                            Optimize Bullet Points
+                          </Button>
                         </div>
                         {exp.description.map((bullet, bIdx) => (
                           <div key={bIdx} className="flex gap-2">
-                            <Textarea 
-                              value={bullet} 
+                            <Textarea
+                              value={bullet}
                               onChange={(e) => {
-                                const newExp = [...data.experience]; newExp[idx].description[bIdx] = e.target.value; setData({...data, experience: newExp});
+                                const newExp = [...data.experience]; newExp[idx].description[bIdx] = e.target.value; setData({ ...data, experience: newExp });
                               }}
                               className="min-h-[60px] text-sm border-none focus-visible:ring-0 p-0 shadow-none"
                             />
                             <Button variant="ghost" size="icon" onClick={() => {
-                              const newExp = [...data.experience]; newExp[idx].description.splice(bIdx, 1); setData({...data, experience: newExp});
+                              const newExp = [...data.experience]; newExp[idx].description.splice(bIdx, 1); setData({ ...data, experience: newExp });
                             }} className="h-8 w-8 text-slate-300 hover:text-red-500">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         ))}
                         <Button variant="ghost" size="sm" onClick={() => {
-                          const newExp = [...data.experience]; newExp[idx].description.push(''); setData({...data, experience: newExp});
+                          const newExp = [...data.experience]; newExp[idx].description.push(''); setData({ ...data, experience: newExp });
                         }} className="w-full border-dashed border-slate-200 hover:bg-slate-50 text-slate-400 h-8 rounded-lg">
                           <Plus className="h-3 w-3 mr-1" /> Add Bullet
                         </Button>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({...data, experience: [...data.experience, { title: '', company: '', duration: '', description: [''] }]})} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
+                  <Button onClick={() => setData({ ...data, experience: [...data.experience, { title: '', company: '', duration: '', description: [''] }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
                     <Plus className="h-5 w-5 mr-2" /> Add New Work Experience
                   </Button>
                 </motion.div>
@@ -451,20 +451,20 @@ export default function AIResumeBuilder() {
                       </Button>
                       <CardContent className="p-6 space-y-4">
                         <Input placeholder="Degree (e.g. BS Computer Science)" value={edu.degree} onChange={(e) => {
-                          const newEdu = [...data.education]; newEdu[idx].degree = e.target.value; setData({...data, education: newEdu});
+                          const newEdu = [...data.education]; newEdu[idx].degree = e.target.value; setData({ ...data, education: newEdu });
                         }} className="h-12 rounded-xl" />
                         <div className="grid grid-cols-2 gap-4">
                           <Input placeholder="Institution" value={edu.institution} onChange={(e) => {
-                            const newEdu = [...data.education]; newEdu[idx].institution = e.target.value; setData({...data, education: newEdu});
+                            const newEdu = [...data.education]; newEdu[idx].institution = e.target.value; setData({ ...data, education: newEdu });
                           }} className="h-10 border-none bg-slate-50" />
                           <Input placeholder="Year" value={edu.year} onChange={(e) => {
-                            const newEdu = [...data.education]; newEdu[idx].year = e.target.value; setData({...data, education: newEdu});
+                            const newEdu = [...data.education]; newEdu[idx].year = e.target.value; setData({ ...data, education: newEdu });
                           }} className="h-10 border-none bg-slate-50" />
                         </div>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({...data, education: [...data.education, { degree: '', institution: '', year: '' }]})} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
+                  <Button onClick={() => setData({ ...data, education: [...data.education, { degree: '', institution: '', year: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
                     <Plus className="h-5 w-5 mr-2" /> Add Education
                   </Button>
                 </motion.div>
@@ -472,16 +472,16 @@ export default function AIResumeBuilder() {
             </AnimatePresence>
 
             <div className="mt-12 flex items-center justify-between gap-4">
-              <Button 
-                variant="outline" 
-                disabled={step === 1} 
+              <Button
+                variant="outline"
+                disabled={step === 1}
                 onClick={() => setStep(step - 1)}
                 className="flex-1 h-12 rounded-xl border-slate-200 font-bold"
               >
                 Previous Section
               </Button>
-              <Button 
-                disabled={step === steps.length} 
+              <Button
+                disabled={step === steps.length}
                 onClick={() => setStep(step + 1)}
                 className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 font-bold text-white shadow-lg"
               >
@@ -509,7 +509,7 @@ export default function AIResumeBuilder() {
         <div className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] lg:scale-[0.8] xl:scale-[0.9] flex flex-col font-sans" ref={previewRef}>
           {/* Top Decorative Bar */}
           <div className="h-2 bg-indigo-600 w-full" />
-          
+
           {/* Header */}
           <div className="p-8 md:p-16 pb-8 md:pb-12 space-y-4">
             <h2 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
@@ -524,8 +524,8 @@ export default function AIResumeBuilder() {
             {/* Summary */}
             <section className="space-y-2 md:space-y-4">
               <div className="flex items-center gap-3">
-                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Profile</h3>
-                 <div className="h-px bg-indigo-50 flex-1" />
+                <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Profile</h3>
+                <div className="h-px bg-indigo-50 flex-1" />
               </div>
               <p className="text-slate-600 leading-relaxed text-[11px] md:text-[13px] font-medium">{data.summary || "Add a summary to see the magic..."}</p>
             </section>
@@ -533,8 +533,8 @@ export default function AIResumeBuilder() {
             {/* Skills */}
             <section className="space-y-2 md:space-y-3">
               <div className="flex items-center gap-3">
-                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expertise</h3>
-                 <div className="h-px bg-indigo-50 flex-1" />
+                <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expertise</h3>
+                <div className="h-px bg-indigo-50 flex-1" />
               </div>
               <div className="flex flex-wrap gap-1.5 md:gap-2">
                 {data.skills.map((s, i) => (
@@ -546,8 +546,8 @@ export default function AIResumeBuilder() {
             {/* Experience */}
             <section className="space-y-4 md:space-y-6">
               <div className="flex items-center gap-3">
-                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Experience</h3>
-                 <div className="h-px bg-indigo-50 flex-1" />
+                <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Experience</h3>
+                <div className="h-px bg-indigo-50 flex-1" />
               </div>
               <div className="space-y-6 md:space-y-8">
                 {data.experience.map((exp, i) => exp.title && (
@@ -575,8 +575,8 @@ export default function AIResumeBuilder() {
             {/* Education */}
             <section className="space-y-3 md:space-y-4">
               <div className="flex items-center gap-3">
-                 <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Education</h3>
-                 <div className="h-px bg-indigo-50 flex-1" />
+                <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Education</h3>
+                <div className="h-px bg-indigo-50 flex-1" />
               </div>
               <div className="grid grid-cols-1 gap-4 md:gap-6">
                 {data.education.map((edu, i) => (
@@ -591,10 +591,10 @@ export default function AIResumeBuilder() {
               </div>
             </section>
           </div>
-          
+
           {/* Footer Branding (Subtle) */}
           <div className="p-8 md:p-12 border-t border-slate-50 text-center">
-             <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
+            <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
           </div>
         </div>
       </div>
@@ -602,48 +602,48 @@ export default function AIResumeBuilder() {
       {/* --- Mobile: Live Preview Floating Toggle & Sheet --- */}
       <div className="lg:hidden fixed bottom-6 right-6 z-50">
         <Sheet open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-           <SheetTrigger asChild>
-             <Button variant="default" size="icon" className="h-14 w-14 rounded-full bg-indigo-600 shadow-2xl shadow-indigo-200">
-               <Eye className="h-6 w-6" />
-             </Button>
-           </SheetTrigger>
-           <SheetContent side="bottom" className="h-[90vh] p-0 border-none rounded-t-[32px] overflow-hidden">
-             <SheetHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white shrink-0">
-               <div>
-                  <SheetTitle className="text-xl font-black">Live Preview</SheetTitle>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ATS Optimized Analysis</p>
-               </div>
-               <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="rounded-xl border-indigo-100 text-indigo-600 font-bold">
-                 <Download className="h-4 w-4 mr-2" /> PDF
-               </Button>
-             </SheetHeader>
-             <div className="flex-1 bg-slate-100/50 p-4 overflow-y-auto flex justify-center pb-20">
-                {/* Scaled Preview for Mobile Sheet */}
-                <div className="bg-white shadow-2xl w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.4] sm:scale-[0.6] flex flex-col font-sans" ref={previewRef}>
-                   {/* We reuse the same content as desktop preview here or refactor it. 
+          <SheetTrigger asChild>
+            <Button variant="default" size="icon" className="h-14 w-14 rounded-full bg-indigo-600 shadow-2xl shadow-indigo-200">
+              <Eye className="h-6 w-6" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[90vh] p-0 border-none rounded-t-[32px] overflow-hidden">
+            <SheetHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white shrink-0">
+              <div>
+                <SheetTitle className="text-xl font-black">Live Preview</SheetTitle>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ATS Optimized Analysis</p>
+              </div>
+              <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="rounded-xl border-indigo-100 text-indigo-600 font-bold">
+                <Download className="h-4 w-4 mr-2" /> PDF
+              </Button>
+            </SheetHeader>
+            <div className="flex-1 bg-slate-100/50 p-4 overflow-y-auto flex justify-center pb-20">
+              {/* Scaled Preview for Mobile Sheet */}
+              <div className="bg-white shadow-2xl w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.4] sm:scale-[0.6] flex flex-col font-sans" ref={previewRef}>
+                {/* We reuse the same content as desktop preview here or refactor it. 
                        For now, since it uses a ref, it will visually match if we put the same content. 
                        Actually, the ref should be on the visible one or shared. 
                        Alternative: use a shared component ResumePreview. 
                    */}
-                   {/* Restoring the content inside the sheet for mobile view */}
-                   <div className="h-2 bg-indigo-600 w-full" />
-                   <div className="p-16 pb-12 space-y-4">
-                      <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
-                      <div className="flex items-center gap-4 text-slate-500 text-xs font-bold tracking-widest uppercase">
-                        {data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-indigo-600" /> {data.email}</span>}
-                        {data.phone && <span className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-indigo-600" /> {data.phone}</span>}
-                      </div>
-                      <div className="h-px bg-slate-100 w-24 !mt-6" />
-                   </div>
-                   {/* ... Simplified version for mobile preview toggle ... */}
-                   <div className="px-16 pb-16 space-y-10 flex-1">
-                      <p className="text-slate-600 font-medium">{data.summary || "Summary loading..."}</p>
-                      <div className="h-40 bg-slate-50 rounded-xl" /> {/* Placeholder for brevity */}
-                      <p className="text-center text-slate-300 font-bold uppercase tracking-widest text-[10px]">Tap PDF to view full resume</p>
-                   </div>
+                {/* Restoring the content inside the sheet for mobile view */}
+                <div className="h-2 bg-indigo-600 w-full" />
+                <div className="p-16 pb-12 space-y-4">
+                  <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
+                  <div className="flex items-center gap-4 text-slate-500 text-xs font-bold tracking-widest uppercase">
+                    {data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-indigo-600" /> {data.email}</span>}
+                    {data.phone && <span className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-indigo-600" /> {data.phone}</span>}
+                  </div>
+                  <div className="h-px bg-slate-100 w-24 !mt-6" />
                 </div>
-             </div>
-           </SheetContent>
+                {/* ... Simplified version for mobile preview toggle ... */}
+                <div className="px-16 pb-16 space-y-10 flex-1">
+                  <p className="text-slate-600 font-medium">{data.summary || "Summary loading..."}</p>
+                  <div className="h-40 bg-slate-50 rounded-xl" /> {/* Placeholder for brevity */}
+                  <p className="text-center text-slate-300 font-bold uppercase tracking-widest text-[10px]">Tap PDF to view full resume</p>
+                </div>
+              </div>
+            </div>
+          </SheetContent>
         </Sheet>
       </div>
     </div>
