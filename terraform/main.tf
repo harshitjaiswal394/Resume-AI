@@ -270,4 +270,24 @@ resource "google_dns_record_set" "root" {
   ttl          = 300
   rrdatas      = [google_compute_global_address.lb_ip.address]
 }
+# 9. HTTP to HTTPS Redirect
+resource "google_compute_url_map" "https_redirect" {
+  name = "resumatch-https-redirect"
+  default_url_redirect {
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
+  }
+}
 
+resource "google_compute_target_http_proxy" "http_proxy" {
+  name    = "resumatch-http-proxy"
+  url_map = google_compute_url_map.https_redirect.id
+}
+
+resource "google_compute_global_forwarding_rule" "http_forwarding_rule" {
+  name       = "resumatch-http-forwarding"
+  target     = google_compute_target_http_proxy.http_proxy.id
+  port_range = "80"
+  ip_address = google_compute_global_address.lb_ip.address
+}

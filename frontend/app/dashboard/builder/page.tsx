@@ -25,6 +25,21 @@ export default function BuilderDiscovery() {
   const [targetRole, setTargetRole] = useState('');
   const [yearsOfExp, setYearsOfExp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+
+  React.useEffect(() => {
+    const localDraft = localStorage.getItem('resumatch_builder_data');
+    if (localDraft) {
+      try {
+        const parsed = JSON.parse(localDraft);
+        // Look for data in both new structure { data: {...} } and old flat structure
+        const d = parsed.data || parsed;
+        if (d.fullName || d.summary || d.experience?.length > 1) {
+          setHasDraft(true);
+        }
+      } catch (e) {}
+    }
+  }, []);
 
   const handleStart = () => {
     if (!targetRole || !yearsOfExp) {
@@ -94,9 +109,28 @@ export default function BuilderDiscovery() {
               onClick={handleStart}
               className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-semibold shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
-              Start Building
+              Start New Resume
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
+
+            <AnimatePresence>
+              {hasDraft && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Button 
+                    variant="outline"
+                    onClick={() => router.push('/dashboard/builder/new')}
+                    className="w-full h-14 rounded-2xl border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold transition-all mt-2"
+                  >
+                    <Clock className="mr-2 h-5 w-5" />
+                    Resume Previous Draft
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">

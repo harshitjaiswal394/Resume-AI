@@ -62,6 +62,9 @@ class ResumeCreateRequest(BaseModel):
     section_order: List[str] = ["summary", "skills", "experience", "education", "projects", "certifications", "languages", "achievements", "internships"]
     template_id: Optional[str] = "modern"
     user_id: Optional[str] = "guest"
+    parsed_data: Optional[Dict[str, Any]] = None
+    original_score: Optional[float] = 0.0
+    resume_score: Optional[float] = 0.0
 
 class ResumeUpdateRequest(BaseModel):
     title: Optional[str] = None
@@ -78,6 +81,9 @@ class ResumeUpdateRequest(BaseModel):
     section_order: Optional[List[str]] = None
     template_id: Optional[str] = None
     user_id: Optional[str] = None
+    parsed_data: Optional[Dict[str, Any]] = None
+    original_score: Optional[float] = None
+    resume_score: Optional[float] = None
 
 class OptimizeExperienceRequest(BaseModel):
     experience: ExperienceItem

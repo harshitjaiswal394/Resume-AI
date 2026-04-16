@@ -23,37 +23,46 @@ async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = N
     if body_user_id and not db_user_id:
         db_user_id = None if body_user_id in ["guest", "undefined"] else body_user_id
 
-    with engine.begin() as conn:
-        conn.execute(
-            text("""
-                INSERT INTO resumes (
-                    id, user_id, title, phone_number, summary, skills, experience, 
-                    education, projects, certifications, languages, internships, 
-                    achievements, section_order, template_id, status, created_at, updated_at
-                ) VALUES (
-                    :id, :uid, :title, :phone, :summary, :skills, :experience,
-                    :education, :projects, :certs, :langs, :interns, :achieve, 
-                    :order, :template, 'draft', NOW(), NOW()
-                )
-            """),
-            {
-                "id": resume_id,
-                "uid": db_user_id,
-                "title": payload.title,
-                "phone": payload.phone_number,
-                "summary": payload.summary,
-                "skills": json.dumps(payload.skills),
-                "experience": json.dumps([e.dict() for e in payload.experience]),
-                "education": json.dumps([e.dict() for e in payload.education]),
-                "projects": json.dumps([p.dict() for p in payload.projects]),
-                "certs": json.dumps([c.dict() for c in payload.certifications]),
-                "langs": json.dumps([l.dict() for l in payload.languages]),
-                "interns": json.dumps([i.dict() for i in payload.internships]),
-                "achieve": json.dumps([a.dict() for a in payload.achievements]),
-                "order": payload.section_order,
-                "template": payload.template_id
-            }
-        )
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO resumes (
+                        id, user_id, title, phone_number, summary, skills, experience, 
+                        education, projects, certifications, languages, internships, 
+                        achievements, section_order, template_id, status, file_url, file_name, file_type, file_size_bytes, parsed_data, 
+                        original_score, resume_score, created_at, updated_at
+                    ) VALUES (
+                        :id, :uid, :title, :phone, :summary, :skills, :experience,
+                        :education, :projects, :certs, :langs, :interns, :achieve, 
+                        :order, :template, 'draft', '', :title, 'pdf', 0, :parsed, 
+                        :orig_score, :r_score, NOW(), NOW()
+                    )
+                """),
+                {
+                    "id": resume_id,
+                    "uid": db_user_id,
+                    "title": payload.title,
+                    "phone": payload.phone_number,
+                    "summary": payload.summary,
+                    "skills": json.dumps(payload.skills),
+                    "experience": json.dumps([e.dict() for e in payload.experience]),
+                    "education": json.dumps([e.dict() for e in payload.education]),
+                    "projects": json.dumps([p.dict() for p in payload.projects]),
+                    "certs": json.dumps([c.dict() for c in payload.certifications]),
+                    "langs": json.dumps([l.dict() for l in payload.languages]),
+                    "interns": json.dumps([i.dict() for i in payload.internships]),
+                    "achieve": json.dumps([a.dict() for a in payload.achievements]),
+                    "order": "{" + ",".join([f'"{s}"' for s in payload.section_order]) + "}",
+                    "template": payload.template_id,
+                    "parsed": json.dumps(payload.parsed_data) if payload.parsed_data else None,
+                    "orig_score": payload.original_score or 0,
+                    "r_score": payload.resume_score or 0
+                }
+            )
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in create_resume: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     return {"success": True, "resume_id": resume_id}
 
@@ -91,24 +100,40 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
     set_clauses = []
     params = {"id": resume_id}
     
-    json_fields = [
+    json_fields = {
         'experience', 'education', 'projects', 'skills', 
-        'certifications', 'languages', 'internships', 'achievements'
-    ]
+        'certifications', 'languages', 'internships', 'achievements', 'parsed_data'
+    }
     
     for key, value in update_data.items():
         if key in json_fields:
-            params[key] = json.dumps(value if key == 'skills' else [i.dict() if hasattr(i, 'dict') else i for i in value])
+            logger.info(f"[DB-FIX] Serializing {key} for database storage...")
+            # Pydantic models need to be converted to dicts/lists before json.dumps
+            if isinstance(value, list):
+                serializable_value = [v.dict() if hasattr(v, 'dict') else v for v in value]
+            elif hasattr(value, 'dict'):
+                serializable_value = value.dict()
+            else:
+                serializable_value = value
+            params[key] = json.dumps(serializable_value)
         elif key == 'section_order':
-            params[key] = value
+            params[key] = "{" + ",".join([f'"{s}"' for s in value]) + "}"
+        elif key == 'user_id':
+            params[key] = None if value in ["guest", "undefined", None] else value
         else:
             params[key] = value
+        
         set_clauses.append(f"{key} = :{key}")
     
     query = f"UPDATE resumes SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id"
     
-    with engine.begin() as conn:
-        conn.execute(text(query), params)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(query), params)
+            logger.info(f"[DB-FIX] Successfully updated resume {resume_id}")
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in update_resume: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     return {"success": True}
 

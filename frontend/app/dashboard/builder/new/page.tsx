@@ -35,7 +35,8 @@ import {
   Loader2,
   Upload,
   Mail,
-  Phone
+  Phone,
+  Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
@@ -105,12 +106,14 @@ interface ResumeData {
 
 export default function AIResumeBuilder() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAuthReady } = useAuth();
   const [step, setStep] = useState(1);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [resumeId, setResumeId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [discovery, setDiscovery] = useState({ role: '', exp: '' });
+  const [isLoaded, setIsLoaded] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   const [data, setData] = useState<ResumeData>({
@@ -130,44 +133,235 @@ export default function AIResumeBuilder() {
   });
   const [originalScore, setOriginalScore] = useState<number | null>(null);
   const [currentScore, setCurrentScore] = useState<number>(0);
+  const lastSavedRef = useRef<string>(""); // For dirty checking
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('id');
+    if (!isAuthReady) return; // WAIT FOR AUTH INITIALIZATION
 
-    const saved = sessionStorage.getItem('builder_discovery');
-    if (saved) setDiscovery(jsonParseSafe(saved));
+    const loadDraft = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const urlId = params.get('id');
+      let activeResumeId: string | null = urlId;
+      
+      console.log('[Builder] Handshake: Auth is ready. Initiating Cloud Sovereignty check...', { urlId, userId: user?.id });
 
-    // Load from localStorage if available AND no ID in URL
-    const localData = localStorage.getItem('resumatch_builder_data');
-    if (localData && !id) {
-      try {
-        const parsed = JSON.parse(localData);
-        setData(prev => ({ ...prev, ...parsed }));
-      } catch (e) { console.error('Failed to load local storage', e); }
-    }
+      // PHASE 1: Authority Verification (URL Intent)
+      if (urlId) {
+        console.log('[Builder] Authority: URL ID identified. Restoring cloud record...', urlId);
+        if (user) {
+          await fetchResume(urlId);
+          setIsLoaded(true);
+          return;
+        }
+      }
 
-    if (id && user) {
-      fetchResume(id);
-    }
-  }, [user]);
+      // PHASE 2: Cloud Sovereignty (Account Sync)
+      // If logged in, we scan the account's master database before trusting any local browser data.
+      if (!activeResumeId && user && user.id !== 'guest') {
+        console.log('[Builder] Authority: Logged-in user. Querying Account Master Sync...');
+        try {
+          const { data: latestResumes, error } = await supabase
+            .from('resumes')
+            .select('id')
+            .eq('user_id', user.id)
+            .order('updated_at', { ascending: false })
+            .limit(1);
 
-  // Auto-save to localStorage
+          if (!error && latestResumes && latestResumes.length > 0) {
+            const cloudId = latestResumes[0].id;
+            console.log('[Builder] Authority: Cloud record found! Syncing account state...', cloudId);
+            setResumeId(cloudId);
+            await fetchResume(cloudId);
+            activeResumeId = cloudId;
+            
+            // Re-sync URL
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.set('id', cloudId);
+            window.history.replaceState({}, '', newUrl.toString());
+
+            // Force cache wipe for consistency
+            const freshSnapshot = JSON.stringify({ data: restoredData, resumeId: cloudId, discovery });
+            localStorage.setItem('resumatch_builder_data', freshSnapshot);
+            sessionStorage.setItem('resumatch_builder_session', freshSnapshot);
+          } else {
+            console.log('[Builder] Authority: No cloud drafts found for this account.');
+            if (error) console.error('[Builder] Sync error:', error);
+          }
+        } catch (e) {
+          console.warn('[Builder] Cloud handshake failed:', e);
+        }
+      }
+
+      // PHASE 3: Browser Cache Fallback (Guest or Offline sessions)
+      // Only used if no Cloud data is available for this account.
+      if (!activeResumeId) {
+        const savedSnapshot = sessionStorage.getItem('resumatch_builder_session') || localStorage.getItem('resumatch_builder_data');
+        if (savedSnapshot) {
+          try {
+            const parsed = JSON.parse(savedSnapshot);
+            const restoredData = parsed.data || parsed;
+            const restoredResumeId = parsed.resumeId || null;
+            const restoredDiscovery = parsed.discovery || null;
+
+            if (restoredData && (restoredData.fullName || restoredResumeId)) {
+              console.log('[Builder] Authority: Cloud empty. Restoring from secondary local cache.');
+              setData(restoredData);
+              activeResumeId = restoredResumeId;
+              if (restoredResumeId) setResumeId(restoredResumeId);
+              if (restoredDiscovery) setDiscovery(restoredDiscovery);
+              
+              lastSavedRef.current = JSON.stringify({ 
+                data: restoredData, 
+                discovery: restoredDiscovery || { role: '', exp: '' } 
+              });
+            }
+          } catch (e) {
+            console.warn('[Builder] Local cache bypass', e);
+          }
+        }
+      }
+      
+      setIsLoaded(true);
+      console.log('[Builder] Handshake: Account state and cache resolved.');
+    };
+
+    loadDraft();
+  }, [user, isAuthReady]);
+
+  // Auto-save to both localStorage (permanent) and sessionStorage (this session)
   useEffect(() => {
-    localStorage.setItem('resumatch_builder_data', JSON.stringify(data));
-  }, [data]);
+    if (!isLoaded) return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
+    const snapshot = JSON.stringify({ data, resumeId, discovery });
+    localStorage.setItem('resumatch_builder_data', snapshot);
+    sessionStorage.setItem('resumatch_builder_session', snapshot);
+  }, [data, resumeId, discovery, isLoaded]);
+
+  // Optimized Debounced Auto-save to DB
+  useEffect(() => {
+    if (!isLoaded || !user || user.id === 'guest') return;
+
+    const timer = setTimeout(() => {
+      performSilentSave();
+    }, 5000); // 5 second debounce for DB performance
+
+    return () => clearTimeout(timer);
+  }, [data, discovery, user]);
+
+  // Save on tab switch/visibility change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (isLoaded && document.visibilityState === 'hidden') {
+        performSilentSave();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [data, discovery, resumeId]);
+
+  const performSilentSave = async () => {
+    if (!user || user.id === 'guest' || !isLoaded) return;
+    
+    // Dirty check: only save if state has changed
+    const currentState = JSON.stringify({ data, discovery });
+    if (currentState === lastSavedRef.current) return;
+
+    try {
+      const isUpdate = !!resumeId;
+      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes/`;
+      const method = isUpdate ? 'PUT' : 'POST';
+
+      const payload = {
+        title: `${data.fullName || 'Untitled'}'s Resume - ${discovery.role}`,
+        target_role: discovery.role,
+        years_of_experience: parseInt(discovery.exp) || 0,
+        summary: data.summary,
+        skills: data.skills,
+        experience: data.experience,
+        education: data.education,
+        projects: data.projects,
+        certifications: data.certifications,
+        languages: data.languages,
+        internships: data.internships,
+        achievements: data.achievements,
+        section_order: data.sectionOrder,
+        phone_number: data.phone,
+        user_id: user.id,
+        parsed_data: data,
+        original_score: originalScore || 0,
+        resume_score: currentScore || 0
+      };
+
+      const response = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        lastSavedRef.current = currentState;
+        if (!isUpdate && result.resume_id) {
+          setResumeId(result.resume_id);
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('id', result.resume_id);
+          window.history.replaceState({}, '', newUrl.toString());
+        }
+      }
+    } catch (e) {
+      console.warn('Silent auto-save failed - state preserved locally');
+    }
+  };
 
   const fetchResume = async (id: string) => {
+    console.log('[Builder] Fetching resume from DB:', id);
     const { data: resume, error } = await supabase
       .from('resumes')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (resume) {
-      setData(resume.parsed_data || data);
-      setOriginalScore(resume.original_score);
-      setCurrentScore(resume.resume_score || 0);
+    if (resume && !error) {
+      // Restore Discovery Metadata
+      const newDiscovery = {
+         role: resume.target_role || '',
+         exp: resume.years_of_experience?.toString() || ''
+      };
+      setDiscovery(newDiscovery);
+
+      let restoredData: ResumeData;
+      if (resume.parsed_data) {
+        restoredData = typeof resume.parsed_data === 'string' 
+          ? JSON.parse(resume.parsed_data) 
+          : resume.parsed_data;
+      } else {
+        restoredData = {
+          fullName: (resume.title || '').split("'s Resume")[0] || '',
+          email: '',
+          phone: resume.phone_number || '',
+          summary: resume.summary || '',
+          skills: Array.isArray(resume.skills) ? resume.skills : [],
+          experience: Array.isArray(resume.experience) ? resume.experience : [],
+          education: Array.isArray(resume.education) ? resume.education : [],
+          projects: Array.isArray(resume.projects) ? resume.projects : [],
+          certifications: Array.isArray(resume.certifications) ? resume.certifications : [],
+          languages: Array.isArray(resume.languages) ? resume.languages : [],
+          internships: Array.isArray(resume.internships) ? resume.internships : [],
+          achievements: Array.isArray(resume.achievements) ? resume.achievements : [],
+          sectionOrder: resume.section_order || ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'languages', 'achievements', 'internships']
+        };
+      }
+      
+      setData(restoredData);
+      
+      // Restore score metrics
+      if (resume.original_score !== undefined) setOriginalScore(resume.original_score);
+      if (resume.resume_score !== undefined) setCurrentScore(resume.resume_score || 0);
+
+      // Sync lastSavedRef to prevent immediate auto-save loop
+      lastSavedRef.current = JSON.stringify({ data: restoredData, discovery: newDiscovery });
+      console.log('[Builder] State restored from DB');
+    } else {
+      console.error('[Builder] Fetch resume failed or record missing', error);
     }
   };
 
@@ -247,79 +441,190 @@ export default function AIResumeBuilder() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch(`${backendUrl}/api/resumes/`, {
-        method: 'POST',
+      const isUpdate = !!resumeId;
+      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes/`;
+      const method = isUpdate ? 'PUT' : 'POST';
+
+      const payload = {
+        title: `${data.fullName || 'Untitled'}'s Resume - ${discovery.role}`,
+        target_role: discovery.role,
+        years_of_experience: parseInt(discovery.exp) || 0,
+        summary: data.summary,
+        skills: data.skills,
+        experience: data.experience,
+        education: data.education,
+        projects: data.projects,
+        certifications: data.certifications,
+        languages: data.languages,
+        internships: data.internships,
+        achievements: data.achievements,
+        section_order: data.sectionOrder,
+        phone_number: data.phone,
+        user_id: user?.id || 'guest',
+        parsed_data: data,
+        original_score: originalScore || 0,
+        resume_score: currentScore || 0
+      };
+
+      const response = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `${data.fullName}'s Resume - ${discovery.role}`,
-          target_role: discovery.role,
-          years_of_experience: parseInt(discovery.exp) || 0,
-          summary: data.summary,
-          skills: data.skills,
-          experience: data.experience,
-          education: data.education,
-          projects: data.projects,
-          certifications: data.certifications,
-          languages: data.languages,
-          internships: data.internships,
-          achievements: data.achievements,
-          section_order: data.sectionOrder,
-          phone_number: data.phone,
-          user_id: user?.id || 'guest'
-        })
+        body: JSON.stringify(payload)
       });
+
+      const result = await response.json();
+
       if (response.ok) {
-        toast.success('Resume saved to your dashboard');
+        lastSavedRef.current = JSON.stringify({ data, discovery });
+        if (!isUpdate && result.resume_id) {
+          setResumeId(result.resume_id);
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('id', result.resume_id);
+          window.history.replaceState({}, '', newUrl.toString());
+        }
+        toast.success(isUpdate ? 'Progress synced to cloud' : 'Resume saved to cloud dashboard');
+      } else {
+        throw new Error(result.detail || 'Failed to sync');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Save error:', e);
-      toast.error('Failed to save to database. Progress kept locally.');
+      toast.error(`Save failed: ${e.message || 'Server error'}. Progress kept locally.`);
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleCopyForWord = async () => {
+    if (!previewRef.current) return;
+    try {
+      // Use the modern Clipboard API to copy as HTML
+      const blob = new Blob([previewRef.current.innerHTML], { type: 'text/html' });
+      const data = [new ClipboardItem({ 'text/html': blob })];
+      await navigator.clipboard.write(data);
+      toast.success('Resume copied! Just paste (Ctrl+V) into Word.');
+    } catch (err) {
+      console.error('Copy failed:', err);
+      toast.error('Copy failed - please try downloading instead');
+    }
+  };
+
+  const handleDownloadDocx = () => {
+    if (!previewRef.current) return;
+    toast.info('Generating compatible Word file...');
+    
+    // Improved XML template for Word compatibility
+    const header = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Resume</title>
+      <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.4; }
+        h2 { font-size: 28pt; margin: 0; color: #0f172a; text-transform: uppercase; }
+        h3 { font-size: 14pt; color: #4f46e5; border-bottom: 1px solid #e1e4e8; padding-bottom: 2pt; }
+        .flex { display: flex; }
+        .gap-4 { gap: 1rem; }
+      </style></head><body>
+    `;
+    const footer = "</body></html>";
+    const source = header + previewRef.current.innerHTML + footer;
+    
+    // Use the older format for maximum compatibility on localhost
+    const blob = new Blob(['\ufeff', source], {
+      type: 'application/msword'
+    });
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${(data.fullName || 'Resume').trim().replace(/[^a-z0-9]/gi, '_')}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Word file downloaded!');
+  };
+
   const handleDownloadPDF = async () => {
     if (!previewRef.current) return;
-    toast.info('Generating high-resolution PDF...');
+    toast.info('Generating high-fidelity PDF...');
 
-    // TEMPORARY: Add a class to override oklch colors for html2canvas
-    const el = previewRef.current;
+    const originalEl = previewRef.current;
+    const originalGCS = window.getComputedStyle;
+    
+    const oklchToRgb = (val: string) => {
+      if (!val || typeof val !== 'string' || !val.includes('oklch')) return val;
+      return val.replace(/oklch\([^)]+\)/g, (match) => {
+        if (match.includes('0.55')) return 'rgb(79, 70, 229)';   // indigo-600
+        if (match.includes('0.64') || match.includes('0.63')) return 'rgb(99, 102, 241)';   // indigo-500
+        if (match.includes('0.2')) return 'rgb(15, 23, 42)';    // slate-900
+        if (match.includes('0.92')) return 'rgb(241, 245, 249)'; // slate-100
+        if (match.includes('0.44')) return 'rgb(71, 85, 105)';   // slate-600
+        return 'rgb(79, 70, 229)';
+      });
+    };
 
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      onclone: (clonedDoc) => {
-        // Fix for oklch colors: replace indigo-600 variables with standard hex
-        const style = clonedDoc.createElement('style');
-        style.innerHTML = `
-          * { 
-            --tw-text-opacity: 1 !important;
-            --tw-bg-opacity: 1 !important;
-            --indigo-600: #4f46e5 !important;
-            --indigo-500: #6366f1 !important;
-            --indigo-400: #818cf8 !important;
+    try {
+      (window as any).getComputedStyle = (el: Element, pseudo?: string) => {
+        const style = originalGCS(el, pseudo);
+        return new Proxy(style, {
+          get(target, prop) {
+            if (prop === 'getPropertyValue') {
+              return (p: string) => {
+                const val = target.getPropertyValue(p);
+                return (typeof val === 'string' && val.includes('oklch')) ? oklchToRgb(val) : val;
+              };
+            }
+            const val = (target as any)[prop];
+            if (typeof val === 'function') return val.bind(target);
+            if (typeof val === 'string' && val.includes('oklch')) return oklchToRgb(val);
+            return val;
           }
-          .text-indigo-600 { color: #4f46e5 !important; }
-          .bg-indigo-600 { background-color: #4f46e5 !important; }
-          .text-indigo-500 { color: #6366f1 !important; }
-          .bg-indigo-50 { background-color: #f5f3ff !important; }
-          .bg-indigo-600 { background-color: #4f46e5 !important; }
-        `;
-        clonedDoc.body.appendChild(style);
-      }
-    });
+        });
+      };
 
-    const imgData = canvas.toDataURL('image/png', 1.0);
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const canvas = await html2canvas(originalEl, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        onclone: (clonedDoc) => {
+          const clonedRoot = clonedDoc.querySelector('[data-resume-preview]');
+          
+          const resetStyle = clonedDoc.createElement('style');
+          resetStyle.innerHTML = `
+            * { 
+              letter-spacing: normal !important; 
+              font-variant-ligatures: none !important;
+              font-kerning: none !important;
+              word-spacing: normal !important;
+              text-rendering: optimizeSpeed !important;
+              -webkit-font-smoothing: antialiased !important;
+            }
+            [style*="oklch"] { color: inherit; }
+          `;
+          clonedDoc.head.appendChild(resetStyle);
 
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`${data.fullName.replace(/\s+/g, '_')}_Resume.pdf`);
-    toast.success('Resume downloaded!');
+          if (clonedRoot instanceof HTMLElement) {
+            clonedRoot.style.width = '210mm';
+            clonedRoot.style.transform = 'none';
+            clonedRoot.style.position = 'relative';
+            clonedRoot.style.margin = '0';
+          }
+        }
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.85); // Optimized quality for compatibility
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${(data.fullName || 'Resume').trim().replace(/[^a-z0-9]/gi, '_')}.pdf`);
+      toast.success('Resume downloaded successfully!');
+    } catch (e) {
+      console.error('PDF Error:', e);
+      toast.error('Export failed - please try one more time');
+    } finally {
+      (window as any).getComputedStyle = originalGCS;
+    }
   };
 
   // --- Render Helpers ---
@@ -359,11 +664,19 @@ export default function AIResumeBuilder() {
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 md:mr-2" />}
-              <span className="hidden md:inline">Save Progress</span>
+              <span className="hidden md:inline">Save</span>
+            </Button>
+            <Button variant="ghost" onClick={handleCopyForWord} className="h-9 md:h-10 rounded-xl text-slate-500 hover:text-indigo-600 px-3 md:px-4 transition-colors">
+              <Copy className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Copy</span>
+            </Button>
+            <Button variant="outline" onClick={handleDownloadDocx} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4 text-slate-600 hover:text-slate-900">
+              <FileDown className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Word</span>
             </Button>
             <Button onClick={handleDownloadPDF} className="h-9 md:h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 px-3 md:px-4">
               <Download className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Export PDF</span>
+              <span className="hidden md:inline">PDF</span>
             </Button>
           </div>
         </header>
@@ -770,6 +1083,7 @@ export default function AIResumeBuilder() {
           onReorder={(newOrder) => setData({ ...data, sectionOrder: newOrder })}
           className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] lg:scale-[0.8] xl:scale-[0.9] flex flex-col font-sans"
           ref={previewRef}
+          data-resume-preview
         >
           {/* Top Decorative Bar */}
           <div className="h-2 bg-indigo-600 w-full shrink-0" />
@@ -981,9 +1295,17 @@ export default function AIResumeBuilder() {
                 <SheetTitle className="text-xl font-black">Live Preview</SheetTitle>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ATS Optimized Analysis</p>
               </div>
-              <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="rounded-xl border-indigo-100 text-indigo-600 font-bold">
-                <Download className="h-4 w-4 mr-2" /> PDF
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={handleCopyForWord} variant="ghost" size="sm" className="rounded-xl text-slate-400">
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button onClick={handleDownloadDocx} variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-600 font-bold">
+                  <FileDown className="h-4 w-4 mr-2" /> Word
+                </Button>
+                <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="rounded-xl border-indigo-100 text-indigo-600 font-bold">
+                  <Download className="h-4 w-4 mr-2" /> PDF
+                </Button>
+              </div>
             </SheetHeader>
             <div className="flex-1 bg-slate-100/50 p-4 overflow-y-auto flex justify-center pb-20">
               {/* Scaled Preview for Mobile Sheet */}
