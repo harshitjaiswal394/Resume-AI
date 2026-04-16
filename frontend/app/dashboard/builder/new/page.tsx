@@ -179,10 +179,7 @@ export default function AIResumeBuilder() {
             newUrl.searchParams.set('id', cloudId);
             window.history.replaceState({}, '', newUrl.toString());
 
-            // Force cache wipe for consistency
-            const freshSnapshot = JSON.stringify({ data: restoredData, resumeId: cloudId, discovery });
-            localStorage.setItem('resumatch_builder_data', freshSnapshot);
-            sessionStorage.setItem('resumatch_builder_session', freshSnapshot);
+            window.history.replaceState({}, '', newUrl.toString());
           } else {
             console.log('[Builder] Authority: No cloud drafts found for this account.');
             if (error) console.error('[Builder] Sync error:', error);
