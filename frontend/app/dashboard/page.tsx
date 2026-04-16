@@ -295,7 +295,7 @@ export default function Dashboard() {
       
       if (listError) throw listError;
       if (files && files.length > 0) {
-        const pathsToDelete = files.map(file => `${user.id}/${file.name}`);
+        const pathsToDelete = (files || []).map(file => `${user.id}/${file.name}`);
         const { error: deleteError } = await supabase.storage
           .from('resumes')
           .remove(pathsToDelete);
@@ -613,7 +613,7 @@ export default function Dashboard() {
                   <Sparkles className="h-5 w-5 text-indigo-600" /> AI Improvement Suggestions
                 </h3>
                 <div className="space-y-6">
-                  {selectedResume?.score_breakdown?.weaknesses?.map((w: string, i: number) => (
+                  {(selectedResume?.score_breakdown?.weaknesses || []).map((w: string, i: number) => (
                     <div key={i} className="bg-rose-50/50 p-6 rounded-[24px] border border-rose-50 space-y-2">
                       <div className="flex items-center gap-2">
                          <Badge className="bg-rose-100 text-rose-600 border-none font-black text-[10px] uppercase tracking-tighter">High Priority</Badge>
@@ -624,7 +624,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                   ))}
-                  {selectedResume?.score_breakdown?.recommendations?.map((r: string, i: number) => (
+                  {(selectedResume?.score_breakdown?.recommendations || []).map((r: string, i: number) => (
                     <div key={`rec-${i}`} className="bg-indigo-50/50 p-6 rounded-[24px] border border-indigo-50 space-y-2">
                       <div className="flex items-center gap-2">
                          <Badge className="bg-indigo-100 text-indigo-600 border-none font-black text-[10px] uppercase tracking-tighter">Suggestion</Badge>
@@ -892,7 +892,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="space-y-6 pt-4">
-                      {analysisSteps.map((step) => (
+                      {(analysisSteps || []).map((step) => (
                         <div key={step.id} className="flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <div className={`

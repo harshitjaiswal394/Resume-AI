@@ -206,7 +206,7 @@ export default function SmartCoverLetter() {
                       <SelectValue placeholder="Select a resume" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl md:rounded-2xl border-slate-100 shadow-2xl">
-                      {resumes.map(r => (
+                      {(resumes || []).map(r => (
                         <SelectItem key={r.id} value={r.id} className="py-3 focus:bg-indigo-50 rounded-lg md:rounded-xl">
                           <div className="flex flex-col items-start gap-1">
                             <span className="font-bold text-slate-900 text-sm">{getResumeLabel(r)}</span>

@@ -43,7 +43,7 @@ export function MatchResults({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {matches.map((match, idx) => (
+        {(matches || []).map((match, idx) => (
           <MatchCard
             key={idx}
             match={match}
@@ -165,7 +165,7 @@ function MatchCard({ match, isLocked, onUpgrade, onSave, onGenerateCoverLetter }
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {match.apply_links ? (
+          {match.apply_links && typeof match.apply_links === 'object' ? (
             Object.entries(match.apply_links).map(([platform, url]) => (
               <Button
                 key={platform}

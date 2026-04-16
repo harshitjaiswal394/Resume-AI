@@ -681,7 +681,7 @@ export default function AIResumeBuilder() {
         <div className="px-4 md:px-12 py-4 md:py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4">
           <div className="flex-1 max-w-xl">
             <div className="flex items-center justify-between mb-2">
-              {steps.map((s) => (
+              {(steps || []).map((s) => (
                 <div
                   key={s.id}
                   className={`flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 ${step >= s.id ? 'text-indigo-600' : 'text-slate-400'}`}
@@ -784,7 +784,7 @@ export default function AIResumeBuilder() {
                       }} className="h-12 px-6 rounded-xl bg-slate-900">Add</Button>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-2">
-                      {data.skills.map((s, i) => (
+                      {(data.skills || []).map((s, i) => (
                         <div key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold flex items-center gap-2 border border-indigo-100">
                           {s}
                           <button onClick={() => {
@@ -799,7 +799,7 @@ export default function AIResumeBuilder() {
 
               {step === 3 && (
                 <motion.div key="step3" className="space-y-8">
-                  {data.experience.map((exp, idx) => (
+                  {(data.experience || []).map((exp, idx) => (
                     <Card key={idx} className="border-slate-100 shadow-sm relative group">
                       <CardContent className="p-6 space-y-4">
                         <div className="grid grid-cols-2 gap-4">
@@ -818,10 +818,10 @@ export default function AIResumeBuilder() {
                             className="h-8 rounded-lg border-indigo-100 text-indigo-600 hover:bg-indigo-50 font-bold"
                           >
                             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                            Optimize Bullet Points
+                            <div className="h-px bg-indigo-50 flex-1" />
                           </Button>
                         </div>
-                        {exp.description.map((bullet, bIdx) => (
+                        {(exp.description || []).map((bullet, bIdx) => (
                           <div key={bIdx} className="flex gap-2">
                             <Textarea
                               value={bullet}
@@ -853,7 +853,7 @@ export default function AIResumeBuilder() {
 
               {step === 4 && (
                 <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-                  {data.education.map((edu, idx) => (
+                  {(data.education || []).map((edu, idx) => (
                     <Card key={idx} className="border-slate-100 shadow-sm relative group">
                       <Button
                         variant="ghost"
@@ -890,7 +890,7 @@ export default function AIResumeBuilder() {
 
               {step === 5 && (
                 <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                  {data.projects.map((proj, idx) => (
+                  {(data.projects || []).map((proj, idx) => (
                     <Card key={idx} className="border-slate-100 shadow-sm relative group">
                       <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
                         const newProj = [...data.projects]; newProj.splice(idx, 1); setData({ ...data, projects: newProj });
@@ -918,7 +918,7 @@ export default function AIResumeBuilder() {
 
               {step === 6 && (
                 <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                  {data.certifications.map((cert, idx) => (
+                  {(data.certifications || []).map((cert, idx) => (
                     <Card key={idx} className="border-slate-100 shadow-sm relative group">
                       <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
                         const newCerts = [...data.certifications]; newCerts.splice(idx, 1); setData({ ...data, certifications: newCerts });
@@ -949,7 +949,7 @@ export default function AIResumeBuilder() {
               {step === 7 && (
                 <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {data.languages.map((lang, idx) => (
+                    {(data.languages || []).map((lang, idx) => (
                       <Card key={idx} className="border-slate-100 shadow-sm relative group">
                         <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-slate-300 hover:text-red-500" onClick={() => {
                           const newLangs = [...data.languages]; newLangs.splice(idx, 1); setData({ ...data, languages: newLangs });
@@ -975,7 +975,7 @@ export default function AIResumeBuilder() {
 
               {step === 8 && (
                 <motion.div key="step8" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                  {data.achievements.map((ach, idx) => (
+                  {(data.achievements || []).map((ach, idx) => (
                     <Card key={idx} className="border-slate-100 shadow-sm relative group">
                       <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
                         const newAch = [...data.achievements]; newAch.splice(idx, 1); setData({ ...data, achievements: newAch });
@@ -1000,7 +1000,7 @@ export default function AIResumeBuilder() {
 
               {step === 9 && (
                 <motion.div key="step9" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-                  {data.internships.map((intern, idx) => (
+                  {(data.internships || []).map((intern, idx) => (
                     <Card key={idx} className="border-slate-100 shadow-sm relative group">
                       <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
                         const newIntern = [...data.internships]; newIntern.splice(idx, 1); setData({ ...data, internships: newIntern });
@@ -1016,7 +1016,7 @@ export default function AIResumeBuilder() {
                             const newInt = [...data.internships]; newInt[idx].company = e.target.value; setData({ ...data, internships: newInt });
                           }} className="h-10 border-none bg-slate-50" />
                         </div>
-                        {intern.description.map((bullet, bIdx) => (
+                        {(intern.description || []).map((bullet, bIdx) => (
                           <div key={bIdx} className="flex gap-2">
                             <Textarea value={bullet} onChange={(e) => {
                               const newInt = [...data.internships]; newInt[idx].description[bIdx] = e.target.value; setData({ ...data, internships: newInt });
@@ -1097,7 +1097,7 @@ export default function AIResumeBuilder() {
           </div>
 
           <div className="px-8 md:px-16 pb-8 md:pb-16 space-y-6 md:space-y-10 flex-1">
-            {data.sectionOrder.map((sectionId) => (
+            {(data.sectionOrder || []).map((sectionId) => (
               <Reorder.Item as="div" key={sectionId} value={sectionId} className="cursor-grab active:cursor-grabbing">
                 {sectionId === 'summary' && (
                   <section className="space-y-2 md:space-y-4">
@@ -1109,28 +1109,28 @@ export default function AIResumeBuilder() {
                   </section>
                 )}
 
-                {sectionId === 'skills' && data.skills.length > 0 && (
+                {sectionId === 'skills' && (data.skills || []).length > 0 && (
                   <section className="space-y-2 md:space-y-3">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expertise</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
                     <div className="flex flex-wrap gap-1.5 md:gap-2">
-                      {data.skills.map((s, i) => (
+                      {(data.skills || []).map((s, i) => (
                         <span key={i} className="text-[9px] md:text-[11px] font-bold text-slate-700 bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded border border-slate-100">{s}</span>
                       ))}
                     </div>
                   </section>
                 )}
 
-                {sectionId === 'experience' && data.experience.some(e => e.title) && (
+                {sectionId === 'experience' && (data.experience || []).some(e => e.title) && (
                   <section className="space-y-4 md:space-y-6">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Experience</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
                     <div className="space-y-6 md:space-y-8">
-                      {data.experience.map((exp, i) => exp.title && (
+                      {(data.experience || []).map((exp, i) => exp.title && (
                         <div key={i} className="space-y-2 md:space-y-3 relative">
                           <div className="flex items-start justify-between">
                             <div className="space-y-0.5">
@@ -1140,7 +1140,7 @@ export default function AIResumeBuilder() {
                             {exp.duration && <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded">{exp.duration}</span>}
                           </div>
                           <ul className="list-none space-y-1.5 md:space-y-2">
-                            {exp.description.map((b, bi) => b.trim() && (
+                            {(exp.description || []).map((b, bi) => b.trim() && (
                               <li key={bi} className="text-[10px] md:text-[12px] text-slate-600 leading-normal flex gap-2 md:gap-3">
                                 <span className="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full bg-indigo-200 mt-1 md:mt-1.5 flex-shrink-0" />
                                 {b}
@@ -1153,14 +1153,14 @@ export default function AIResumeBuilder() {
                   </section>
                 )}
 
-                {sectionId === 'education' && data.education.some(e => e.degree) && (
+                {sectionId === 'education' && (data.education || []).some(e => e.degree) && (
                   <section className="space-y-3 md:space-y-4">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Education</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:gap-6">
-                      {data.education.map((edu, i) => edu.degree && (
+                      {(data.education || []).map((edu, i) => edu.degree && (
                         <div key={i} className="flex justify-between items-start">
                           <div>
                             <h4 className="text-[12px] md:text-[14px] font-bold text-slate-800">{edu.degree}</h4>
@@ -1173,13 +1173,13 @@ export default function AIResumeBuilder() {
                   </section>
                 )}
 
-                {sectionId === 'projects' && data.projects.some(p => p.title) && (
+                {sectionId === 'projects' && (data.projects || []).some(p => p.title) && (
                   <section className="space-y-3 md:space-y-4">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Projects</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
-                    {data.projects.map((proj, i) => proj.title && (
+                    {(data.projects || []).map((proj, i) => proj.title && (
                       <div key={i} className="space-y-1">
                         <div className="flex items-center justify-between">
                           <h4 className="text-[12px] md:text-[14px] font-bold text-slate-800">{proj.title}</h4>
@@ -1191,14 +1191,14 @@ export default function AIResumeBuilder() {
                   </section>
                 )}
 
-                {sectionId === 'certifications' && data.certifications.length > 0 && (
+                {sectionId === 'certifications' && (data.certifications || []).length > 0 && (
                   <section className="space-y-3 md:space-y-4">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Certifications</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-                      {data.certifications.map((cert, i) => (
+                      {(data.certifications || []).map((cert, i) => (
                         <div key={i} className="flex justify-between items-center text-[10px] md:text-[12px]">
                           <span className="font-bold text-slate-800">{cert.name}</span>
                           <span className="text-slate-400 uppercase text-[8px]">{cert.year}</span>
@@ -1208,14 +1208,14 @@ export default function AIResumeBuilder() {
                   </section>
                 )}
 
-                {sectionId === 'languages' && data.languages.length > 0 && (
+                {sectionId === 'languages' && (data.languages || []).length > 0 && (
                   <section className="space-y-3 md:space-y-4">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Languages</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
                     <div className="flex flex-wrap gap-4">
-                      {data.languages.map((lang, i) => (
+                      {(data.languages || []).map((lang, i) => (
                         <div key={i} className="flex items-center gap-2">
                           <span className="text-[10px] md:text-[12px] font-bold text-slate-800">{lang.language}</span>
                           <span className="text-[8px] text-indigo-400 font-bold uppercase">• {lang.proficiency}</span>
@@ -1225,13 +1225,13 @@ export default function AIResumeBuilder() {
                   </section>
                 )}
 
-                {sectionId === 'achievements' && data.achievements.length > 0 && (
+                {sectionId === 'achievements' && (data.achievements || []).length > 0 && (
                   <section className="space-y-3 md:space-y-4">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Highlights</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
-                    {data.achievements.map((ach, i) => (
+                    {(data.achievements || []).map((ach, i) => (
                       <div key={i} className="space-y-1">
                         <h4 className="text-[11px] md:text-[13px] font-bold text-slate-800">{ach.title}</h4>
                         <p className="text-[10px] md:text-[12px] text-slate-600">{ach.description}</p>
@@ -1240,14 +1240,14 @@ export default function AIResumeBuilder() {
                   </section>
                 )}
 
-                {sectionId === 'internships' && data.internships.some(inr => inr.role) && (
+                {sectionId === 'internships' && (data.internships || []).some(inr => inr.role) && (
                   <section className="space-y-4 md:space-y-6">
                     <div className="flex items-center gap-3">
                       <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Internships</h3>
                       <div className="h-px bg-indigo-50 flex-1" />
                     </div>
                     <div className="space-y-4">
-                      {data.internships.map((int, i) => int.role && (
+                      {(data.internships || []).map((int, i) => int.role && (
                         <div key={i} className="space-y-2 relative">
                           <div className="flex items-start justify-between">
                             <div className="space-y-0.5">
@@ -1256,7 +1256,7 @@ export default function AIResumeBuilder() {
                             </div>
                           </div>
                           <ul className="list-none space-y-1.5">
-                            {int.description.map((b, bi) => b.trim() && (
+                            {(int.description || []).map((b, bi) => b.trim() && (
                               <li key={bi} className="text-[10px] text-slate-600 leading-normal flex gap-2">
                                 <span className="w-1 h-1 rounded-full bg-indigo-200 mt-1.5 flex-shrink-0" />
                                 {b}

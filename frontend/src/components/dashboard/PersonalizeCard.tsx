@@ -210,7 +210,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                         <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                       </div>
                     ) : (
-                      roleSuggestions.map((r) => (
+                      (roleSuggestions || []).map((r) => (
                         <div
                           key={r}
                           onClick={() => {
@@ -335,7 +335,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                         <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                       </div>
                     ) : (
-                      locationSuggestions.map((l) => (
+                      (locationSuggestions || []).map((l) => (
                         <div
                           key={l}
                           onClick={() => addLocation(l)}
@@ -352,7 +352,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
 
             <div className="flex flex-wrap gap-2 min-h-[30px]">
               <AnimatePresence>
-                {locations.map((loc) => (
+                {(locations || []).map((loc) => (
                   <motion.div
                     key={loc}
                     initial={{ scale: 0.8, opacity: 0 }}
