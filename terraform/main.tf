@@ -74,7 +74,7 @@ resource "google_compute_firewall" "allow_lb" {
 # 4. Artifact Registry
 resource "google_artifact_registry_repository" "repo" {
   location      = var.region
-  repository_id = "resumatch-repo"
+  repository_id = "resumatches-official"
   format        = "DOCKER"
   depends_on    = [google_project_service.services]
 }
@@ -86,7 +86,7 @@ resource "google_cloud_run_v2_service" "backend" {
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.repo.repository_id}/backend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-official/backend:${var.image_tag}"
       ports {
         container_port = 8090
       }
@@ -140,7 +140,7 @@ resource "google_cloud_run_v2_service" "frontend" {
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.repo.repository_id}/frontend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-official/frontend:${var.image_tag}"
       ports {
         container_port = 3000
       }
