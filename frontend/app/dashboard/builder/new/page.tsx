@@ -1075,11 +1075,12 @@ export default function AIResumeBuilder() {
         </div>
 
         <Reorder.Group
+          as="div"
           axis="y"
           values={data.sectionOrder}
           onReorder={(newOrder) => setData({ ...data, sectionOrder: newOrder })}
           className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] lg:scale-[0.8] xl:scale-[0.9] flex flex-col font-sans"
-          ref={previewRef}
+          ref={previewRef as any}
           data-resume-preview
         >
           {/* Top Decorative Bar */}
@@ -1097,7 +1098,7 @@ export default function AIResumeBuilder() {
 
           <div className="px-8 md:px-16 pb-8 md:pb-16 space-y-6 md:space-y-10 flex-1">
             {data.sectionOrder.map((sectionId) => (
-              <Reorder.Item key={sectionId} value={sectionId} className="cursor-grab active:cursor-grabbing">
+              <Reorder.Item as="div" key={sectionId} value={sectionId} className="cursor-grab active:cursor-grabbing">
                 {sectionId === 'summary' && (
                   <section className="space-y-2 md:space-y-4">
                     <div className="flex items-center gap-3">
