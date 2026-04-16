@@ -230,9 +230,13 @@ resource "google_compute_url_map" "url_map" {
 }
 
 resource "google_compute_managed_ssl_certificate" "cert" {
-  name = "resumatch-cert"
+  name = "resumatch-cert-v2"
   managed {
     domains = ["resumatches.com"]
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -240,6 +244,10 @@ resource "google_compute_target_https_proxy" "https_proxy" {
   name             = "resumatch-https-proxy"
   url_map          = google_compute_url_map.url_map.id
   ssl_certificates = [google_compute_managed_ssl_certificate.cert.id]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
