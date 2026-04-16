@@ -267,6 +267,44 @@ class AIService:
         content = await self._call_ai_with_fallback(prompt, temperature=0.7)
         return content or "Professional Cover Letter: [Generation error]"
 
+
+    async def clean_job_description(self, raw_text: str) -> str:
+        """
+        Uses AI to strip away irrelevant noise (headers, footers, ads) from scraped JD text.
+        Returns ONLY the core job details.
+        """
+        prompt = f"""
+        Extract ONLY the relevant Job Description content from the following noisy text.
+        
+        START extraction if you see: "Job Title", "About the Role", "Responsibilities", "We are looking for", "Qualifications", or similar JD intros.
+        STOP extraction when the actual requirements/role details end (ignore "About the Company" fluff if it's too long, and ignore ALL navigation links, footers, and legal disclaimers).
+        
+        NOISY TEXT:
+        {raw_text[:8000]}
+        
+        Return ONLY the cleaned Markdown text of the JD sections. Do not provide any conversational filler.
+        """
+        try:
+            from app.services.nvidia_service import nvidia_service
+            response = nvidia_service.client.chat.completions.create(
+                model="meta/llama-3.1-8b-instruct",
+                messages=[
+                    {"role": "system", "content": "You are a professional recruiting assistant specialized in JD cleaning. Extract core details only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1500
+            )
+            content = self._get_completion_content(response)
+            if content:
+                logger.info("AI Cleanup successful for JD text.")
+                return content.strip()
+            return raw_text # Fallback
+        except Exception as e:
+            logger.error(f"AI JD Cleanup failed: {str(e)}")
+            return raw_text # Fallback
+
+
     async def rewrite_bullet_point(self, bullet: str, role: str) -> str:
         """Impactful rewriting using reasoning model with strict format enforcement."""
         system_prompt = "You are a world-class professional resume writer. Return ONLY the final rewritten bullet point text. Do not provide explanations, do not use quotes, and do not include any reasoning. One bullet point only."
@@ -358,7 +396,7 @@ class AIService:
         """Extracts structured JD data from raw HTML using Nemotron-Nano."""
         # This will be called after scraper_service fetches the HTML
         prompt = f"""
-        Extract the following job details from this HTML content as JSON:
+        Extract the following job details from this HTML content as JSON nothings else from the HTML:
         - title
         - company
         - location

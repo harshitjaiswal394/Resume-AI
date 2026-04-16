@@ -28,9 +28,9 @@ async def fetch_job_description(payload: Dict[str, Any] = Body(...)):
         if not raw_text or len(raw_text) < 150:
              raise HTTPException(status_code=422, detail="Scraping failed or content too short")
              
-        # Optional: Use AI to clean up the scraped Markdown/Text if it looks messy
-        # For now, return the raw text as Jina does a great job.
-        return {"success": True, "jdText": raw_text}
+        # AI Cleanup: Filter out noise (headers, ads, etc.)
+        clean_jd = await ai_service.clean_job_description(raw_text)
+        return {"success": True, "jdText": clean_jd}
     except HTTPException as he:
         raise he
     except Exception as e:
