@@ -8,7 +8,7 @@ output "frontend_url" {
 
 output "load_balancer_ip" {
   value = google_compute_global_address.lb_ip.address
-  description = "The IP address of the Global Load Balancer. Point app.jaiswal.shop to this IP."
+  description = "The IP address of the Global Load Balancer. Point resumatches.com to this IP."
 }
 
 output "dns_nameservers" {

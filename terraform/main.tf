@@ -146,11 +146,11 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"
-        value = "https://app.jaiswal.shop"
+        value = "https://resumatches.com"
       }
       env {
         name  = "BACKEND_API_URL"
-        value = "https://app.jaiswal.shop"
+        value = "https://resumatches.com"
       }
     }
     vpc_access {
@@ -214,7 +214,7 @@ resource "google_compute_url_map" "url_map" {
   default_service = google_compute_backend_service.frontend_service.id
 
   host_rule {
-    hosts        = ["app.jaiswal.shop"]
+    hosts        = ["resumatches.com"]
     path_matcher = "allpaths"
   }
 
@@ -232,7 +232,7 @@ resource "google_compute_url_map" "url_map" {
 resource "google_compute_managed_ssl_certificate" "cert" {
   name = "resumatch-cert"
   managed {
-    domains = ["app.jaiswal.shop"]
+    domains = ["resumatches.com"]
   }
 }
 
@@ -250,16 +250,14 @@ resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
 }
 
 
-# 8. DNS Configuration
-resource "google_dns_managed_zone" "primary" {
-  name        = "resumatch-zone"
-  dns_name    = "${var.domain_name}."
-  description = "Managed zone for ResuMatch AI"
+# 8. DNS Configuration (Referencing existing Zone)
+data "google_dns_managed_zone" "primary" {
+  name = "resumatches-com"
 }
 
-resource "google_dns_record_set" "app" {
-  name         = "app.${google_dns_managed_zone.primary.dns_name}"
-  managed_zone = google_dns_managed_zone.primary.name
+resource "google_dns_record_set" "root" {
+  name         = data.google_dns_managed_zone.primary.dns_name
+  managed_zone = data.google_dns_managed_zone.primary.name
   type         = "A"
   ttl          = 300
   rrdatas      = [google_compute_global_address.lb_ip.address]

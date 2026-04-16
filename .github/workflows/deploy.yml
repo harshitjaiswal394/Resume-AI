@@ -1,10 +1,10 @@
-name: Production Deployment to app.jaiswal.shop
+name: Production Deployment to resumatches.com
 
 on:
   pull_request:
     branches: [ "main", "dev" ]
   push:
-    branches: [ "dev-feat" , "dev" ]
+    branches: [ "dev-feat" , "dev", "dev-domain" ]
   workflow_dispatch:
 
 env:
@@ -53,7 +53,7 @@ jobs:
             -target=google_artifact_registry_repository.repo \
             -target=google_compute_network.vpc \
             -var="project_id=${{ env.PROJECT_ID }}" \
-            -var="domain_name=jaiswal.shop" \
+            -var="domain_name=resumatches.com" \
             -var="database_url=${{ secrets.DATABASE_URL }}" \
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
@@ -78,7 +78,7 @@ jobs:
           docker build \
             --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
-            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://app.jaiswal.shop" \
+            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://resumatches.com" \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ./frontend
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:latest
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend --all-tags
@@ -109,7 +109,7 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="project_id=${{ env.PROJECT_ID }}" \
-            -var="domain_name=jaiswal.shop" \
+            -var="domain_name=resumatches.com" \
             -var="database_url=${{ secrets.DATABASE_URL }}" \
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
