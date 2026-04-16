@@ -54,8 +54,7 @@ export function MobileNav(props: MobileNavProps) {
           <div className="h-full">
             <PremiumSidebar 
               {...props}
-              // Force uncollapsed for mobile view
-              // We'll update PremiumSidebar to handle this
+              isMobile={true}
             />
           </div>
         </SheetContent>
