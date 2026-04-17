@@ -36,7 +36,8 @@ import {
   Upload,
   Mail,
   Phone,
-  Copy
+  Copy,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
