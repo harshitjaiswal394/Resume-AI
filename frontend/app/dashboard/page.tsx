@@ -47,7 +47,6 @@ import { CoverLetterModal } from '@/components/resume/CoverLetterModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { extractTextFromFile } from '@/lib/pdf';
 import { rewriteBulletPoint } from '@/lib/ai';
-import { startResumeAnalysis, completeResumeAnalysis } from '@/app/actions/resume';
 import { generateJobLinks } from '@/lib/job-portals';
 import { WhyRejectedSection } from '@/components/resume/WhyRejectedSection';
 import { ImproveResumeSection } from '@/components/resume/ImproveResumeSection';

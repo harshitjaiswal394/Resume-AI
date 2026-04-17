@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +26,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AuthModal } from '@/components/common/AuthModal';
 import { extractTextFromFile } from '@/lib/pdf';
-import { startResumeAnalysis, completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
+import { startResumeAnalysis } from '@/app/actions/resume';
 import { generateJobLinks } from '@/lib/job-portals';
 
 type Step = 'upload' | 'analyzing' | 'personalize';
@@ -124,65 +124,42 @@ export default function OnboardingFlow() {
       let resumeId = 'guest';
       if (user) {
         console.log('User is logged in, starting authenticated upload flow...');
-
-        // Ensure profile exists (retry once if just created)
-        let userProfile = profile;
-        if (!userProfile) {
-          console.log('Profile not found in state, attempting manual fetch...');
-          const { data: pData } = await supabase.from('users').select('*').eq('id', user.uid).single();
-          userProfile = pData as any;
-        }
-
-        if (!userProfile) {
-          throw new Error('User profile not found. Please try refreshing the page.');
-        }
-
-        const filePath = `resumes/${user.uid}/${Date.now()}_${file.name}`;
-
-        // Storage Upload
-        const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
-        if (uploadError) {
-          console.error('Storage upload error:', uploadError);
-          throw new Error(`Cloud storage upload failed: ${uploadError.message}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
-
-        // Database Insert
-        const { data: resumeData, error: resumeError } = await supabase
-          .from('resumes')
-          .insert({
-            user_id: user.uid,
-            file_name: file.name,
-            file_url: publicUrl,
-            file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
-            file_size_bytes: file.size,
-            status: 'parsing',
+        const idToken = await auth.currentUser?.getIdToken();
+        const response = await fetch(`${backendUrl}/api/resumes/`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            title: file.name,
+            target_role: 'Software Engineer', // Temporary default
+            section_order: ['summary', 'experience', 'education', 'skills', 'projects'],
+            template_id: 'modern'
           })
-          .select()
-          .single();
-
-        if (resumeError) {
-          console.error('Database insert error:', resumeError);
-          throw new Error(`Failed to save resume record: ${resumeError.message}`);
+        });
+        const result = await response.json();
+        if (result.success) {
+          resumeId = result.resume_id;
+        } else {
+          throw new Error('Failed to create resume record');
         }
-
-        resumeId = resumeData.id;
-        console.log('Authenticated upload successful, Resume ID:', resumeId);
       }
 
       // 2. Start Streaming Server Pipeline
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
       const formData = new FormData();
       formData.append('file', file);
 
-      // Pass user_id and resume_id to backend for server-side persistence (same as dashboard)
       const streamUrl = (user && resumeId !== 'guest')
         ? `${backendUrl}/api/resume/process-stream?user_id=${user.uid}&resume_id=${resumeId}`
         : `${backendUrl}/api/resume/process-stream`;
 
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(streamUrl, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        },
         body: formData,
       });
 
@@ -275,39 +252,59 @@ export default function OnboardingFlow() {
       if (resumeId === 'guest' && fileRef.current) {
         console.log('Saving guest analysis to new user record...');
         const file = fileRef.current;
-        const filePath = `resumes/${user.uid}/${Date.now()}_${file.name}`;
+        const idToken = await auth.currentUser?.getIdToken();
 
-        // 1. Upload to storage
-        const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
-        if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
-
-        const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
-
-        // 2. Insert resume record
-        const { data: resumeData, error: resumeError } = await supabase
-          .from('resumes')
-          .insert({
-            user_id: user.uid,
-            file_name: file.name,
-            file_url: publicUrl,
-            file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
-            file_size_bytes: file.size,
-            status: 'parsing',
+        // 1. Create resume record via Backend
+        const createRes = await fetch(`${backendUrl}/api/resumes/`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            title: file.name,
+            target_role: personalizeData.targetRole || 'Software Engineer',
+            section_order: ['summary', 'experience', 'education', 'skills', 'projects'],
+            template_id: 'modern',
+            parsed_data: fullAnalysisData.parsed_data
           })
-          .select()
-          .single();
-
-        if (resumeError) throw resumeError;
-        resumeId = resumeData.id;
+        });
+        const createResult = await createRes.json();
+        if (!createResult.success) throw new Error('Migration: Failed to create record');
+        
+        resumeId = createResult.resume_id;
         setActiveResumeId(resumeId);
 
-        // 3. Persist the analysis data received earlier as a guest
-        await completeResumeAnalysis(user.uid, resumeId, fullAnalysisData);
+        // 2. Persist the analysis data
+        await fetch(`${backendUrl}/api/save-analysis`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({ 
+            resumeId: resumeId, 
+            data: fullAnalysisData 
+          })
+        });
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.uid, resumeId, personalizeData, fullAnalysisData.parsed_data);
-        if (!result.success) throw new Error(result.error || 'Failed to tailor results');
+        const idToken = await auth.currentUser?.getIdToken();
+        const tailorRes = await fetch(`${backendUrl}/api/resumes/tailor`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            resumeId: resumeId,
+            preferences: personalizeData,
+            parsedData: fullAnalysisData.parsed_data
+          })
+        });
+        const tailorResult = await tailorRes.json();
+        if (!tailorResult.success) throw new Error(tailorResult.error || 'Failed to tailor results');
       }
 
       toast.success('Strategy optimized!');

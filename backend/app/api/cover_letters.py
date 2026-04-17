@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any, Optional
 from app.services.ai_service import ai_service
 from app.services.scraper_service import scraper_service
@@ -11,9 +11,13 @@ import time
 
 router = APIRouter()
 logger = logging.getLogger("resumatch-api.cover_letters")
+from app.api.auth import get_current_user
 
 @router.post("/fetch-jd")
-async def fetch_job_description(payload: Dict[str, Any] = Body(...)):
+async def fetch_job_description(
+    payload: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
     """
     Stand-alone JD fetching endpoint for the frontend.
     Returns clean text from a URL.
@@ -38,13 +42,15 @@ async def fetch_job_description(payload: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=500, detail="Could not retrieve job description from this URL")
 
 @router.post("/generate")
-async def generate_smart_cover_letter(payload: Dict[str, Any] = Body(...)):
+async def generate_smart_cover_letter(
+    payload: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
     """
     Highly targeted cover letter generation.
     Supports Resume Data + (JD Text OR JD URL).
     """
     start_time = time.time()
-    user_id = payload.get("userId", "guest")
     resume_id = payload.get("resumeId")
     resume_data = payload.get("resumeData")
     jd_text = payload.get("jdText", "").strip()

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from './AuthProvider';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/firebase';
 import { Button } from './ui/button';
 import { Briefcase, LogOut, User, Menu } from 'lucide-react';
 import { AuthModal } from './common/AuthModal';
@@ -23,7 +23,7 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await auth.signOut();
       router.push('/');
     } catch (error) {
       console.error('Sign out failed', error);

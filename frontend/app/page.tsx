@@ -33,9 +33,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { AuthModal } from '@/components/common/AuthModal';
 import { useAuth } from '@/components/AuthProvider';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
 import { toast } from 'sonner';
-import { completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
+import { startResumeAnalysis } from '@/app/actions/resume';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -78,13 +78,18 @@ export default function LandingPage() {
   useEffect(() => {
     if (user) {
       const checkResumes = async () => {
-        const { count, error } = await supabase
-          .from('resumes')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.uid);
-
-        if (!error && count !== null) {
-          setResumeCount(count);
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${backendUrl}/api/resumes/`, {
+            headers: { 'Authorization': `Bearer ${idToken}` }
+          });
+          const result = await response.json();
+          if (result.success) {
+            setResumeCount(result.resumes.length);
+          }
+        } catch (err) {
+          console.error('Failed to check resumes', err);
         }
       };
       checkResumes();
@@ -236,36 +241,60 @@ export default function LandingPage() {
 
       if (resumeId === 'guest' && fileRef.current) {
         const file = fileRef.current;
-        const filePath = `resumes/${user.uid}/${Date.now()}_${file.name}`;
+        const idToken = await auth.currentUser?.getIdToken();
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
-        const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
-        if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
-
-        const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
-
-        const { data: resumeData, error: resumeError } = await supabase
-          .from('resumes')
-          .insert({
-            user_id: user.uid,
-            file_name: file.name,
-            file_url: publicUrl,
-            file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
-            file_size_bytes: file.size,
-            status: 'parsing',
+        // 1. Create resume record via Backend
+        const createRes = await fetch(`${backendUrl}/api/resumes/`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            title: file.name,
+            target_role: personalizeData.targetRole || 'Software Engineer',
+            section_order: ['summary', 'experience', 'education', 'skills', 'projects'],
+            template_id: 'modern'
           })
-          .select()
-          .single();
-
-        if (resumeError) throw resumeError;
-        resumeId = resumeData.id;
+        });
+        const createResult = await createRes.json();
+        if (!createResult.success) throw new Error('Migration: Failed to create record');
+        
+        resumeId = createResult.resume_id;
         setActiveResumeId(resumeId);
 
-        await completeResumeAnalysis(user.uid, resumeId, fullAnalysisData);
+        // 2. Persist the analysis data
+        await fetch(`${backendUrl}/api/save-analysis`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({ 
+            resumeId: resumeId, 
+            data: fullAnalysisData 
+          })
+        });
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.uid, resumeId, personalizeData, fullAnalysisData.parsed_data);
-        if (!result.success) throw new Error(result.error || 'Failed to tailor results');
+        const idToken = await auth.currentUser?.getIdToken();
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+        const tailorRes = await fetch(`${backendUrl}/api/resumes/tailor`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            resumeId: resumeId,
+            preferences: personalizeData,
+            parsedData: fullAnalysisData.parsed_data
+          })
+        });
+        const tailorResult = await tailorRes.json();
+        if (!tailorResult.success) throw new Error(tailorResult.error || 'Failed to tailor results');
       }
 
       toast.success('Strategy optimized!');

@@ -69,3 +69,27 @@ async def upsert_my_profile(
     except Exception as e:
         logger.error(f"Error upserting profile: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error")
+
+@router.patch("/me/plan")
+async def update_user_plan(
+    payload: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
+    """Updates the user's plan (e.g. to 'pro' after payment)."""
+    plan = payload.get("plan", "free")
+    credits = payload.get("credits", 3)
+    
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("""
+                    UPDATE users 
+                    SET plan = :plan, credits_remaining = :credits, updated_at = NOW()
+                    WHERE id = :uid
+                """),
+                {"plan": plan, "credits": credits, "uid": user_id}
+            )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error updating plan: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error")

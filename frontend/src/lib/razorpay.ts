@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
 import { toast } from 'sonner';
 
 declare global {
@@ -30,26 +30,22 @@ export function useRazorpay() {
       image: "https://picsum.photos/seed/resumatch/200",
       handler: async function (response: any) {
         try {
-          const { error } = await supabase
-            .from('users')
-            .update({
+          const idToken = await auth.currentUser?.getIdToken();
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+          
+          const patchRes = await fetch(`${backendUrl}/api/users/me/plan`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({
               plan: 'pro',
-              credits_remaining: 999999, // Effectively unlimited
+              credits: 999999
             })
-            .eq('id', user.uid);
-
-          if (error) throw error;
-
-          // Also log the payment
-          await supabase.from('audit_logs').insert({
-            user_id: user.uid,
-            action: 'payment_success',
-            details: {
-              payment_id: response.razorpay_payment_id,
-              plan: 'pro',
-              amount
-            }
           });
+
+          if (!patchRes.ok) throw new Error('Backend failed to update plan');
 
           toast.success('Welcome to Pro! Your account has been upgraded.');
           window.location.reload();

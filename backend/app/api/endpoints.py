@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, UploadFile, File
+from fastapi import APIRouter, HTTPException, Body, UploadFile, File, Depends
 from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from app.services.ai_service import ai_service
@@ -12,18 +12,22 @@ import asyncio
 resume_router = APIRouter()
 logger = logging.getLogger("resumatch-api.endpoints")
 
+from app.api.auth import get_current_user, security
+
 from app.db import persist_pipeline_results, engine
 from app.services.storage import storage_service
 from datetime import datetime
 from sqlalchemy import text
 
 @resume_router.post("/tailor")
-async def tailor_resume(payload: Dict[str, Any] = Body(...)):
+async def tailor_resume(
+    payload: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
     """
     Re-analyzes and re-matches based on user personalization (role, exp, location)
     """
     resume_id = payload.get("resumeId")
-    user_id = payload.get("userId") or "guest"
     preferences = payload.get("preferences", {})
     parsed_data = payload.get("parsedData")
     
@@ -86,7 +90,10 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @resume_router.post("/cover-letter")
-async def generate_cover_letter(payload: Dict[str, Any] = Body(...)):
+async def generate_cover_letter(
+    payload: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
     """Generate a tailored cover letter using AI."""
     resume_data = payload.get("resume") or payload.get("resumeData")
     job_role = payload.get("jobRole") or payload.get("job_role", "Software Engineer")
@@ -237,12 +244,14 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         yield f"data: {json.dumps({'success': False, 'error': str(e)})}\n\n"
 
 @resume_router.post("/save-analysis")
-async def save_analysis(payload: Dict[str, Any] = Body(...)):
+async def save_analysis(
+    payload: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
     """
     Persists pre-existing analysis data to the database.
     Used for migrating guest analysis results to a user account.
     """
-    user_id = payload.get("userId")
     resume_id = payload.get("resumeId")
     data = payload.get("data")
 
@@ -276,9 +285,9 @@ async def rewrite_bullet(request: RewriteBulletRequest):
         logger.error(f"Bullet rewrite failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@resume_router.delete("/storage/resumes/{user_id}")
-async def cleanup_user_storage(user_id: str):
-    """Cleans up GCP storage for a specific user."""
+@resume_router.delete("/storage/resumes")
+async def cleanup_user_storage(user_id: str = Depends(get_current_user)):
+    """Cleans up GCP storage for the authenticated user."""
     if not user_id or user_id == "guest":
         return {"success": True}
     success = storage_service.delete_user_folder(user_id)
@@ -287,8 +296,8 @@ async def cleanup_user_storage(user_id: str):
 @resume_router.post("/process-stream")
 async def process_resume_stream(
     file: UploadFile = File(...),
-    user_id: str = "guest",
-    resume_id: str = "guest"
+    resume_id: str = "guest",
+    user_id: str = Depends(get_current_user)
 ):
     content = await file.read()
     return StreamingResponse(
@@ -299,8 +308,8 @@ async def process_resume_stream(
 @resume_router.post("/process")
 async def process_resume(
     file: UploadFile = File(...),
-    user_id: str = "guest",
-    resume_id: str = "guest"
+    resume_id: str = "guest",
+    user_id: str = Depends(get_current_user)
 ):
     """
     Production-grade pipeline: Extract -> Parse -> Match -> Save

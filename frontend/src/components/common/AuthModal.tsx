@@ -8,7 +8,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendEmailVerification,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { X, Sparkles, Shield, Zap, Mail, Lock, Loader2, Phone, KeyRound, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -161,84 +161,15 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
   };
 
   const handleSendOtp = async (type: 'email' | 'phone') => {
-    setErrors([]);
-    setIsLoading(true);
-    try {
-      if (type === 'email') {
-        if (!email) { setErrors(['Enter your email']); setIsLoading(false); return; }
-        const { error } = await supabase.auth.signInWithOtp({ email });
-        if (error) throw error;
-        toast.success('OTP sent to your email!');
-      } else {
-        if (!phone) { setErrors(['Enter your phone number']); setIsLoading(false); return; }
-        const { error } = await supabase.auth.signInWithOtp({ phone });
-        if (error) throw error;
-        toast.success('OTP sent to your phone!');
-      }
-      setOtpTarget(type);
-      setView('verify-otp');
-      setResendTimer(60);
-    } catch (error: any) {
-      if (error.message?.includes('rate')) {
-        setErrors(['Too many attempts. Wait a few minutes.']);
-      } else {
-        setErrors([error.message || 'Failed to send OTP']);
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    toast.info(`${type === 'email' ? 'Email link' : 'Phone'} authentication is being migrated to Firebase. Please use Google or Password login for now.`);
   };
 
   const handleVerifyOtp = async () => {
-    setErrors([]);
-    const token = otpDigits.join('');
-    if (token.length !== 6) {
-      setErrors(['Enter all 6 digits']);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const params: any = { token, type: otpTarget === 'email' ? 'email' : 'sms' };
-      if (otpTarget === 'email') params.email = email;
-      else params.phone = phone;
-
-      const { error } = await supabase.auth.verifyOtp(params);
-      if (error) throw error;
-      toast.success('Verified! Signing you in...');
-      onClose();
-      if (onSuccess) onSuccess();
-      else setTimeout(() => { window.location.href = '/dashboard'; }, 300);
-    } catch (error: any) {
-      if (error.message?.includes('expired')) {
-        setErrors(['OTP expired. Please request a new one.']);
-      } else if (error.message?.includes('invalid') || error.message?.includes('Invalid')) {
-        setErrors(['Invalid OTP. Check and try again.']);
-      } else {
-        setErrors([error.message || 'Verification failed']);
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    toast.error('OTP verification is temporarily disabled during security migration.');
   };
 
   const handleResendOtp = async () => {
-    if (resendTimer > 0) return;
-    setIsResending(true);
-    try {
-      if (otpTarget === 'email') {
-        const { error } = await supabase.auth.signInWithOtp({ email });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signInWithOtp({ phone });
-        if (error) throw error;
-      }
-      toast.success('New OTP sent!');
-      setResendTimer(60);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to resend');
-    } finally {
-      setIsResending(false);
-    }
+    toast.info('OTP resend disabled.');
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -523,23 +454,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-3 text-slate-400 font-semibold tracking-wider">Or continue with</span></div>
           </div>
 
-          {/* OTP + Google options */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => setView('otp-email')}
-              className="flex items-center justify-center gap-2 h-11 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200"
-            >
-              <KeyRound className="h-4 w-4 text-slate-500" /> Email OTP
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('otp-phone')}
-              className="flex items-center justify-center gap-2 h-11 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200"
-            >
-              <Phone className="h-4 w-4 text-slate-500" /> Mobile OTP
-            </button>
-          </div>
+          {/* Removed legacy Supabase OTP options for security hardening */}
           <button
             type="button"
             onClick={handleGoogleLogin}

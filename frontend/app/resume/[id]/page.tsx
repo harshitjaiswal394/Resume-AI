@@ -5,7 +5,8 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
+import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +35,8 @@ import { CoverLetterModal } from '@/components/resume/CoverLetterModal';
 import { Skeleton, SkeletonCard, SkeletonGauge, SkeletonText } from '@/components/ui/skeleton';
 import { motion } from 'motion/react';
 
-export default function ResumeView() {
+export function ResumeView() {
+  const { user } = useAuth();
   const params = useParams();
   const id = params.id as string;
   const [resume, setResume] = useState<any>(null);
@@ -45,12 +47,22 @@ export default function ResumeView() {
 
   const handleSaveJob = async (matchId: string, isSaved: boolean) => {
     try {
-      const { error } = await supabase
-        .from('job_matches')
-        .update({ is_saved: isSaved })
-        .eq('id', matchId);
+      const idToken = await auth.currentUser?.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      
+      const response = await fetch(`${backendUrl}/api/resumes/${id}/matches/${matchId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ is_saved: isSaved })
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to update job');
+      
+      // Optimistic update
+      setMatches(prev => prev.map(m => m.id === matchId ? { ...m, is_saved: isSaved } : m));
       toast.success(isSaved ? 'Job saved!' : 'Job removed from saved');
     } catch (error) {
       console.error('Error saving job:', error);
@@ -63,60 +75,36 @@ export default function ResumeView() {
 
     const fetchData = async () => {
       setLoading(true);
-      
-      // Fetch resume
-      const { data: resumeData, error: resumeError } = await supabase
-        .from('resumes')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (resumeError) {
-        console.error('Error fetching resume:', resumeError);
-      } else {
-        setResume(resumeData);
-      }
-
-      // Fetch matches
-      const { data: matchesData, error: matchesError } = await supabase
-        .from('job_matches')
-        .select('*')
-        .eq('resume_id', id);
-
-      if (matchesError) {
-        console.error('Error fetching matches:', matchesError);
-      } else {
-        setMatches(matchesData || []);
-      }
-
-      setLoading(false);
-    };
-
-    fetchData();
-
-    // Realtime subscription for matches
-    const subscription = supabase
-      .channel(`matches_${id}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'job_matches',
-        filter: `resume_id=eq.${id}`
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setMatches(prev => [...prev, payload.new]);
-        } else if (payload.eventType === 'DELETE') {
-          setMatches(prev => prev.filter(m => m.id !== payload.old.id));
-        } else if (payload.eventType === 'UPDATE') {
-          setMatches(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+        
+        // Fetch resume
+        const resumeRes = await fetch(`${backendUrl}/api/resumes/${id}`, {
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
+        const resumeResult = await resumeRes.json();
+        if (resumeResult.success) {
+          setResume(resumeResult.resume);
         }
-      })
-      .subscribe();
 
-    return () => {
-      subscription.unsubscribe();
+        // Fetch matches
+        const matchesRes = await fetch(`${backendUrl}/api/resumes/${id}/matches`, {
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
+        const matchesResult = await matchesRes.json();
+        if (matchesResult.success) {
+          setMatches(matchesResult.matches || []);
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
     };
-  }, [id]);
+
+    if (id) fetchData();
+  }, [id, user]);
 
   if (loading) return (
     <div className="container mx-auto py-10 px-4 space-y-8">

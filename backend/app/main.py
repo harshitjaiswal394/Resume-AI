@@ -20,7 +20,6 @@ logging.basicConfig(
 logger = logging.getLogger("resumatch-api")
 
 from app.api.endpoints import resume_router
-from app.api.auth_routes import auth_router
 from app.api.resumes_crud import router as resumes_crud_router
 from app.api.builder import router as builder_router
 from app.api.cover_letters import router as cover_letters_router
@@ -60,7 +59,6 @@ app.add_middleware(
 )
 
 app.include_router(resume_router, prefix="/api/resume", tags=["resume"])
-app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(resumes_crud_router, prefix="/api/resumes", tags=["builder"])
 app.include_router(builder_router, prefix="/api/builder", tags=["builder"])
 app.include_router(cover_letters_router, prefix="/api/cover-letter", tags=["cover-letter"])

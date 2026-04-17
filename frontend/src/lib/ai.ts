@@ -1,3 +1,5 @@
+import { auth } from '@/lib/firebase';
+
 export interface ParsedResume {
   name: string;
   contact: {
@@ -21,54 +23,62 @@ export interface ParsedResume {
   }[];
 }
 
+const getBackendUrl = () => process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+
+async function authorizedFetch(path: string, options: RequestInit = {}) {
+  const idToken = await auth.currentUser?.getIdToken();
+  const headers = {
+    ...options.headers,
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${idToken}`
+  };
+  
+  const response = await fetch(`${getBackendUrl()}${path}`, {
+    ...options,
+    headers
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Request failed with status ${response.status}`);
+  }
+  
+  return response.json();
+}
+
 export async function parseResume(text: string): Promise<ParsedResume> {
-  const response = await fetch('/api/resume/parse', {
+  return authorizedFetch('/api/resume/parse', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text })
   });
-  if (!response.ok) throw new Error('Failed to parse resume');
-  return response.json();
 }
 
 export async function analyzeResume(resume: ParsedResume) {
-  const response = await fetch('/api/resume/analyze', {
+  return authorizedFetch('/api/resume/analyze', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resume })
   });
-  if (!response.ok) throw new Error('Failed to analyze resume');
-  return response.json();
 }
 
 export async function generateJobMatches(resume: ParsedResume, roles: string[]) {
-  const response = await fetch('/api/resume/matches', {
+  return authorizedFetch('/api/resume/matches', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resume, roles })
   });
-  if (!response.ok) throw new Error('Failed to generate job matches');
-  return response.json();
 }
 
 export async function generateCoverLetter(resume: ParsedResume, jobRole: string) {
-  const response = await fetch('/api/resume/cover-letter', {
+  const data = await authorizedFetch('/api/resume/cover-letter', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resume, jobRole })
   });
-  if (!response.ok) throw new Error('Failed to generate cover letter');
-  const data = await response.json();
   return data.content;
 }
 
 export async function rewriteBulletPoint(bullet: string, role: string) {
-  const response = await fetch('/api/resume/rewrite', {
+  const data = await authorizedFetch('/api/resume/rewrite-bullet', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bullet, role })
+    body: JSON.stringify({ bullet, targetRole: role })
   });
-  if (!response.ok) throw new Error('Failed to rewrite bullet point');
-  const data = await response.json();
-  return data.content;
+  return data.optimized;
 }

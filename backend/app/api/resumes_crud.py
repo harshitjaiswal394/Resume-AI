@@ -50,13 +50,8 @@ async def create_resume(payload: ResumeCreateRequest, user_id: str = Depends(get
     """Creates a new modular resume."""
     resume_id = str(uuid.uuid4())
     
-    # Handle guest user_id precisely
-    db_user_id = None if user_id in ["guest", "undefined", None] else user_id
-
-    # If user_id is provided in the body (common for builder), use it
-    body_user_id = getattr(payload, 'user_id', None)
-    if body_user_id and not db_user_id:
-        db_user_id = None if body_user_id in ["guest", "undefined"] else body_user_id
+    # Force authenticated user_id from JWT
+    db_user_id = user_id
 
     try:
         with engine.begin() as conn:
@@ -195,7 +190,7 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
         elif key == 'section_order':
             params[key] = "{" + ",".join([f'"{s}"' for s in value]) + "}"
         elif key == 'user_id':
-            params[key] = None if value in ["guest", "undefined", None] else value
+            continue # Never allow manual override of user_id via update payload
         else:
             params[key] = value
         

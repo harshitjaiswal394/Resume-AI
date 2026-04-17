@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any, Optional
 from app.services.ai_service import ai_service
 from app.services.scraper_service import scraper_service
@@ -9,9 +9,13 @@ import time
 
 router = APIRouter()
 logger = logging.getLogger("resumatch-api.builder")
+from app.api.auth import get_current_user
 
 @router.post("/parse-job-url")
-async def parse_job_url(payload: Dict[str, str] = Body(...)):
+async def parse_job_url(
+    payload: Dict[str, str] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
     """Scrapes a job URL and returns structured data using AI."""
     start_time = time.time()
     url = payload.get("url")
@@ -32,7 +36,10 @@ async def parse_job_url(payload: Dict[str, str] = Body(...)):
     return {"success": True, "data": parsed_jd, "raw_content": raw_content}
 
 @router.post("/optimize-experience")
-async def optimize_experience(request: OptimizeExperienceRequest):
+async def optimize_experience(
+    request: OptimizeExperienceRequest,
+    user_id: str = Depends(get_current_user)
+):
     """Optimizes a work experience block for ATS & target role."""
     start_time = time.time()
     logger.info(f"OPTIMIZE_EXP_START - Role: {request.target_role}")
@@ -49,7 +56,10 @@ async def optimize_experience(request: OptimizeExperienceRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate-summary")
-async def generate_summary(payload: Dict[str, Any] = Body(...)):
+async def generate_summary(
+    payload: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user)
+):
     """Generates a professional summary based on profile data."""
     profile_data = payload.get("profileData")
     target_role = payload.get("targetRole", "Software Engineer")

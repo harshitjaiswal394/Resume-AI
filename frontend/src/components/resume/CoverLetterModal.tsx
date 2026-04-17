@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Copy, Check, Download, FileText, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateCoverLetter, ParsedResume } from '@/lib/ai';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 
 interface CoverLetterModalProps {
@@ -33,20 +33,26 @@ export function CoverLetterModal({ isOpen, onClose, resume, jobMatch }: CoverLet
     
     setIsGenerating(true);
     try {
-      const letter = await generateCoverLetter(resume.parsed_data as ParsedResume, jobMatch.job_title);
-      setCoverLetter(letter);
+      const idToken = await auth.currentUser?.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
       
-      // Save to database
-      if (user) {
-        await supabase.from('cover_letters').insert({
-          user_id: user.uid,
-          resume_id: resume.id,
-          job_match_id: jobMatch.id,
-          job_title: jobMatch.job_title,
-          company: jobMatch.company,
-          content: letter,
-        });
-      }
+      const response = await fetch(`${backendUrl}/api/cover-letter/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          resumeId: resume.id,
+          resumeData: resume.parsed_data,
+          jdText: `${jobMatch.job_title} at ${jobMatch.company}. ${jobMatch.job_description || ''}`,
+        })
+      });
+
+      if (!response.ok) throw new Error('Generation failed');
+      const data = await response.json();
+      setCoverLetter(data.content);
+      
     } catch (error) {
       console.error('Failed to generate cover letter', error);
       toast.error('Failed to generate cover letter. Please try again.');

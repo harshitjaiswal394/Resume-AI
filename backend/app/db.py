@@ -7,7 +7,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logger = logging.getLogger("resumatch-api.db")
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Prioritize GCP Cloud SQL during migration
+DATABASE_URL = os.getenv("GCP_DATABASE_URL") or os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    logger.error("No DATABASE_URL found in environment!")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

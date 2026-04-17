@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Lock, Loader2, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -42,15 +42,18 @@ export default function ResetPasswordPage() {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      if (!auth.currentUser) {
+        throw new Error('No active session found. Please request a new reset link.');
+      }
+      const { updatePassword } = await import('firebase/auth');
+      await updatePassword(auth.currentUser, password);
       setIsSuccess(true);
       toast.success('Password updated successfully!');
     } catch (error: any) {
-      if (error.message?.includes('same password')) {
-        setErrors(['New password must be different from the old one.']);
-      } else if (error.message?.includes('session')) {
-        setErrors(['Reset link expired. Please request a new one.']);
+      if (error.code === 'auth/weak-password') {
+        setErrors(['Password is too weak.']);
+      } else if (error.code === 'auth/requires-recent-login') {
+        setErrors(['For security reasons, please login again before changing your password.']);
       } else {
         setErrors([error.message || 'Failed to update password']);
       }
