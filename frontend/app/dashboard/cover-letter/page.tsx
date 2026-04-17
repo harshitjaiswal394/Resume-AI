@@ -169,11 +169,11 @@ export default function SmartCoverLetter() {
       if (error) throw error;
       
       toast.success('Resume deleted');
-      // Reset state
+      // Reset state IMMEDIATELY to prevent 500 errors on generation
       setSelectedResumeId('');
       setContent('');
       // Refresh list
-      fetchResumes();
+      await fetchResumes();
     } catch (e: any) {
       console.error('Delete error:', e);
       toast.error('Failed to delete resume');
@@ -375,17 +375,17 @@ export default function SmartCoverLetter() {
                     </motion.div>
                   ) : (
                     <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center space-y-6 py-20">
-                      <div className={`w-24 h-24 rounded-[2rem] bg-indigo-50 flex items-center justify-center text-indigo-200 ${isGenerating ? 'animate-bounce' : 'animate-pulse'}`}>
-                        <Sparkles className={`h-10 w-10 ${isGenerating ? 'text-indigo-600' : 'text-indigo-300'}`} />
+                      <div className={`w-28 h-28 rounded-[2.5rem] bg-indigo-50 flex items-center justify-center text-indigo-200 shadow-inner ${isGenerating ? 'animate-bounce' : 'animate-pulse'}`}>
+                        <Sparkles className={`h-12 w-12 ${isGenerating ? 'text-indigo-600 animate-pulse' : 'text-indigo-300'}`} />
                       </div>
-                      <div className="space-y-2">
-                        <p className="text-2xl font-black text-slate-800 tracking-tight">
+                      <div className="space-y-3">
+                        <p className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">
                           {isGenerating ? 'Intelligence Working...' : 'Intelligence Standby'}
                         </p>
-                        <p className="text-base text-slate-400 font-medium max-w-xs">
+                        <p className="text-base text-slate-400 font-bold max-w-sm leading-relaxed">
                           {isGenerating 
-                            ? 'Our Llama 3.1 engine is crafting your tailored career strategy. This usually takes 10-15 seconds.' 
-                            : 'Your tailored strategy will appear here after analysis.'}
+                            ? 'Our Llama 3.1 & Nemotron engines are co-creating your strategy. This usually takes 10-15 seconds.' 
+                            : 'Select a base resume to unlock your professional AI strategy.'}
                         </p>
                       </div>
                     </div>

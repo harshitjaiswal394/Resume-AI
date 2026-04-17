@@ -84,6 +84,7 @@ class ResumeUpdateRequest(BaseModel):
     parsed_data: Optional[Dict[str, Any]] = None
     original_score: Optional[float] = None
     resume_score: Optional[float] = None
+    target_role: Optional[str] = None
 
 class OptimizeExperienceRequest(BaseModel):
     experience: ExperienceItem

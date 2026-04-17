@@ -27,20 +27,20 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...)):
     if not preferences or not parsed_data:
         raise HTTPException(status_code=400, detail="Preferences and parsed data are required")
         
-    logger.info(f"Tailoring results for Resume: {resume_id}, Role: {preferences.get('targetRole')}")
+    target_role = preferences.get("target_role") or preferences.get("targetRole") or "Software Engineer"
+    logger.info(f"Tailoring results for Resume: {resume_id}, Role: {target_role}")
     
     try:
         # Define roles for matching
-        target_role = preferences.get("targetRole", "Software Engineer")
         roles = [target_role]
         
         # 1 & 2. Run Analysis and Matching IN PARALLEL for max speed
         filters = {
             "domain": target_role,
-            "experience_level": preferences.get("experienceLevel"),
+            "experience_level": preferences.get("experience_level") or preferences.get("experienceLevel"),
             "location": preferences.get("location"),
-            "work_mode": preferences.get("workMode"),
-            "days_old": preferences.get("daysOld", 25)
+            "work_mode": preferences.get("work_mode") or preferences.get("workMode"),
+            "days_old": preferences.get("days_old") or preferences.get("daysOld") or 25
         }
         
         logger.info(f"Triggering parallel AI pipeline for Resume: {resume_id}")
@@ -155,7 +155,7 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         # Standardize roles
         roles = ["Software Engineer"]
         if hasattr(parsed_data, 'get'):
-            roles = [parsed_data.get('targetRole') or 'Software Engineer']
+            roles = [parsed_data.get('target_role') or parsed_data.get('targetRole') or 'Software Engineer']
             
         analysis_task = ai_service.analyze_resume(parsed_data)
         matches_task = ai_service.generate_job_matches(parsed_data, roles, filters={"days_old": 25})
@@ -241,7 +241,7 @@ async def save_analysis(payload: Dict[str, Any] = Body(...)):
 
 class RewriteBulletRequest(BaseModel):
     bullet: str
-    targetRole: Optional[str] = "Software Engineer"
+    target_role: Optional[str] = Field("Software Engineer", alias="targetRole")
 
 @resume_router.post("/rewrite-bullet")
 async def rewrite_bullet(request: RewriteBulletRequest):
@@ -250,7 +250,7 @@ async def rewrite_bullet(request: RewriteBulletRequest):
         raise HTTPException(status_code=400, detail="Bullet text cannot be empty")
         
     try:
-        optimized = await ai_service.rewrite_bullet_point(request.bullet, request.targetRole)
+        optimized = await ai_service.rewrite_bullet_point(request.bullet, request.target_role)
         logger.info(f"AI Rewriting: '{request.bullet[:50]}...' -> '{optimized[:50]}...'")
         return {"success": True, "optimized": optimized}
     except Exception as e:

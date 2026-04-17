@@ -145,8 +145,8 @@ export default function AIResumeBuilder() {
       let activeResumeId: string | null = urlId;
 
       // PHASE 0: Pre-sync check (Landing Page / Dashboard intent)
-      if (urlRole && !discovery.role) {
-        console.log('[Builder] Discovery: Initializing with role intent from URL:', urlRole);
+      if (urlRole) {
+        console.log('[Builder] Discovery: Intent captured from URL:', urlRole);
         setDiscovery(prev => ({ ...prev, role: urlRole }));
       }
       
@@ -325,9 +325,10 @@ export default function AIResumeBuilder() {
       .single();
 
     if (resume && !error) {
-      // Restore Discovery Metadata
+      // Restore Discovery Metadata - Prioritize URL role if it was just passed from Dashboard
+      const urlRole = new URLSearchParams(window.location.search).get('role');
       const newDiscovery = {
-         role: resume.target_role || '',
+         role: urlRole || resume.target_role || '',
          exp: resume.years_of_experience?.toString() || ''
       };
       setDiscovery(newDiscovery);
@@ -687,12 +688,14 @@ export default function AIResumeBuilder() {
         if (error) throw error;
       }
 
-      // Clear local caches
+      // Clear local caches and state IMMEDIATELY
       localStorage.removeItem('resumatch_builder_data');
       sessionStorage.removeItem('resumatch_builder_session');
+      setResumeId(null);
+      setData({} as any);
       
       toast.success('Draft deleted successfully');
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } catch (e: any) {
       console.error('Delete failed:', e);
       toast.error('Failed to delete draft');
