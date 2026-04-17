@@ -144,7 +144,9 @@ export default function AIResumeBuilder() {
       const urlRole = params.get('role');
       let activeResumeId: string | null = urlId;
 
+      // PHASE 0: Pre-sync check (Landing Page / Dashboard intent)
       if (urlRole && !discovery.role) {
+        console.log('[Builder] Discovery: Initializing with role intent from URL:', urlRole);
         setDiscovery(prev => ({ ...prev, role: urlRole }));
       }
       

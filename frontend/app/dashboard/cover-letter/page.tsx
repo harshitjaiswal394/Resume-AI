@@ -338,12 +338,18 @@ export default function SmartCoverLetter() {
                     </motion.div>
                   ) : (
                     <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center space-y-6 py-20">
-                      <div className="w-24 h-24 rounded-[2rem] bg-indigo-50 flex items-center justify-center text-indigo-200 animate-pulse">
-                        <Sparkles className="h-10 w-10 text-indigo-300" />
+                      <div className={`w-24 h-24 rounded-[2rem] bg-indigo-50 flex items-center justify-center text-indigo-200 ${isGenerating ? 'animate-bounce' : 'animate-pulse'}`}>
+                        <Sparkles className={`h-10 w-10 ${isGenerating ? 'text-indigo-600' : 'text-indigo-300'}`} />
                       </div>
                       <div className="space-y-2">
-                        <p className="text-2xl font-black text-slate-800 tracking-tight">Intelligence Standby</p>
-                        <p className="text-base text-slate-400 font-medium max-w-xs">Your tailored strategy will appear here after analysis.</p>
+                        <p className="text-2xl font-black text-slate-800 tracking-tight">
+                          {isGenerating ? 'Intelligence Working...' : 'Intelligence Standby'}
+                        </p>
+                        <p className="text-base text-slate-400 font-medium max-w-xs">
+                          {isGenerating 
+                            ? 'Our Llama 3.1 engine is crafting your tailored career strategy. This usually takes 10-15 seconds.' 
+                            : 'Your tailored strategy will appear here after analysis.'}
+                        </p>
                       </div>
                     </div>
                   )}
