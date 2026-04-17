@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  transpilePackages: ['pdfjs-dist'],
+  transpilePackages: ['pdfjs-dist', 'firebase', '@firebase/app', '@firebase/auth', '@firebase/util', '@firebase/component'],
   images: {
     remotePatterns: [
       {

@@ -204,26 +204,25 @@ export default function Dashboard() {
     }
   }, [user, isAuthReady, router]);
 
+  const fetchResumes = async () => {
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch(`${backendUrl}/api/resumes?user_id=${user?.uid}`, {
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
+      const result = await response.json();
+      
+      if (result.success && result.resumes) {
+        setResumes(result.resumes);
+        if (result.resumes.length > 0 && !selectedResume) setSelectedResume(result.resumes[0]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch resumes from backend:', err);
+    }
+  };
+
   useEffect(() => {
     if (!user || !isAuthReady) return;
-
-    const fetchResumes = async () => {
-      try {
-        const idToken = await auth.currentUser?.getIdToken();
-        const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.uid}`, {
-          headers: { 'Authorization': `Bearer ${idToken}` }
-        });
-        const result = await response.json();
-        
-        if (result.success && result.resumes) {
-          setResumes(result.resumes);
-          if (result.resumes.length > 0 && !selectedResume) setSelectedResume(result.resumes[0]);
-        }
-      } catch (err) {
-        console.error('Failed to fetch resumes from backend:', err);
-      }
-    };
-
     fetchResumes();
   }, [user, isAuthReady]);
 

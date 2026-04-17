@@ -26,7 +26,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { AuthModal } from '@/components/common/AuthModal';
 import { extractTextFromFile } from '@/lib/pdf';
-import { startResumeAnalysis } from '@/app/actions/resume';
+import { startResumeAnalysis, completeResumeAnalysis } from '@/app/actions/resume';
 import { generateJobLinks } from '@/lib/job-portals';
 
 type Step = 'upload' | 'analyzing' | 'personalize';
@@ -35,6 +35,7 @@ export default function OnboardingFlow() {
   const { user, profile } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [isDragging, setIsDragging] = useState(false);

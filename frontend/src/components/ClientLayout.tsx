@@ -2,10 +2,11 @@
 
 import React from "react";
 import { usePathname } from "next/navigation";
-import { AuthProvider } from "./AuthProvider";
+import dynamic from 'next/dynamic';
 import { Toaster } from "./ui/sonner";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
+const AuthProvider = dynamic(() => import('./AuthProvider').then(mod => mod.AuthProvider), { ssr: false });
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

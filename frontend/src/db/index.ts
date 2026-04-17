@@ -8,5 +8,3 @@ const client = postgres(process.env.DATABASE_URL!, {
   connect_timeout: 10,
 });
 export const db = drizzle(client, { schema });
-
-export const db = drizzle(client, { schema });
