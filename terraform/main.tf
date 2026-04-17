@@ -74,7 +74,7 @@ resource "google_compute_firewall" "allow_lb" {
 # 4. Artifact Registry
 resource "google_artifact_registry_repository" "repo" {
   location      = var.region
-  repository_id = "resumatch-repo"
+  repository_id = "resumatches-official"
   format        = "DOCKER"
   depends_on    = [google_project_service.services]
 }
@@ -86,7 +86,7 @@ resource "google_cloud_run_v2_service" "backend" {
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.repo.repository_id}/backend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-official/backend:${var.image_tag}"
       ports {
         container_port = 8090
       }
@@ -140,17 +140,17 @@ resource "google_cloud_run_v2_service" "frontend" {
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.repo.repository_id}/frontend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-official/frontend:${var.image_tag}"
       ports {
         container_port = 3000
       }
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"
-        value = "https://app.jaiswal.shop"
+        value = "https://resumatches.com"
       }
       env {
         name  = "BACKEND_API_URL"
-        value = "https://app.jaiswal.shop"
+        value = "https://resumatches.com"
       }
     }
     vpc_access {
@@ -214,7 +214,7 @@ resource "google_compute_url_map" "url_map" {
   default_service = google_compute_backend_service.frontend_service.id
 
   host_rule {
-    hosts        = ["app.jaiswal.shop"]
+    hosts        = ["resumatches.com"]
     path_matcher = "allpaths"
   }
 
@@ -230,9 +230,13 @@ resource "google_compute_url_map" "url_map" {
 }
 
 resource "google_compute_managed_ssl_certificate" "cert" {
-  name = "resumatch-cert"
+  name = "resumatch-cert-v2"
   managed {
-    domains = ["app.jaiswal.shop"]
+    domains = ["resumatches.com"]
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -240,6 +244,10 @@ resource "google_compute_target_https_proxy" "https_proxy" {
   name             = "resumatch-https-proxy"
   url_map          = google_compute_url_map.url_map.id
   ssl_certificates = [google_compute_managed_ssl_certificate.cert.id]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
@@ -250,18 +258,36 @@ resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
 }
 
 
-# 8. DNS Configuration
-resource "google_dns_managed_zone" "primary" {
-  name        = "resumatch-zone"
-  dns_name    = "${var.domain_name}."
-  description = "Managed zone for ResuMatch AI"
+# 8. DNS Configuration (Referencing existing Zone)
+data "google_dns_managed_zone" "primary" {
+  name = "resumatches-com"
 }
 
-resource "google_dns_record_set" "app" {
-  name         = "app.${google_dns_managed_zone.primary.dns_name}"
-  managed_zone = google_dns_managed_zone.primary.name
+resource "google_dns_record_set" "root" {
+  name         = data.google_dns_managed_zone.primary.dns_name
+  managed_zone = data.google_dns_managed_zone.primary.name
   type         = "A"
   ttl          = 300
   rrdatas      = [google_compute_global_address.lb_ip.address]
 }
+# 9. HTTP to HTTPS Redirect
+resource "google_compute_url_map" "https_redirect" {
+  name = "resumatch-https-redirect"
+  default_url_redirect {
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
+  }
+}
 
+resource "google_compute_target_http_proxy" "http_proxy" {
+  name    = "resumatch-http-proxy"
+  url_map = google_compute_url_map.https_redirect.id
+}
+
+resource "google_compute_global_forwarding_rule" "http_forwarding_rule" {
+  name       = "resumatch-http-forwarding"
+  target     = google_compute_target_http_proxy.http_proxy.id
+  port_range = "80"
+  ip_address = google_compute_global_address.lb_ip.address
+}

@@ -202,7 +202,7 @@ export default function ResumeView() {
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
-                  {resume.score_breakdown?.strengths?.map((s: string, i: number) => (
+                  {(resume.score_breakdown?.strengths || []).map((s: string, i: number) => (
                     <li key={i} className="text-small flex gap-3 leading-relaxed">
                       <span className="text-accent-500 font-bold">•</span> {s}
                     </li>
@@ -219,7 +219,7 @@ export default function ResumeView() {
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
-                  {resume.score_breakdown?.weaknesses?.map((w: string, i: number) => (
+                  {(resume.score_breakdown?.weaknesses || []).map((w: string, i: number) => (
                     <li key={i} className="text-small flex gap-3 leading-relaxed">
                       <span className="text-warn-500 font-bold">•</span> {w}
                     </li>
@@ -236,7 +236,7 @@ export default function ResumeView() {
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
-                  {resume.score_breakdown?.recommendations?.map((r: string, i: number) => (
+                  {(resume.score_breakdown?.recommendations || []).map((r: string, i: number) => (
                     <li key={i} className="text-small flex gap-3 leading-relaxed">
                       <span className="text-brand-600 font-bold">•</span> {r}
                     </li>
@@ -256,7 +256,7 @@ export default function ResumeView() {
               
               <TabsContent value="matches" className="mt-6">
                 <div className="grid gap-6">
-                  {matches.map((match) => (
+                  {(matches || []).map((match: any) => (
                     <Card key={match.id} className="rounded-3xl border-none shadow-sm">
                       <CardHeader>
                         <div className="flex items-start justify-between">
@@ -290,7 +290,7 @@ export default function ResumeView() {
                         <div className="space-y-2">
                           <p className="text-label text-subtle">Missing Skills</p>
                           <div className="flex flex-wrap gap-2">
-                            {match.missing_skills?.map((skill: string) => (
+                            {(match.missing_skills || []).map((skill: string) => (
                               <SkillPill key={skill} skill={skill} status="missing" />
                             ))}
                           </div>

@@ -557,7 +557,7 @@ export default function LandingPage() {
                     <Progress value={uploadProgress} className="h-3 bg-slate-100" />
                   </div>
                   <div className="space-y-6">
-                    {analysisSteps.map((step) => (
+                    {(analysisSteps || []).map((step) => (
                       <div key={step.id} className="flex items-center justify-between group">
                         <div className="flex items-center gap-4">
                           <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm ${step.status === 'done' ? 'bg-emerald-50 text-emerald-500' : step.status === 'loading' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-50 text-slate-300'}`}>

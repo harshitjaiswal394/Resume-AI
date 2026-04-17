@@ -37,7 +37,8 @@ import {
   Mail,
   Phone,
   GraduationCap,
-  Award
+  Award,
+  Wand2
 } from 'lucide-react';
 import { AuthModal } from '@/components/common/AuthModal';
 import { ScoreGauge } from '@/components/resume/ScoreGauge';
@@ -55,6 +56,7 @@ import { useRouter } from 'next/navigation';
 import { useRazorpay } from '@/lib/razorpay';
 
 import { PremiumSidebar } from '@/components/dashboard/PremiumSidebar';
+import { MobileNav } from '@/components/dashboard/MobileNav';
 import { ScoreAnalytics } from '@/components/dashboard/ScoreAnalytics';
 import { StatsColumn } from '@/components/dashboard/StatsColumn';
 import { MatchResults } from '@/components/dashboard/MatchResults';
@@ -245,8 +247,14 @@ export default function Dashboard() {
         body: JSON.stringify({
           resumeId: selectedResume.id,
           userId: user?.id,
-          preferences: newPrefs,
-          parsedData: selectedResume.parsed_data || { skills: [], summary: "" }
+          preferences: {
+            ...newPrefs,
+            target_role: newPrefs.target_role || newPrefs.targetRole,
+            experience_level: newPrefs.experience_level || newPrefs.experienceLevel,
+            work_mode: newPrefs.work_mode || newPrefs.workMode,
+            days_old: newPrefs.days_old || newPrefs.daysOld,
+          },
+          parsedData: selectedResume.parsed_data || selectedResume.parsedData || { skills: [], summary: "" }
         })
       });
 
@@ -293,7 +301,7 @@ export default function Dashboard() {
       
       if (listError) throw listError;
       if (files && files.length > 0) {
-        const pathsToDelete = files.map(file => `${user.id}/${file.name}`);
+        const pathsToDelete = (files || []).map(file => `${user.id}/${file.name}`);
         const { error: deleteError } = await supabase.storage
           .from('resumes')
           .remove(pathsToDelete);
@@ -399,10 +407,19 @@ export default function Dashboard() {
                     ...prev,
                     status: 'complete',
                     parsedData: resultData.parsed_data,
+                    target_role: resultData.parsed_data.targetRole || resultData.parsed_data.target_role,
                     resume_score: resultData.analysis.score,
                     score_breakdown: resultData.analysis,
                     rawText: resultData.raw_text
                   }));
+
+                  // Update preferences to match extracted data
+                  if (resultData.parsed_data.targetRole || resultData.parsed_data.target_role) {
+                    setPreferences(prev => ({
+                      ...prev,
+                      targetRole: resultData.parsed_data.targetRole || resultData.parsed_data.target_role
+                    }));
+                  }
 
                   // Sort matches descending by score
                   const sortedMatches = [...(resultData.matches || [])].sort(
@@ -479,7 +496,17 @@ export default function Dashboard() {
   if (!isAuthReady || !user) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#f8fafc]">
+      <MobileNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        jobCount={jobMatches.length}
+        suggestionCount={5}
+        onLogout={handleLogout}
+        onDeleteResume={handleDeleteResume}
+        onPlanUpgrade={() => initiatePayment(299, 'Pro Plan')}
+      />
+      
       <PremiumSidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -490,9 +517,9 @@ export default function Dashboard() {
         onPlanUpgrade={() => initiatePayment(299, 'Pro Plan')}
       />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-x-hidden">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10 sticky top-0 z-10">
+        <header className="min-h-20 bg-white border-b border-slate-100 flex flex-col md:flex-row items-center justify-between px-4 md:px-10 py-4 md:py-0 sticky top-0 z-40 gap-4">
           <div className="space-y-1">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Resume Analysis</h1>
             <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
@@ -503,23 +530,39 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-center md:justify-end w-full md:w-auto">
             <Button
               onClick={() => {
                 handleTailor(preferences);
               }}
               disabled={isTailoring}
               variant="outline"
-              className="h-11 px-6 rounded-xl border-slate-200 font-bold text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 gap-2"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-slate-200 font-bold text-xs md:text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 gap-2 flex-grow sm:flex-grow-0"
             >
               {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isTailoring ? 'Analyzing...' : 'Re-analyze'}
+              {isTailoring ? 'Analysing...' : 'Re-analyze'}
+            </Button>
+            <Button
+              onClick={() => router.push('/dashboard/builder')}
+              variant="outline"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-indigo-200 text-indigo-600 font-bold text-xs md:text-sm bg-indigo-50/50 hover:bg-indigo-600 hover:text-white transition-all gap-2 flex-grow sm:flex-grow-0"
+            >
+              <Wand2 className="h-4 w-4" />
+              AI Builder
+            </Button>
+            <Button
+              onClick={() => router.push('/dashboard/cover-letter')}
+              variant="outline"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-slate-200 text-slate-600 font-bold text-xs md:text-sm hover:bg-slate-50 transition-all gap-2 flex-grow sm:flex-grow-0"
+            >
+              <FileText className="h-4 w-4" />
+              Cover Letter
             </Button>
             <Button
               onClick={() => fileInputRef.current?.click()}
-              className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-sm text-white shadow-lg shadow-indigo-100 transition-all"
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs md:text-sm text-white shadow-lg shadow-indigo-100 transition-all flex-grow sm:flex-grow-0"
             >
-              Upload New
+              Upload
             </Button>
             <input
               type="file"
@@ -531,7 +574,7 @@ export default function Dashboard() {
           </div>
         </header>
 
-        <div className="p-10 max-w-7xl mx-auto space-y-10">
+        <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-6 md:space-y-10">
           {activeTab === 'dashboard' && (
             <>
               {/* Personalization Section */}
@@ -585,7 +628,7 @@ export default function Dashboard() {
                   <Sparkles className="h-5 w-5 text-indigo-600" /> AI Improvement Suggestions
                 </h3>
                 <div className="space-y-6">
-                  {selectedResume?.score_breakdown?.weaknesses?.map((w: string, i: number) => (
+                  {(selectedResume?.score_breakdown?.weaknesses || []).map((w: string, i: number) => (
                     <div key={i} className="bg-rose-50/50 p-6 rounded-[24px] border border-rose-50 space-y-2">
                       <div className="flex items-center gap-2">
                          <Badge className="bg-rose-100 text-rose-600 border-none font-black text-[10px] uppercase tracking-tighter">High Priority</Badge>
@@ -596,7 +639,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                   ))}
-                  {selectedResume?.score_breakdown?.recommendations?.map((r: string, i: number) => (
+                  {(selectedResume?.score_breakdown?.recommendations || []).map((r: string, i: number) => (
                     <div key={`rec-${i}`} className="bg-indigo-50/50 p-6 rounded-[24px] border border-indigo-50 space-y-2">
                       <div className="flex items-center gap-2">
                          <Badge className="bg-indigo-100 text-indigo-600 border-none font-black text-[10px] uppercase tracking-tighter">Suggestion</Badge>
@@ -668,6 +711,10 @@ export default function Dashboard() {
                       </div>
 
                       <div className="flex flex-wrap gap-3">
+                        <div className="flex items-center gap-2 text-sm font-black text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100">
+                           <LayoutDashboard className="h-4 w-4" />
+                           {selectedResume?.target_role || selectedResume?.parsedData?.targetRole || selectedResume?.parsed_data?.targetRole || "Target Role"}
+                        </div>
                         {['linkedin', 'github', 'portfolio'].map((type) => {
                           const links = selectedResume?.parsedData?.links || selectedResume?.parsed_data?.links || {};
                           const url = links[type];
@@ -764,13 +811,99 @@ export default function Dashboard() {
                           <Award className="h-3 w-3" /> Certifications & Awards
                         </h4>
                         <div className="flex flex-wrap gap-2">
-                          {(selectedResume?.parsedData?.certifications || selectedResume?.parsed_data?.certifications || []).map((cert: string, i: number) => (
+                          {(selectedResume?.parsedData?.certifications || selectedResume?.parsed_data?.certifications || selectedResume?.certifications || []).map((cert: any, i: number) => (
                             <Badge key={i} className="bg-slate-50 text-slate-600 border border-slate-100 py-2 px-4 rounded-xl font-bold text-xs shadow-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
-                              {cert}
+                              {typeof cert === 'string' ? cert : cert.name}
                             </Badge>
                           ))}
                         </div>
                       </div>
+                    </div>
+
+                    {/* 5. Projects Section */}
+                    {(selectedResume?.parsedData?.projects || selectedResume?.parsed_data?.projects || selectedResume?.projects || []).length > 0 && (
+                      <div className="space-y-6">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                          <LayoutDashboard className="h-3 w-3" /> Projects
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {(selectedResume?.parsedData?.projects || selectedResume?.parsed_data?.projects || selectedResume?.projects || []).map((proj: any, i: number) => (
+                            <div key={i} className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm space-y-2">
+                              <div className="flex items-center justify-between">
+                                <h5 className="font-black text-slate-900 text-sm">{proj.title}</h5>
+                                {proj.link && <a href={proj.link} target="_blank" className="text-indigo-600"><ExternalLink className="h-3 w-3" /></a>}
+                              </div>
+                              <p className="text-xs text-slate-600 font-medium leading-relaxed">{proj.description}</p>
+                              {proj.tech_stack && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {proj.tech_stack.map((t: string, ti: number) => (
+                                    <span key={ti} className="text-[9px] font-black text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded uppercase">{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 6. Internships Section */}
+                    {(selectedResume?.parsedData?.internships || selectedResume?.parsed_data?.internships || selectedResume?.internships || []).length > 0 && (
+                      <div className="space-y-6">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                          <Briefcase className="h-3 w-3" /> Internships
+                        </h4>
+                        <div className="space-y-4">
+                          {(selectedResume?.parsedData?.internships || selectedResume?.parsed_data?.internships || selectedResume?.internships || []).map((intern: any, i: number) => (
+                            <div key={i} className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
+                              <div className="flex items-center justify-between mb-2">
+                                <h5 className="font-black text-slate-900 text-sm">{intern.role}</h5>
+                                <span className="text-[10px] font-black text-slate-400">{intern.duration}</span>
+                              </div>
+                              <p className="text-xs font-bold text-indigo-600 mb-2">{intern.company}</p>
+                              <ul className="list-disc list-inside space-y-1">
+                                {intern.description?.map((b: string, bi: number) => (
+                                  <li key={bi} className="text-xs text-slate-600 font-medium">{b}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 7. Languages & Achievements */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                      {(selectedResume?.parsedData?.languages || selectedResume?.parsed_data?.languages || selectedResume?.languages || []).length > 0 && (
+                        <div className="space-y-6">
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <Mail className="h-3 w-3" /> Languages
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {(selectedResume?.parsedData?.languages || selectedResume?.parsed_data?.languages || selectedResume?.languages || []).map((lang: any, i: number) => (
+                              <Badge key={i} className="bg-indigo-50 text-indigo-600 border border-indigo-100 py-2 px-4 rounded-xl font-bold text-xs">
+                                {lang.language} — <span className="opacity-60">{lang.proficiency}</span>
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {(selectedResume?.parsedData?.achievements || selectedResume?.parsed_data?.achievements || selectedResume?.achievements || []).length > 0 && (
+                        <div className="space-y-6">
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <Award className="h-3 w-3" /> Achievements
+                          </h4>
+                          <div className="space-y-3">
+                            {(selectedResume?.parsedData?.achievements || selectedResume?.parsed_data?.achievements || selectedResume?.achievements || []).map((ach: any, i: number) => (
+                              <div key={i} className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                                <h5 className="font-bold text-slate-900 text-xs mb-1">{ach.title}</h5>
+                                <p className="text-[10px] text-slate-500 font-medium">{ach.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -864,7 +997,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="space-y-6 pt-4">
-                      {analysisSteps.map((step) => (
+                      {(analysisSteps || []).map((step) => (
                         <div key={step.id} className="flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <div className={`

@@ -209,6 +209,7 @@ Required JSON format:
   "fullName": "string",
   "email": "string", 
   "phone": "string",
+  "targetRole": "suggested job title based on experience",
   "links": {{
     "linkedin": "url or null",
     "github": "url or null",
@@ -216,9 +217,13 @@ Required JSON format:
   }},
   "summary": "2-3 sentence professional summary",
   "skills": ["skill1", "skill2"],
-  "experience": [{{"title": "string", "company": "string", "duration": "string", "description": ["achievement1"]}}],
-  "education": [{{"degree": "string", "institution": "string", "year": "string"}}],
-  "certifications": ["award or cert 1", "award or cert 2"]
+  "experience": [{{"title": "string", "company": "string", "location": "string", "duration": "string", "description": ["achievement1"]}}],
+  "education": [{{"degree": "string", "institution": "string", "year": "string", "description": "optional detail"}}],
+  "projects": [{{"title": "string", "description": "string", "link": "url or null", "tech_stack": ["tech1"]}}],
+  "certifications": ["award or cert 1"],
+  "languages": [{{"language": "string", "proficiency": "Native/Professional/Basic"}}],
+  "internships": [{{"role": "string", "company": "string", "duration": "string", "description": ["detail1"]}}],
+  "achievements": [{{"title": "string", "description": "string"}}]
 }}
 
 Respond with ONLY the JSON object:"""
