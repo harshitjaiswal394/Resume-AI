@@ -302,19 +302,7 @@ export default function Dashboard() {
   const cleanupUserStorage = async () => {
     if (!user) return;
     try {
-      const { data: files, error: listError } = await supabase.storage
-        .from('resumes')
-        .list(user.id);
-      
-      if (listError) throw listError;
-      if (files && files.length > 0) {
-        const pathsToDelete = (files || []).map(file => `${user.id}/${file.name}`);
-        const { error: deleteError } = await supabase.storage
-          .from('resumes')
-          .remove(pathsToDelete);
-        
-        if (deleteError) throw deleteError;
-      }
+      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.id}`, { method: 'DELETE' });
     } catch (err) {
       console.error('Storage cleanup failed:', err);
     }
@@ -336,37 +324,29 @@ export default function Dashboard() {
     setAnalysisProgress(10);
     setAnalysisSteps(prev => prev.map(s => ({ ...s, status: 'pending' })));
 
-    try {
-      // 0. Single-Resume Policy: Delete all previous records and physical files
+      // 0. Single-Resume Policy: Wipe database and storage instantly
       await cleanupUserStorage();
       await fetch(`${backendUrl}/api/resumes?user_id=${user!.id}`, { method: 'DELETE' });
       setResumes([]);
       setSelectedResume(null);
       setJobMatches([]);
 
-      // 1. Storage Upload
-      const filePath = `resumes/${user!.id}/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-      const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
-
-      // 2. Database Record
-      const { data: resumeData, error: resumeError } = await supabase
-        .from('resumes')
-        .insert({
+      // 1. Create temporary database record (Backend will handle the GCS upload during processing)
+      const resumeResult = await fetch(`${backendUrl}/api/resumes?user_id=${user!.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: file.name,
           user_id: user!.id,
           file_name: file.name,
-          file_url: publicUrl,
           file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
           file_size_bytes: file.size,
-          status: 'parsing',
+          status: 'parsing'
         })
-        .select()
-        .single();
+      }).then(r => r.json());
 
-      if (resumeError) throw resumeError;
-      const resumeId = resumeData.id;
+      if (!resumeResult.success) throw new Error(resumeResult.detail || 'Failed to create resume record');
+      const resumeId = resumeResult.resume_id;
 
       // 3. Streaming Backend call
       const formData = new FormData();

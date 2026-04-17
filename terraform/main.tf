@@ -340,3 +340,30 @@ resource "google_compute_global_forwarding_rule" "http_forwarding_rule" {
   ip_address = google_compute_global_address.lb_ip.address
 }
 
+# 10. GCP Storage for Resumes
+resource "google_storage_bucket" "resumes_bucket" {
+  name                        = "resumatches-resumes-${var.project_id}-${var.environment}"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  force_destroy               = true
+
+  cors {
+    origin          = ["*"]
+    method          = ["GET", "HEAD", "PUT", "POST", "DELETE"]
+    response_header = ["*"]
+    max_age_seconds = 3600
+  }
+}
+
+resource "google_storage_bucket_iam_member" "backend_storage_admin" {
+  bucket = google_storage_bucket.resumes_bucket.name
+  role   = "roles/storage.objectAdmin"
+  member = "allAuthenticatedUsers"
+}
+
+resource "google_storage_bucket_iam_member" "public_read" {
+  bucket = google_storage_bucket.resumes_bucket.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
+}
+

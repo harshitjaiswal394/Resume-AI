@@ -12,7 +12,10 @@ import asyncio
 resume_router = APIRouter()
 logger = logging.getLogger("resumatch-api.endpoints")
 
-from app.db import persist_pipeline_results
+from app.db import persist_pipeline_results, engine
+from app.services.storage import storage_service
+from datetime import datetime
+from sqlalchemy import text
 
 @resume_router.post("/tailor")
 async def tailor_resume(payload: Dict[str, Any] = Body(...)):
@@ -145,6 +148,22 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
 
         # 2. Parsing (Flash)
         yield f"data: {json.dumps({'step': 'ats', 'status': 'loading', 'label': 'Checking ATS compatibility'})}\n\n"
+        
+        # [STAGE 2] Persistence to GCS
+        try:
+            timestamp = int(datetime.now().timestamp())
+            blob_path = f"resumes/{user_id}/{timestamp}_{filename}"
+            public_url = storage_service.upload_file(content, blob_path)
+            if public_url and resume_id != "guest":
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("UPDATE resumes SET file_url = :url, updated_at = NOW() WHERE id = :rid"),
+                        {"url": public_url, "rid": resume_id}
+                    )
+                logger.info(f"Persisted file to GCS: {public_url}")
+        except Exception as se:
+            logger.error(f"GCS Storage error (non-critical): {str(se)}")
+
         parsed_data = await ai_service.parse_resume(text)
         yield f"data: {json.dumps({'step': 'ats', 'status': 'done', 'label': 'Checking ATS compatibility'})}\n\n"
 
@@ -257,6 +276,14 @@ async def rewrite_bullet(request: RewriteBulletRequest):
         logger.error(f"Bullet rewrite failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@resume_router.delete("/storage/resumes/{user_id}")
+async def cleanup_user_storage(user_id: str):
+    """Cleans up GCP storage for a specific user."""
+    if not user_id or user_id == "guest":
+        return {"success": True}
+    success = storage_service.delete_user_folder(user_id)
+    return {"success": success}
+
 @resume_router.post("/process-stream")
 async def process_resume_stream(
     file: UploadFile = File(...),
@@ -280,6 +307,21 @@ async def process_resume(
     """
     try:
         content = await file.read()
+        
+        # [STAGE 2] Persistence to GCS
+        try:
+            timestamp = int(datetime.now().timestamp())
+            blob_path = f"resumes/{user_id}/{timestamp}_{file.filename}"
+            public_url = storage_service.upload_file(content, blob_path)
+            if public_url and resume_id != "guest":
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("UPDATE resumes SET file_url = :url, updated_at = NOW() WHERE id = :rid"),
+                        {"url": public_url, "rid": resume_id}
+                    )
+        except Exception as se:
+            logger.error(f"GCS Storage error: {str(se)}")
+
         text = await resume_service.extract_text(content, file.filename)
         parsed_data = await ai_service.parse_resume(text)
         analysis = await ai_service.analyze_resume(parsed_data)
