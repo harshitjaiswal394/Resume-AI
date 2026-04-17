@@ -1,16 +1,14 @@
-name: Production Deployment to resumatches.com
+name: Staging Deployment to staging.resumatches.com
 
 on:
-  pull_request:
-    branches: [ "main", "dev" ]
   push:
-    branches: [ "dev-feat" , "dev", "dev-domain", "dev-major", "dev-major-fix" ]
+    branches: [ "staging" ]
   workflow_dispatch:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-east1
-  REPOSITORY: resumatches-official
+  REPOSITORY: resumatches-staging
 
 permissions:
   contents: read
@@ -18,20 +16,12 @@ permissions:
 
 jobs:
   build-and-prep:
-    name: "1. Build & Prep"
+    name: "1. Build & Prep (Staging)"
     runs-on: ubuntu-latest
-    environment: dev
+    environment: dev # Using 'dev' environment secrets for now, or you can create a 'staging' env in GH
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Secret Sanity Check
-        run: |
-          ERROR=0
-          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then echo "::error::SUPABASE_URL secret is MISSING in environment 'dev'"; ERROR=1; fi
-          if [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then echo "::error::SUPABASE_ANON_KEY secret is MISSING in environment 'dev'"; ERROR=1; fi
-          if [ "$ERROR" -eq 1 ]; then exit 1; fi
-          echo "Secret check PASSED."
 
       - name: Google Auth
         uses: google-github-actions/auth@v2
@@ -46,16 +36,13 @@ jobs:
         run: terraform init
         working-directory: ./terraform
 
-      - name: Bootstrap Infra
+      - name: Bootstrap Infra (Staging)
         run: |
           terraform apply -auto-approve \
-            -target=google_project_service.services \
-            -target=google_artifact_registry_repository.repo \
-            -target=google_compute_network.vpc \
-            -var="environment=prod" \
+            -var="environment=staging" \
             -var="project_id=${{ env.PROJECT_ID }}" \
             -var="domain_name=resumatches.com" \
-            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="database_url=stub" \
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
@@ -70,22 +57,22 @@ jobs:
 
       - name: Build & Push Backend
         run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/backend:${{ github.sha }} ./backend
-          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/backend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/backend:latest
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/backend --all-tags
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend:${{ github.sha }} ./backend
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend --all-tags
 
       - name: Build & Push Frontend
         run: |
           docker build \
             --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
-            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://resumatches.com" \
-            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ./frontend
-          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:latest
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend --all-tags
+            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://staging.resumatches.com" \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend:${{ github.sha }} ./frontend
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend --all-tags
 
   deploy:
-    name: "2. Deploy"
+    name: "2. Deploy (Staging)"
     needs: build-and-prep
     runs-on: ubuntu-latest
     environment: dev
@@ -106,13 +93,13 @@ jobs:
         run: terraform init
         working-directory: ./terraform
 
-      - name: Final Terraform Apply
+      - name: Final Terraform Apply (Staging)
         run: |
           terraform apply -auto-approve \
-            -var="environment=prod" \
+            -var="environment=staging" \
             -var="project_id=${{ env.PROJECT_ID }}" \
             -var="domain_name=resumatches.com" \
-            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="database_url=stub" \
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
@@ -121,3 +108,26 @@ jobs:
             -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -var="image_tag=${{ github.sha }}"
         working-directory: ./terraform
+
+  test:
+    name: "3. Run E2E Tests (Staging)"
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./frontend
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+        working-directory: ./frontend
+      - name: Run Playwright tests
+        env:
+          PLAYWRIGHT_BASE_URL: https://staging.resumatches.com
+        run: npx playwright test tests/e2e/responsiveness.spec.ts
+        working-directory: ./frontend

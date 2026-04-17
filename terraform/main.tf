@@ -1,7 +1,7 @@
 terraform {
   backend "gcs" {
-    bucket = "resume-terraform-state-01"
-    prefix = "dev-state"
+    bucket = "resume-terraform-stage-state"
+    prefix = "stage"
   }
   required_providers {
     google = {
@@ -35,58 +35,74 @@ resource "google_project_service" "services" {
   disable_on_destroy = false
 }
 
-# 2. Networking (VPC for Load Balancer routing)
+# 2. Networking
 resource "google_compute_network" "vpc" {
-  name = "resumatch-vpc"
+  name = "resumatch-vpc-${var.environment}"
   depends_on = [google_project_service.services]
 }
 
 # 2.2 Subnet for Serverless VPC Access
 resource "google_compute_subnetwork" "serverless_subnet" {
-  name          = "serverless-subnet"
-  ip_cidr_range = "10.10.0.0/28"
+  name          = "serverless-subnet-${var.environment}"
+  ip_cidr_range = var.environment == "prod" ? "10.10.0.0/28" : "10.11.0.0/28"
   network       = google_compute_network.vpc.id
   region        = var.region
 }
 
 resource "google_vpc_access_connector" "connector" {
-  name          = "vpc-con"
+  name          = "vpc-con-${var.environment}"
   region        = var.region
   subnet {
     name = google_compute_subnetwork.serverless_subnet.name
   }
 }
 
-# 2.3 Firewall Rules
-resource "google_compute_firewall" "allow_lb" {
-  name    = "allow-lb-traffic"
-  network = google_compute_network.vpc.id
+# 3. Cloud SQL - Managed PostgreSQL
+resource "google_sql_database_instance" "db_instance" {
+  name             = "resumatch-db-${var.environment}"
+  database_version = "POSTGRES_15"
+  region           = var.region
 
-  allow {
-    protocol = "tcp"
-    ports    = ["80", "443", "8090", "3000"]
+  settings {
+    tier = var.environment == "prod" ? "db-custom-1-3840" : "db-f1-micro"
+    
+    ip_configuration {
+      ipv4_enabled    = true # Allow Cloud Run to connect, but we will use IAM auth or private VPC
+      private_network = google_compute_network.vpc.id
+    }
   }
-
-  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
-  target_tags   = ["resumatch-app"]
+  
+  deletion_protection = var.environment == "prod" ? true : false
+  depends_on          = [google_project_service.services]
 }
 
-# 4. Artifact Registry
+resource "google_sql_database" "database" {
+  name     = "resumatch_${var.environment}"
+  instance = google_sql_database_instance.db_instance.name
+}
+
+resource "google_sql_user" "users" {
+  name     = "resumatch_app"
+  instance = google_sql_database_instance.db_instance.name
+  password = "change-me-via-secret" # In real CI/CD we use external secrets
+}
+
+# 4. Artifact Registry (Shared for both envs often, but let's separate if needed)
 resource "google_artifact_registry_repository" "repo" {
   location      = var.region
-  repository_id = "resumatches-official"
+  repository_id = "resumatches-${var.environment}"
   format        = "DOCKER"
   depends_on    = [google_project_service.services]
 }
 
 # 5. Cloud Run - Backend
 resource "google_cloud_run_v2_service" "backend" {
-  name     = "resumatch-backend"
+  name     = "resumatch-backend-${var.environment}"
   location = var.region
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-official/backend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-${var.environment}/backend:${var.image_tag}"
       ports {
         container_port = 8090
       }
@@ -98,32 +114,15 @@ resource "google_cloud_run_v2_service" "backend" {
       }
       env {
         name  = "DATABASE_URL"
-        value = var.database_url
+        value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
       }
-      env {
-        name  = "NVIDIA_API_KEY_REASONING"
-        value = var.nvidia_api_key_reasoning
-      }
-      env {
-        name  = "NVIDIA_API_KEY_PARSING"
-        value = var.nvidia_api_key_parsing
-      }
-      env {
-        name  = "NVIDIA_API_KEY_EMBEDDING"
-        value = var.nvidia_api_key_embedding
-      }
-      env {
-        name  = "NVIDIA_API_KEY_RERANKING"
-        value = var.nvidia_api_key_reranking
-      }
-      env {
-        name  = "SUPABASE_URL"
-        value = var.supabase_url
-      }
-      env {
-        name  = "SUPABASE_SERVICE_ROLE_KEY"
-        value = var.supabase_service_role_key
-      }
+      # Other envs...
+      env { name = "NVIDIA_API_KEY_REASONING"; value = var.nvidia_api_key_reasoning }
+      env { name = "NVIDIA_API_KEY_PARSING"; value = var.nvidia_api_key_parsing }
+      env { name = "NVIDIA_API_KEY_EMBEDDING"; value = var.nvidia_api_key_embedding }
+      env { name = "NVIDIA_API_KEY_RERANKING"; value = var.nvidia_api_key_reranking }
+      env { name = "SUPABASE_URL"; value = var.supabase_url }
+      env { name = "SUPABASE_SERVICE_ROLE_KEY"; value = var.supabase_service_role_key }
     }
     vpc_access {
       connector = google_vpc_access_connector.connector.id
@@ -135,22 +134,30 @@ resource "google_cloud_run_v2_service" "backend" {
 
 # 6. Cloud Run - Frontend
 resource "google_cloud_run_v2_service" "frontend" {
-  name     = "resumatch-frontend"
+  name     = "resumatch-frontend-${var.environment}"
   location = var.region
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-official/frontend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-${var.environment}/frontend:${var.image_tag}"
       ports {
         container_port = 3000
       }
       env {
-        name  = "NEXT_PUBLIC_BACKEND_API_URL"
-        value = "https://resumatches.com"
+        name  = "DATABASE_URL"
+        value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
       }
       env {
-        name  = "BACKEND_API_URL"
-        value = "https://resumatches.com"
+        name  = "NEXT_PUBLIC_SUPABASE_URL"
+        value = var.supabase_url
+      }
+      env {
+        name  = "SUPABASE_SERVICE_ROLE_KEY"
+        value = var.supabase_service_role_key
+      }
+      env {
+        name  = "NEXT_PUBLIC_BACKEND_API_URL"
+        value = var.environment == "prod" ? "https://resumatches.com" : "https://staging.resumatches.com"
       }
     }
     vpc_access {
@@ -163,11 +170,11 @@ resource "google_cloud_run_v2_service" "frontend" {
 
 # 7. Global HTTP(S) Load Balancer Stack
 resource "google_compute_global_address" "lb_ip" {
-  name = "resumatch-lb-ip"
+  name = "resumatch-lb-ip-${var.environment}"
 }
 
 resource "google_compute_region_network_endpoint_group" "backend_neg" {
-  name                  = "backend-neg"
+  name                  = "backend-neg-${var.environment}"
   network_endpoint_type = "SERVERLESS"
   region                = var.region
   cloud_run {
@@ -176,7 +183,7 @@ resource "google_compute_region_network_endpoint_group" "backend_neg" {
 }
 
 resource "google_compute_region_network_endpoint_group" "frontend_neg" {
-  name                  = "frontend-neg"
+  name                  = "frontend-neg-${var.environment}"
   network_endpoint_type = "SERVERLESS"
   region                = var.region
   cloud_run {
@@ -185,14 +192,9 @@ resource "google_compute_region_network_endpoint_group" "frontend_neg" {
 }
 
 resource "google_compute_backend_service" "backend_service" {
-  name      = "backend-api-service"
+  name      = "backend-api-${var.environment}"
   protocol  = "HTTP"
   port_name = "http"
-
-  log_config {
-    enable      = true
-    sample_rate = 1.0
-  }
 
   backend {
     group = google_compute_region_network_endpoint_group.backend_neg.id
@@ -200,7 +202,7 @@ resource "google_compute_backend_service" "backend_service" {
 }
 
 resource "google_compute_backend_service" "frontend_service" {
-  name        = "frontend-app-service"
+  name        = "frontend-app-${var.environment}"
   protocol    = "HTTP"
   port_name   = "http"
 
@@ -210,11 +212,11 @@ resource "google_compute_backend_service" "frontend_service" {
 }
 
 resource "google_compute_url_map" "url_map" {
-  name            = "resumatch-url-map"
+  name            = "resumatch-url-map-${var.environment}"
   default_service = google_compute_backend_service.frontend_service.id
 
   host_rule {
-    hosts        = ["resumatches.com"]
+    hosts        = [var.environment == "prod" ? "resumatches.com" : "staging.resumatches.com"]
     path_matcher = "allpaths"
   }
 
@@ -230,32 +232,25 @@ resource "google_compute_url_map" "url_map" {
 }
 
 resource "google_compute_managed_ssl_certificate" "cert" {
-  name = "resumatch-cert-v2"
+  name = "resumatch-cert-${var.environment}"
   managed {
-    domains = ["resumatches.com"]
-  }
-
-  lifecycle {
-    create_before_destroy = true
+    domains = [var.environment == "prod" ? "resumatches.com" : "staging.resumatches.com"]
   }
 }
 
 resource "google_compute_target_https_proxy" "https_proxy" {
-  name             = "resumatch-https-proxy"
+  name             = "resumatch-https-${var.environment}"
   url_map          = google_compute_url_map.url_map.id
   ssl_certificates = [google_compute_managed_ssl_certificate.cert.id]
-
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
 resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
-  name       = "resumatch-https-forwarding"
+  name       = "resumatch-https-forward-${var.environment}"
   target     = google_compute_target_https_proxy.https_proxy.id
   port_range = "443"
   ip_address = google_compute_global_address.lb_ip.address
 }
+
 
 
 # 8. DNS Configuration (Referencing existing Zone)
@@ -264,15 +259,16 @@ data "google_dns_managed_zone" "primary" {
 }
 
 resource "google_dns_record_set" "root" {
-  name         = data.google_dns_managed_zone.primary.dns_name
+  name         = var.environment == "prod" ? data.google_dns_managed_zone.primary.dns_name : "staging.${data.google_dns_managed_zone.primary.dns_name}"
   managed_zone = data.google_dns_managed_zone.primary.name
   type         = "A"
   ttl          = 300
   rrdatas      = [google_compute_global_address.lb_ip.address]
 }
+
 # 9. HTTP to HTTPS Redirect
 resource "google_compute_url_map" "https_redirect" {
-  name = "resumatch-https-redirect"
+  name = "resumatch-https-redirect-${var.environment}"
   default_url_redirect {
     https_redirect         = true
     redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
@@ -281,13 +277,14 @@ resource "google_compute_url_map" "https_redirect" {
 }
 
 resource "google_compute_target_http_proxy" "http_proxy" {
-  name    = "resumatch-http-proxy"
+  name    = "resumatch-http-${var.environment}"
   url_map = google_compute_url_map.https_redirect.id
 }
 
 resource "google_compute_global_forwarding_rule" "http_forwarding_rule" {
-  name       = "resumatch-http-forwarding"
+  name       = "resumatch-http-forward-${var.environment}"
   target     = google_compute_target_http_proxy.http_proxy.id
   port_range = "80"
   ip_address = google_compute_global_address.lb_ip.address
 }
+
