@@ -29,7 +29,8 @@ resource "google_project_service" "services" {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "sts.googleapis.com",
-    "cloudresourcemanager.googleapis.com"
+    "cloudresourcemanager.googleapis.com",
+    "servicenetworking.googleapis.com"
   ])
   service = each.key
   disable_on_destroy = false
@@ -57,6 +58,21 @@ resource "google_vpc_access_connector" "connector" {
   }
 }
 
+# 2.3 Private Service Access (for Cloud SQL Private IP)
+resource "google_compute_global_address" "private_ip_address" {
+  name          = "private-ip-address-${var.environment}"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = google_compute_network.vpc.id
+}
+
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.vpc.id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_address.name]
+}
+
 # 3. Cloud SQL - Managed PostgreSQL
 resource "google_sql_database_instance" "db_instance" {
   name             = "resumatch-db-${var.environment}"
@@ -73,7 +89,7 @@ resource "google_sql_database_instance" "db_instance" {
   }
   
   deletion_protection = var.environment == "prod" ? true : false
-  depends_on          = [google_project_service.services]
+  depends_on          = [google_project_service.services, google_service_networking_connection.private_vpc_connection]
 }
 
 resource "google_sql_database" "database" {
