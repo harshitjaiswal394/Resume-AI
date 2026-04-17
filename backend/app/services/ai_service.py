@@ -313,39 +313,6 @@ class AIService:
         content = await self._call_ai_with_fallback(prompt, system_prompt=system_prompt)
         return content or bullet
 
-    async def generate_smart_summary(self, profile_data: Dict[str, Any], target_role: str) -> str:
-        """Generates a professional summary based on the profile using fallback logic."""
-        prompt = f"Write a professional resume summary for a {target_role} position based on this data: {json.dumps(profile_data)}. Keep it under 50 words, impactful and recruiter-friendly. Return only the summary text."
-        
-        content = await self._call_ai_with_fallback(prompt, temperature=0.6)
-        return content or "Professional summary: [Generation error]"
-
-    async def optimize_work_experience(self, experience: Dict[str, Any], target_role: str, years: int) -> Dict[str, Any]:
-        """Deeply optimizes a work experience block for ATS & target role."""
-        prompt = f"""
-        Optimize this work experience block for a {target_role} position ({years} years experience).
-        Focus on:
-        1. Action verbs.
-        2. Quantifiable metrics.
-        3. Recruiter-friendly clarity.
-        
-        Return ONLY a VALID JSON object with:
-        {{
-            "title": "Optimized Job Title",
-            "company": "Company Name",
-            "duration": "Duration",
-            "description": ["Optimized bullet 1", "Optimized bullet 2"]
-        }}
-        
-        Input: {json.dumps(experience)}
-        """
-        
-        content = await self._call_ai_with_fallback(prompt, temperature=0.4)
-        if content:
-             parsed = nvidia_service._clean_json(content)
-             if parsed: return parsed
-             
-        return experience
 
     async def optimize_work_experience(self, experience: Dict[str, Any], target_role: str, years_of_exp: int) -> Dict[str, Any]:
         """
