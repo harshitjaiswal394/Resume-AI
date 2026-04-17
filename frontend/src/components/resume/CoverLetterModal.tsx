@@ -39,7 +39,7 @@ export function CoverLetterModal({ isOpen, onClose, resume, jobMatch }: CoverLet
       // Save to database
       if (user) {
         await supabase.from('cover_letters').insert({
-          user_id: user.id,
+          user_id: user.uid,
           resume_id: resume.id,
           job_match_id: jobMatch.id,
           job_title: jobMatch.job_title,

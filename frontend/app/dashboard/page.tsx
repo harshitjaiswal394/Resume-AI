@@ -211,7 +211,7 @@ export default function Dashboard() {
     const fetchResumes = async () => {
       try {
         const idToken = await auth.currentUser?.getIdToken();
-        const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.id}`, {
+        const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.uid}`, {
           headers: { 'Authorization': `Bearer ${idToken}` }
         });
         const result = await response.json();
