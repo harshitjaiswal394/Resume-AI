@@ -104,6 +104,22 @@ interface ResumeData {
   sectionOrder: string[];
 }
 
+const INITIAL_DATA: ResumeData = {
+  fullName: '',
+  email: '',
+  phone: '',
+  summary: '',
+  skills: [],
+  experience: [{ title: '', company: '', duration: '', description: [''] }],
+  education: [{ degree: '', institution: '', year: '' }],
+  projects: [{ title: '', description: '', link: '', tech_stack: [] }],
+  certifications: [],
+  languages: [],
+  internships: [],
+  achievements: [],
+  sectionOrder: ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'languages', 'achievements', 'internships']
+};
+
 export default function AIResumeBuilder() {
   const router = useRouter();
   const { user, isAuthReady } = useAuth();
@@ -116,21 +132,7 @@ export default function AIResumeBuilder() {
   const [isLoaded, setIsLoaded] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const [data, setData] = useState<ResumeData>({
-    fullName: '',
-    email: '',
-    phone: '',
-    summary: '',
-    skills: [],
-    experience: [{ title: '', company: '', duration: '', description: [''] }],
-    education: [{ degree: '', institution: '', year: '' }],
-    projects: [{ title: '', description: '', link: '', tech_stack: [] }],
-    certifications: [],
-    languages: [],
-    internships: [],
-    achievements: [],
-    sectionOrder: ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'languages', 'achievements', 'internships']
-  });
+  const [data, setData] = useState<ResumeData>(INITIAL_DATA);
   const [originalScore, setOriginalScore] = useState<number | null>(null);
   const [currentScore, setCurrentScore] = useState<number>(0);
   const lastSavedRef = useRef<string>(""); // For dirty checking
@@ -336,7 +338,7 @@ export default function AIResumeBuilder() {
       };
       setDiscovery(newDiscovery);
 
-      let restoredData: ResumeData = { ...initialData };
+      let restoredData: ResumeData = { ...INITIAL_DATA };
       if (resume.parsed_data) {
         restoredData = typeof resume.parsed_data === 'string' 
           ? JSON.parse(resume.parsed_data) 
