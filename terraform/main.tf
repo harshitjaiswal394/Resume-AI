@@ -85,6 +85,10 @@ resource "google_sql_database_instance" "db_instance" {
     ip_configuration {
       ipv4_enabled    = true # Allow Cloud Run to connect, but we will use IAM auth or private VPC
       private_network = google_compute_network.vpc.id
+      authorized_networks {
+        name  = "local-access"
+        value = "223.185.33.162"
+      }
     }
   }
   

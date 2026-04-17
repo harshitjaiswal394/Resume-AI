@@ -175,7 +175,7 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                             ai_reasoning, apply_links, created_at
                         ) VALUES (
                             :rid, :uid, :title, :company, :loc,
-                            :score, :m_skills, :miss_skills,
+                            :score, CAST(:m_skills AS jsonb), CAST(:miss_skills AS jsonb),
                             :reason, :links, NOW()
                         )
                     """),
@@ -186,8 +186,8 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                         "company": m.get("company") or "Direct Opportunity",
                         "loc": m.get("location") or "Remote",
                         "score": m.get("matchScore") or m.get("match_score") or 0,
-                        "m_skills": m.get("matching_skills") or m.get("matchingSkills") or [],
-                        "miss_skills": m.get("missing_skills") or m.get("missingSkills") or [],
+                        "m_skills": json.dumps(m.get("matching_skills") or m.get("matchingSkills") or []),
+                        "miss_skills": json.dumps(m.get("missing_skills") or m.get("missingSkills") or []),
                         "reason": m.get("aiReasoning") or m.get("reasoning") or "Highly compatible matches.",
                         "links": json.dumps(m.get("apply_links") or {})
                     }
