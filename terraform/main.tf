@@ -117,12 +117,30 @@ resource "google_cloud_run_v2_service" "backend" {
         value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
       }
       # Other envs...
-      env { name = "NVIDIA_API_KEY_REASONING"; value = var.nvidia_api_key_reasoning }
-      env { name = "NVIDIA_API_KEY_PARSING"; value = var.nvidia_api_key_parsing }
-      env { name = "NVIDIA_API_KEY_EMBEDDING"; value = var.nvidia_api_key_embedding }
-      env { name = "NVIDIA_API_KEY_RERANKING"; value = var.nvidia_api_key_reranking }
-      env { name = "SUPABASE_URL"; value = var.supabase_url }
-      env { name = "SUPABASE_SERVICE_ROLE_KEY"; value = var.supabase_service_role_key }
+      env {
+        name  = "NVIDIA_API_KEY_REASONING"
+        value = var.nvidia_api_key_reasoning
+      }
+      env {
+        name  = "NVIDIA_API_KEY_PARSING"
+        value = var.nvidia_api_key_parsing
+      }
+      env {
+        name  = "NVIDIA_API_KEY_EMBEDDING"
+        value = var.nvidia_api_key_embedding
+      }
+      env {
+        name  = "NVIDIA_API_KEY_RERANKING"
+        value = var.nvidia_api_key_reranking
+      }
+      env {
+        name  = "SUPABASE_URL"
+        value = var.supabase_url
+      }
+      env {
+        name  = "SUPABASE_SERVICE_ROLE_KEY"
+        value = var.supabase_service_role_key
+      }
     }
     vpc_access {
       connector = google_vpc_access_connector.connector.id
