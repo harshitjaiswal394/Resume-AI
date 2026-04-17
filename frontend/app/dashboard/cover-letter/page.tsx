@@ -26,10 +26,12 @@ import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
+import { auth } from '@/lib/firebase';
 
 export default function SmartCoverLetter() {
   const router = useRouter();
   const { user } = useAuth();
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
   const [resumes, setResumes] = useState<any[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState<string>('');
   const [jdUrl, setJdUrl] = useState('');
@@ -45,14 +47,19 @@ export default function SmartCoverLetter() {
   }, [user]);
 
   const fetchResumes = async () => {
-    const { data, error } = await supabase
-      .from('resumes')
-      .select('id, title, updated_at, parsed_data')
-      .order('updated_at', { ascending: false });
-    
-    if (data) {
-      setResumes(data);
-      if (data.length > 0) setSelectedResumeId(data[0].id);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.uid}`, {
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
+      const result = await response.json();
+      
+      if (result.success && result.resumes) {
+        setResumes(result.resumes);
+        if (result.resumes.length > 0) setSelectedResumeId(result.resumes[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch resumes:', err);
     }
   };
 
@@ -71,11 +78,16 @@ export default function SmartCoverLetter() {
 
     setIsLoading(true);
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+    const { auth } = await import('@/lib/firebase');
 
     try {
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(`${backendUrl}/api/cover-letter/fetch-jd`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify({ jdUrl })
       });
 
@@ -111,11 +123,15 @@ export default function SmartCoverLetter() {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
     try {
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(`${backendUrl}/api/cover-letter/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify({
-          userId: user?.id,
+          userId: user?.uid,
           resumeId: selectedResumeId,
           resumeData: selectedResume.parsed_data,
           jdUrl: jdUrl,
@@ -165,8 +181,13 @@ export default function SmartCoverLetter() {
     if (!confirmed) return;
 
     try {
-      const { error } = await supabase.from('resumes').delete().eq('id', selectedResumeId);
-      if (error) throw error;
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch(`${backendUrl}/api/resumes/${selectedResumeId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.detail || 'Delete failed');
       
       toast.success('Resume deleted');
       // Reset state IMMEDIATELY to prevent 500 errors on generation

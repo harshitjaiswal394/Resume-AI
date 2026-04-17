@@ -153,7 +153,7 @@ export default function AIResumeBuilder() {
         setDiscovery(prev => ({ ...prev, role: urlRole }));
       }
       
-      console.log('[Builder] Handshake: Auth is ready. Initiating Cloud Sovereignty check...', { urlId, userId: user?.id });
+      console.log('[Builder] Handshake: Auth is ready. Initiating Cloud Sovereignty check...', { urlId, userId: user?.uid });
 
       // PHASE 1: Authority Verification (URL Intent)
       if (urlId) {
@@ -167,17 +167,17 @@ export default function AIResumeBuilder() {
 
       // PHASE 2: Cloud Sovereignty (Account Sync)
       // If logged in, we scan the account's master database before trusting any local browser data.
-      if (!activeResumeId && user && user.id !== 'guest') {
+      if (!activeResumeId && user && user.uid !== 'guest') {
         console.log('[Builder] Authority: Logged-in user. Querying Account Master Sync...');
         try {
-          const { data: latestResumes, error } = await supabase
-            .from('resumes')
-            .select('id')
-            .eq('user_id', user.id)
-            .order('updated_at', { ascending: false })
-            .limit(1);
+          const idToken = await auth.currentUser?.getIdToken();
+          const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.uid}`, {
+            headers: { 'Authorization': `Bearer ${idToken}` }
+          });
+          const result = await response.json();
+          const latestResumes = result.resumes;
 
-          if (!error && latestResumes && latestResumes.length > 0) {
+          if (latestResumes && latestResumes.length > 0) {
             const cloudId = latestResumes[0].id;
             console.log('[Builder] Authority: Cloud record found! Syncing account state...', cloudId);
             setResumeId(cloudId);
@@ -192,7 +192,6 @@ export default function AIResumeBuilder() {
             window.history.replaceState({}, '', newUrl.toString());
           } else {
             console.log('[Builder] Authority: No cloud drafts found for this account.');
-            if (error) console.error('[Builder] Sync error:', error);
           }
         } catch (e) {
           console.warn('[Builder] Cloud handshake failed:', e);
@@ -245,7 +244,7 @@ export default function AIResumeBuilder() {
 
   // Optimized Debounced Auto-save to DB
   useEffect(() => {
-    if (!isLoaded || !user || user.id === 'guest') return;
+    if (!isLoaded || !user || user.uid === 'guest') return;
 
     const timer = setTimeout(() => {
       performSilentSave();
@@ -266,7 +265,7 @@ export default function AIResumeBuilder() {
   }, [data, discovery, resumeId]);
 
   const performSilentSave = async () => {
-    if (!user || user.id === 'guest' || !isLoaded) return;
+    if (!user || user.uid === 'guest' || !isLoaded) return;
     
     // Dirty check: only save if state has changed
     const currentState = JSON.stringify({ data, discovery });
@@ -292,15 +291,19 @@ export default function AIResumeBuilder() {
         achievements: data.achievements,
         section_order: data.sectionOrder,
         phone_number: data.phone,
-        user_id: user.id,
+        user_id: user.uid,
         parsed_data: data,
         original_score: originalScore || 0,
         resume_score: currentScore || 0
       };
 
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify(payload)
       });
 
@@ -508,7 +511,7 @@ export default function AIResumeBuilder() {
         achievements: data.achievements,
         section_order: data.sectionOrder,
         phone_number: data.phone,
-        user_id: user?.id || 'guest',
+        user_id: user?.uid || 'guest',
         parsed_data: data,
         original_score: originalScore || 0,
         resume_score: currentScore || 0
@@ -706,7 +709,7 @@ export default function AIResumeBuilder() {
 
     setIsSaving(true);
     try {
-      if (resumeId && user?.id !== 'guest') {
+      if (resumeId && user?.uid !== 'guest') {
         const { error } = await supabase.from('resumes').delete().eq('id', resumeId);
         if (error) throw error;
       }
