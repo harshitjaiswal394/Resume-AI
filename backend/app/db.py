@@ -117,26 +117,38 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
         # 1. Update Resume Record
         conn.execute(
             text("""
-                UPDATE resumes 
-                SET status = 'complete',
-                    parsed_data = :parsed,
-                    target_role = :target_role,
-                    phone_number = :phone,
-                    summary = :summary,
-                    skills = :skills,
-                    experience = :experience,
-                    education = :education,
-                    projects = :projects,
-                    certifications = :certifications,
-                    languages = :languages,
-                    internships = :internships,
-                    achievements = :achievements,
-                    resume_score = :score,
-                    score_breakdown = :breakdown,
-                    raw_text = :text,
-                    original_score = COALESCE(original_score, :score),
+                INSERT INTO resumes (
+                    id, user_id, status, parsed_data, target_role, phone_number,
+                    summary, skills, experience, education, projects, 
+                    certifications, languages, internships, achievements,
+                    resume_score, score_breakdown, raw_text, original_score,
+                    updated_at, created_at
+                ) VALUES (
+                    :id, :user_id, 'complete', :parsed, :target_role, :phone,
+                    :summary, :skills, :experience, :education, :projects,
+                    :certifications, :languages, :internships, :achievements,
+                    :score, :breakdown, :text, :score,
+                    NOW(), NOW()
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    parsed_data = EXCLUDED.parsed_data,
+                    target_role = EXCLUDED.target_role,
+                    phone_number = EXCLUDED.phone_number,
+                    summary = EXCLUDED.summary,
+                    skills = EXCLUDED.skills,
+                    experience = EXCLUDED.experience,
+                    education = EXCLUDED.education,
+                    projects = EXCLUDED.projects,
+                    certifications = EXCLUDED.certifications,
+                    languages = EXCLUDED.languages,
+                    internships = EXCLUDED.internships,
+                    achievements = EXCLUDED.achievements,
+                    resume_score = EXCLUDED.resume_score,
+                    score_breakdown = EXCLUDED.score_breakdown,
+                    raw_text = EXCLUDED.raw_text,
+                    original_score = COALESCE(resumes.original_score, EXCLUDED.original_score),
                     updated_at = NOW()
-                WHERE id = :id AND user_id = :user_id
             """),
             {
                 "parsed": json.dumps(parsed_data),

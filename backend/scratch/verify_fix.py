@@ -62,5 +62,37 @@ class TestPersistenceFix(unittest.TestCase):
         
         print("Verification successful: m_skills and miss_skills are correctly JSON-serialized!")
 
+    @patch('app.db.engine')
+    def test_persist_pipeline_results_upsert(self, mock_engine):
+        # Setup mocks
+        mock_conn = MagicMock()
+        mock_engine.begin.return_value.__enter__.return_value = mock_conn
+        
+        user_id = "af4a7d1d-808d-4b05-8eed-cb4a14f9999d"
+        resume_id = "11111111-2222-3333-4444-555555555555"
+        data = {
+            "parsed_data": {"skills": ["python"]},
+            "analysis": {"score": 85},
+            "matches": []
+        }
+        
+        # Execute
+        persist_pipeline_results(user_id, resume_id, data)
+        
+        # Verify
+        calls = mock_conn.execute.call_args_list
+        insert_resume_call = None
+        for call in calls:
+            stmt = str(call[0][0])
+            if "INSERT INTO resumes" in stmt and "ON CONFLICT (id) DO UPDATE" in stmt:
+                insert_resume_call = call
+                break
+        
+        self.assertIsNotNone(insert_resume_call, "UPSERT (INSERT ... ON CONFLICT) was not called")
+        params = insert_resume_call[0][1]
+        self.assertEqual(params['id'], resume_id)
+        
+        print("Verification successful: UPSERT logic correctly implemented for resumes table!")
+
 if __name__ == "__main__":
     unittest.main()
