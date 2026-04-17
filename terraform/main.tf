@@ -166,6 +166,13 @@ resource "google_cloud_run_v2_service" "backend" {
   }
 }
 
+resource "google_cloud_run_v2_service_iam_member" "backend_invoker" {
+  name     = google_cloud_run_v2_service.backend.name
+  location = google_cloud_run_v2_service.backend.location
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
 # 6. Cloud Run - Frontend
 resource "google_cloud_run_v2_service" "frontend" {
   name     = "resumatch-frontend-${var.environment}"
@@ -200,6 +207,13 @@ resource "google_cloud_run_v2_service" "frontend" {
     }
     timeout = "300s"
   }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "frontend_invoker" {
+  name     = google_cloud_run_v2_service.frontend.name
+  location = google_cloud_run_v2_service.frontend.location
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 # 7. Global HTTP(S) Load Balancer Stack
