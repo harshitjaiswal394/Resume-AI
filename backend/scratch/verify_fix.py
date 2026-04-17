@@ -92,7 +92,21 @@ class TestPersistenceFix(unittest.TestCase):
         params = insert_resume_call[0][1]
         self.assertEqual(params['id'], resume_id)
         
-        print("Verification successful: UPSERT logic correctly implemented for resumes table!")
+        # Verify Audit Log call
+        audit_call = None
+        for call in calls:
+            stmt = str(call[0][0])
+            if "INSERT INTO audit_logs" in stmt:
+                audit_call = call
+                break
+        
+        self.assertIsNotNone(audit_call, "INSERT INTO audit_logs was not called")
+        audit_params = audit_call[0][1]
+        self.assertEqual(audit_params['type'], 'resume')
+        self.assertEqual(audit_params['rid'], resume_id)
+        self.assertIn('details', audit_params)
+        
+        print("Verification successful: Audit log correctly implemented with details column and entity metadata!")
 
 if __name__ == "__main__":
     unittest.main()

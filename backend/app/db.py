@@ -208,13 +208,15 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
         # 3. Create Audit Log
         conn.execute(
             text("""
-                INSERT INTO audit_logs (user_id, action, metadata, created_at)
-                VALUES (:uid, :action, :meta, NOW())
+                INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, created_at)
+                VALUES (:uid, :action, :type, :rid, :details, NOW())
             """),
             {
                 "uid": user_id,
                 "action": "resume_analysis_full",
-                "meta": json.dumps({"score": analysis.get("score")})
+                "type": "resume",
+                "rid": resume_id,
+                "details": json.dumps({"score": analysis.get("score")})
             }
         )
         
