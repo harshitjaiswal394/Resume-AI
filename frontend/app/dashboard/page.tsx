@@ -346,6 +346,7 @@ export default function Dashboard() {
     setAnalysisProgress(10);
     setAnalysisSteps(prev => prev.map(s => ({ ...s, status: 'pending' })));
 
+    try {
       // 0. Single-Resume Policy: Wipe database and storage instantly
       const idToken = await auth.currentUser?.getIdToken();
       await cleanupUserStorage();
