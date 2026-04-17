@@ -35,7 +35,7 @@ import { CoverLetterModal } from '@/components/resume/CoverLetterModal';
 import { Skeleton, SkeletonCard, SkeletonGauge, SkeletonText } from '@/components/ui/skeleton';
 import { motion } from 'motion/react';
 
-export function ResumeView() {
+export default function ResumeView() {
   const { user } = useAuth();
   const params = useParams();
   const id = params.id as string;
