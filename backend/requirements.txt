@@ -6,7 +6,7 @@ pydantic==2.6.3
 python-dotenv==1.0.1
 pypdf==4.0.1
 python-docx==1.1.0
-supabase==2.3.7
+# Supabase removed - migrated to GCP
 sqlalchemy==2.0.27
 psycopg2-binary==2.9.9
 pgvector==0.2.5
