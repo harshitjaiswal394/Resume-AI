@@ -24,6 +24,7 @@ from app.api.auth_routes import auth_router
 from app.api.resumes_crud import router as resumes_crud_router
 from app.api.builder import router as builder_router
 from app.api.cover_letters import router as cover_letters_router
+from app.api.users import router as users_router
 from app.services.knowledge_base_seeder import job_seeder
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -63,6 +64,7 @@ app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(resumes_crud_router, prefix="/api/resumes", tags=["builder"])
 app.include_router(builder_router, prefix="/api/builder", tags=["builder"])
 app.include_router(cover_letters_router, prefix="/api/cover-letter", tags=["cover-letter"])
+app.include_router(users_router, prefix="/api/users", tags=["users"])
 
 @app.get("/health")
 async def health_check():

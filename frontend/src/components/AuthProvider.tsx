@@ -1,8 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { User } from '@supabase/supabase-js';
+import { auth } from '../lib/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface UserProfile {
   id: string;
@@ -40,48 +40,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const profileCreatedRef = React.useRef(false);
 
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Initial session check error:', error);
-        // If it's a refresh token error, sign out to clear locale storage
-        if (error.message.includes('refresh_token')) {
-          supabase.auth.signOut();
-        }
-        setLoading(false);
-        setIsAuthReady(true);
-        return;
-      }
-      
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-        setIsAuthReady(true);
-      }
-    }).catch(err => {
-      console.error('Unhandled getSession error:', err);
-      setLoading(false);
-      setIsAuthReady(true);
-    });
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log('Firebase Auth state changed:', currentUser?.email);
       
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        setIsAuthReady(true);
-        return;
-      }
-
-      const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
-        fetchProfile(currentUser.id);
+        // Fetch ID token for backend authentication
+        const idToken = await currentUser.getIdToken();
+        fetchProfile(currentUser.uid, idToken);
       } else {
         setProfile(null);
         setLoading(false);
@@ -89,76 +57,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, idToken: string) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     
-    console.log('Fetching profile for user:', userId);
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    console.log('Fetching profile for user via Backend:', userId);
+    
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // Profile doesn't exist, create it if we haven't already in this session
-          if (profileCreatedRef.current) {
-             isFetchingRef.current = false;
-             return;
-          }
-          
-          console.log('Profile not found, creating new profile...');
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser) {
-            const { data: createdProfile, error: insertError } = await supabase
-              .from('users')
-              .insert({
-                id: authUser.id,
-                email: authUser.email!,
-                full_name: authUser.user_metadata.full_name || authUser.user_metadata.name || '',
-                avatar_url: authUser.user_metadata.avatar_url || authUser.user_metadata.picture || '',
-                plan: 'free',
-                credits_remaining: 3,
-                onboarding_done: false,
-              })
-              .select()
-              .single();
-            
-            if (insertError) {
-              // If it's a duplicate key error, someone else (another tab/render) already created it
-              if (insertError.code === '23505') {
-                 console.log('Profile was created by another process, fetching again...');
-                 isFetchingRef.current = false;
-                 return fetchProfile(userId);
-              }
-              throw insertError;
-            }
-
-            if (createdProfile) {
-              console.log('Profile created successfully');
-              profileCreatedRef.current = true;
-              setProfile({
-                id: createdProfile.id,
-                email: createdProfile.email,
-                fullName: createdProfile.full_name,
-                avatarUrl: createdProfile.avatar_url,
-                plan: createdProfile.plan,
-                creditsRemaining: createdProfile.credits_remaining,
-                onboardingDone: createdProfile.onboarding_done,
-                createdAt: createdProfile.created_at,
-              });
-            }
-          }
-        } else {
-          throw error;
+      const response = await fetch(`${backendUrl}/api/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${idToken}`
         }
-      } else if (data) {
-        console.log('Profile fetched successfully');
+      });
+      const result = await response.json();
+
+      if (result.success && result.profile) {
+        const data = result.profile;
         setProfile({
           id: data.id,
           email: data.email,
@@ -169,6 +87,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           onboardingDone: data.onboarding_done,
           createdAt: data.created_at,
         });
+      } else {
+        // Profile doesn't exist, create it via Backend
+        console.log('Profile not found, creating new profile via Backend...');
+        const upsertResponse = await fetch(`${backendUrl}/api/users/me`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: auth.currentUser?.email,
+            full_name: auth.currentUser?.displayName || '',
+            avatar_url: auth.currentUser?.photoURL || '',
+          })
+        });
+        const upsertResult = await upsertResponse.json();
+        
+        if (upsertResult.success) {
+          // Fetch again to update state
+          isFetchingRef.current = false;
+          return fetchProfile(userId, idToken);
+        }
       }
     } catch (err) {
       console.error('Error in fetchProfile:', err);

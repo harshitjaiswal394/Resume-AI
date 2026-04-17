@@ -2,7 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase';
+import { auth, googleProvider } from '@/lib/firebase';
+import { 
+  signInWithPopup, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail
+} from 'firebase/auth';
 import { X, Sparkles, Shield, Zap, Mail, Lock, Loader2, Phone, KeyRound, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -82,30 +89,8 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isOpen, onClose]);
 
-  // Listen for auth success from popup (Google OAuth)
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'SUPABASE_AUTH_SUCCESS') {
-        onClose();
-        toast.success('Successfully signed in!');
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          setTimeout(() => {
-            const currentPath = window.location.pathname;
-            if (currentPath === '/' || currentPath === '/auth/callback') {
-              window.location.href = '/dashboard';
-            } else {
-              window.location.reload();
-            }
-          }, 500);
-        }
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onClose, onSuccess]);
+  // Firebase handles auth state globally, so we don't need a custom window listener
+  // for popups in the same way Supabase did.
 
   const validatePassword = (pwd: string): string[] => {
     const errs: string[] = [];
@@ -117,39 +102,20 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
   };
 
   const handleGoogleLogin = async () => {
+    setIsLoading(true);
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback`;
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-          queryParams: { access_type: 'offline', prompt: 'consent' },
-        },
-      });
-      if (error) {
-        if (error.message.includes('provider is not enabled')) {
-          toast.error('Google Auth not enabled in Supabase!', {
-            duration: 10000,
-            description: 'Go to Authentication > Providers > Google in Supabase Dashboard.'
-          });
-        } else {
-          throw error;
-        }
-        return;
-      }
-      if (data?.url) {
-        const authWindow = window.open(data.url, '_blank', 'width=600,height=700');
-        if (!authWindow) {
-          toast.error('Popup blocked. Please allow popups for this site.');
-          return;
-        }
-        const timer = setInterval(() => {
-          if (authWindow.closed) clearInterval(timer);
-        }, 1000);
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        toast.success('Successfully signed in with Google!');
+        onClose();
+        if (onSuccess) onSuccess();
+        else setTimeout(() => { window.location.href = '/dashboard'; }, 300);
       }
     } catch (error: any) {
+      console.error('Google Auth Error:', error);
       toast.error(error.message || 'Failed to sign in with Google.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -165,25 +131,26 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
           setIsLoading(false);
           return;
         }
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { phone: phone || undefined } }
-        });
-        if (error) throw error;
-        toast.success('Check your email for the confirmation link!');
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        if (result.user) {
+          await sendEmailVerification(result.user);
+          toast.success('Account created! Please verify your email.');
+          onClose();
+          if (onSuccess) onSuccess();
+        }
       } else if (view === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        toast.success('Successfully signed in!');
-        onClose();
-        if (onSuccess) onSuccess();
-        else setTimeout(() => { window.location.href = '/dashboard'; }, 300);
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        if (result.user) {
+          toast.success('Successfully signed in!');
+          onClose();
+          if (onSuccess) onSuccess();
+          else setTimeout(() => { window.location.href = '/dashboard'; }, 300);
+        }
       }
     } catch (error: any) {
-      if (error.message?.includes('already registered')) {
+      if (error.code === 'auth/email-already-in-use') {
         setErrors(['This email is already registered. Try signing in.']);
-      } else if (error.message?.includes('Invalid login')) {
+      } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
         setErrors(['Incorrect email or password.']);
       } else {
         setErrors([error.message || 'Authentication failed']);
@@ -280,10 +247,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
     if (!email) { setErrors(['Enter your email']); return; }
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (error) throw error;
+      await sendPasswordResetEmail(auth, email);
       toast.success('Password reset link sent to your email!');
     } catch (error: any) {
       setErrors([error.message || 'Failed to send reset link']);

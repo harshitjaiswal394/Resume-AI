@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -83,9 +83,13 @@ export default function Dashboard() {
 
     setOptimizingIndex(`${expIndex}-${bulletIndex}`);
     try {
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(`${backendUrl}/api/resume/rewrite-bullet`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify({
           bullet: currentText,
           targetRole: preferences.targetRole || 'Software Engineer'
@@ -121,9 +125,13 @@ export default function Dashboard() {
           setResumes(prev => prev.map(r => r.id === selectedResume.id ? updatedResume : r));
 
           // Persist to DB
+          const idToken = await auth.currentUser?.getIdToken();
           await fetch(`${backendUrl}/api/resumes/${selectedResume.id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
             body: JSON.stringify({ parsed_data: newParsedData })
           });
           
@@ -202,7 +210,10 @@ export default function Dashboard() {
 
     const fetchResumes = async () => {
       try {
-        const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.id}`);
+        const idToken = await auth.currentUser?.getIdToken();
+        const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.id}`, {
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
         const result = await response.json();
         
         if (result.success && result.resumes) {
@@ -221,7 +232,10 @@ export default function Dashboard() {
     if (!selectedResume) return;
     const fetchMatches = async () => {
       try {
-        const response = await fetch(`${backendUrl}/api/resumes/${selectedResume.id}/matches`);
+        const idToken = await auth.currentUser?.getIdToken();
+        const response = await fetch(`${backendUrl}/api/resumes/${selectedResume.id}/matches`, {
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
         const result = await response.json();
         
         if (result.success && result.matches) {
@@ -235,7 +249,7 @@ export default function Dashboard() {
   }, [selectedResume]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await auth.signOut();
     router.push('/');
   };
 
@@ -248,12 +262,16 @@ export default function Dashboard() {
     // Removed redundant toast loading as per user request
 
     try {
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(`${backendUrl}/api/resume/tailor`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify({
           resumeId: selectedResume.id,
-          userId: user?.id,
+          userId: user?.uid, // Firebase uses uid
           preferences: {
             ...newPrefs,
             target_role: newPrefs.target_role || newPrefs.targetRole,
@@ -302,7 +320,11 @@ export default function Dashboard() {
   const cleanupUserStorage = async () => {
     if (!user) return;
     try {
-      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.id}`, { method: 'DELETE' });
+      const idToken = await auth.currentUser?.getIdToken();
+      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.uid}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
     } catch (err) {
       console.error('Storage cleanup failed:', err);
     }
@@ -325,19 +347,26 @@ export default function Dashboard() {
     setAnalysisSteps(prev => prev.map(s => ({ ...s, status: 'pending' })));
 
       // 0. Single-Resume Policy: Wipe database and storage instantly
+      const idToken = await auth.currentUser?.getIdToken();
       await cleanupUserStorage();
-      await fetch(`${backendUrl}/api/resumes?user_id=${user!.id}`, { method: 'DELETE' });
+      await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
       setResumes([]);
       setSelectedResume(null);
       setJobMatches([]);
 
       // 1. Create temporary database record (Backend will handle the GCS upload during processing)
-      const resumeResult = await fetch(`${backendUrl}/api/resumes?user_id=${user!.id}`, {
+      const resumeResult = await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify({
           title: file.name,
-          user_id: user!.id,
+          user_id: user!.uid,
           file_name: file.name,
           file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
           file_size_bytes: file.size,
@@ -352,8 +381,11 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${backendUrl}/api/resume/process-stream?user_id=${user!.id}&resume_id=${resumeId}`, {
+      const response = await fetch(`${backendUrl}/api/resume/process-stream?user_id=${user!.uid}&resume_id=${resumeId}`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        },
         body: formData,
       });
 
@@ -450,8 +482,12 @@ export default function Dashboard() {
 
   const handleDeleteResume = async () => {
     // Single-Resume Policy: Wipe database and storage instantly
+    const idToken = await auth.currentUser?.getIdToken();
     await cleanupUserStorage();
-    await fetch(`${backendUrl}/api/resumes?user_id=${user!.id}`, { method: 'DELETE' });
+    await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${idToken}` }
+    });
     setResumes([]);
     setSelectedResume(null);
     setJobMatches([]);
@@ -460,9 +496,13 @@ export default function Dashboard() {
 
   const handleSaveJob = async (jobId: string, isSaved: boolean) => {
     if (!user) return;
+    const idToken = await auth.currentUser?.getIdToken();
     const { error } = await fetch(`${backendUrl}/api/resumes/${selectedResume.id}/matches/${jobId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
       body: JSON.stringify({ is_saved: isSaved })
     }).then(r => r.json());
 

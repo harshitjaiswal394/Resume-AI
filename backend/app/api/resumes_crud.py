@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Body
 from typing import List, Dict, Any, Optional
 from app.db import engine, get_db
+from app.api.auth import get_current_user
 from sqlalchemy import text
 from app.api.builder_models import ResumeCreateRequest, ResumeUpdateRequest
 import uuid
@@ -11,7 +12,7 @@ router = APIRouter()
 logger = logging.getLogger("resumatch-api.resumes")
 
 @router.get("/")
-async def list_resumes(user_id: str):
+async def list_resumes(user_id: str = Depends(get_current_user)):
     """Lists all resumes for a specific user from GCP Database."""
     if not user_id or user_id == "guest":
         return {"success": True, "resumes": []}
@@ -45,7 +46,7 @@ async def list_resumes(user_id: str):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.post("/")
-async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = None):
+async def create_resume(payload: ResumeCreateRequest, user_id: str = Depends(get_current_user)):
     """Creates a new modular resume."""
     resume_id = str(uuid.uuid4())
     
@@ -103,7 +104,7 @@ async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = N
     return {"success": True, "resume_id": resume_id}
 
 @router.get("/{resume_id}")
-async def get_resume(resume_id: str, user_id: str = "guest"):
+async def get_resume(resume_id: str, user_id: str = Depends(get_current_user)):
     """Fetches a modular resume by ID."""
     with engine.connect() as conn:
         result = conn.execute(
@@ -127,7 +128,7 @@ async def get_resume(resume_id: str, user_id: str = "guest"):
         return {"success": True, "resume": res}
 
 @router.get("/{resume_id}/matches")
-async def get_resume_matches(resume_id: str):
+async def get_resume_matches(resume_id: str, user_id: str = Depends(get_current_user)):
     """Fetches job matches for a specific resume from GCP Database."""
     try:
         with engine.connect() as conn:
@@ -152,7 +153,7 @@ async def get_resume_matches(resume_id: str):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.put("/{resume_id}/matches/{job_id}")
-async def update_job_match(resume_id: str, job_id: str, payload: Dict[str, Any] = Body(...)):
+async def update_job_match(resume_id: str, job_id: str, payload: Dict[str, Any] = Body(...), user_id: str = Depends(get_current_user)):
     """Updates a job match (e.g., marks it as saved)."""
     try:
         with engine.begin() as conn:
@@ -166,7 +167,7 @@ async def update_job_match(resume_id: str, job_id: str, payload: Dict[str, Any] 
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.put("/{resume_id}")
-async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: str = "guest"):
+async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: str = Depends(get_current_user)):
     """Updates modular resume sections."""
     update_data = payload.dict(exclude_unset=True)
     if not update_data:
@@ -213,7 +214,7 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
     return {"success": True}
 
 @router.delete("/")
-async def delete_all_user_resumes(user_id: str):
+async def delete_all_user_resumes(user_id: str = Depends(get_current_user)):
     """Deletes all resumes and matches for a user."""
     if not user_id or user_id == "guest":
         return {"success": True}
@@ -232,7 +233,7 @@ async def delete_all_user_resumes(user_id: str):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.delete("/{resume_id}")
-async def delete_resume(resume_id: str, user_id: str = "guest"):
+async def delete_resume(resume_id: str, user_id: str = Depends(get_current_user)):
     """Deletes a resume and associated data."""
     try:
         with engine.begin() as conn:
