@@ -15,5 +15,5 @@ httpx>=0.25.0
 apscheduler==3.10.4
 gunicorn==21.2.0
 beautifulsoup4==4.12.3
-google-cloud-storage==2.14.2
+google-cloud-storage==2.15.0
 python-jose[cryptography]==3.3.0
