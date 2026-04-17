@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -323,57 +323,62 @@ export default function AIResumeBuilder() {
   };
 
   const fetchResume = async (id: string) => {
-    console.log('[Builder] Fetching resume from DB:', id);
-    const { data: resume, error } = await supabase
-      .from('resumes')
-      .select('*')
-      .eq('id', id)
-      .single();
+    console.log('[Builder] Fetching resume from backend:', id);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch(`${backendUrl}/api/resumes/${id}`, {
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
+      const result = await response.json();
 
-    if (resume && !error) {
-      // Restore Discovery Metadata - Prioritize URL role if it was just passed from Dashboard
-      const params = new URLSearchParams(window.location.search);
-      const urlRole = params.get('role');
-      const urlExp = params.get('exp');
-      
-      const newDiscovery = {
-         role: urlRole || resume.target_role || '',
-         exp: urlExp || resume.years_of_experience?.toString() || ''
-      };
-      setDiscovery(newDiscovery);
+      if (result.success && result.resume) {
+        const resume = result.resume;
+        // Restore Discovery Metadata - Prioritize URL role if it was just passed from Dashboard
+        const params = new URLSearchParams(window.location.search);
+        const urlRole = params.get('role');
+        const urlExp = params.get('exp');
+        
+        const newDiscovery = {
+           role: urlRole || resume.target_role || '',
+           exp: urlExp || resume.years_of_experience?.toString() || ''
+        };
+        setDiscovery(newDiscovery);
 
-      let restoredData: ResumeData = { ...INITIAL_DATA };
-      if (resume.parsed_data) {
-        restoredData = typeof resume.parsed_data === 'string' 
-          ? JSON.parse(resume.parsed_data) 
-          : resume.parsed_data;
+        let restoredData: ResumeData = { ...INITIAL_DATA };
+        if (resume.parsed_data) {
+          restoredData = typeof resume.parsed_data === 'string' 
+            ? JSON.parse(resume.parsed_data) 
+            : resume.parsed_data;
+        }
+        
+        // CRITICAL: Merge individual columns into restoredData to ensure "My Resume" edits reflect here
+        if (resume.summary) restoredData.summary = resume.summary;
+        if (resume.skills) restoredData.skills = Array.isArray(resume.skills) ? resume.skills : restoredData.skills;
+        if (resume.experience) restoredData.experience = Array.isArray(resume.experience) ? resume.experience : restoredData.experience;
+        if (resume.education) restoredData.education = Array.isArray(resume.education) ? resume.education : restoredData.education;
+        if (resume.projects) restoredData.projects = Array.isArray(resume.projects) ? resume.projects : restoredData.projects;
+        if (resume.certifications) restoredData.certifications = Array.isArray(resume.certifications) ? resume.certifications : restoredData.certifications;
+        if (resume.languages) restoredData.languages = Array.isArray(resume.languages) ? resume.languages : restoredData.languages;
+        if (resume.internships) restoredData.internships = Array.isArray(resume.internships) ? resume.internships : restoredData.internships;
+        if (resume.achievements) restoredData.achievements = Array.isArray(resume.achievements) ? resume.achievements : restoredData.achievements;
+        if (resume.section_order) restoredData.sectionOrder = resume.section_order;
+        if (resume.phone_number) restoredData.phone = resume.phone_number;
+        if (resume.title && !restoredData.fullName) restoredData.fullName = resume.title.split("'s Resume")[0];
+        
+        setData(restoredData);
+        
+        // Restore score metrics
+        if (resume.original_score !== undefined) setOriginalScore(resume.original_score);
+        if (resume.resume_score !== undefined) setCurrentScore(resume.resume_score || 0);
+
+        // Sync lastSavedRef to prevent immediate auto-save loop
+        lastSavedRef.current = JSON.stringify({ data: restoredData, discovery: newDiscovery });
+        console.log('[Builder] State restored from backend');
+      } else {
+        console.error('[Builder] Fetch resume failed:', result.detail || 'Unknown error');
       }
-      
-      // CRITICAL: Merge individual columns into restoredData to ensure "My Resume" edits reflect here
-      if (resume.summary) restoredData.summary = resume.summary;
-      if (resume.skills) restoredData.skills = Array.isArray(resume.skills) ? resume.skills : restoredData.skills;
-      if (resume.experience) restoredData.experience = Array.isArray(resume.experience) ? resume.experience : restoredData.experience;
-      if (resume.education) restoredData.education = Array.isArray(resume.education) ? resume.education : restoredData.education;
-      if (resume.projects) restoredData.projects = Array.isArray(resume.projects) ? resume.projects : restoredData.projects;
-      if (resume.certifications) restoredData.certifications = Array.isArray(resume.certifications) ? resume.certifications : restoredData.certifications;
-      if (resume.languages) restoredData.languages = Array.isArray(resume.languages) ? resume.languages : restoredData.languages;
-      if (resume.internships) restoredData.internships = Array.isArray(resume.internships) ? resume.internships : restoredData.internships;
-      if (resume.achievements) restoredData.achievements = Array.isArray(resume.achievements) ? resume.achievements : restoredData.achievements;
-      if (resume.section_order) restoredData.sectionOrder = resume.section_order;
-      if (resume.phone_number) restoredData.phone = resume.phone_number;
-      if (resume.title && !restoredData.fullName) restoredData.fullName = resume.title.split("'s Resume")[0];
-      
-      setData(restoredData);
-      
-      // Restore score metrics
-      if (resume.original_score !== undefined) setOriginalScore(resume.original_score);
-      if (resume.resume_score !== undefined) setCurrentScore(resume.resume_score || 0);
-
-      // Sync lastSavedRef to prevent immediate auto-save loop
-      lastSavedRef.current = JSON.stringify({ data: restoredData, discovery: newDiscovery });
-      console.log('[Builder] State restored from DB');
-    } else {
-      console.error('[Builder] Fetch resume failed or record missing', error);
+    } catch (e) {
+      console.error('[Builder] Handshake network error:', e);
     }
   };
 
@@ -679,10 +684,15 @@ export default function AIResumeBuilder() {
   };
 
   const handleReimport = async () => {
-    if (!resumeId) return;
     try {
-      const { data: resume, error } = await supabase.from('resumes').select('parsed_data').eq('id', resumeId).single();
-      if (resume?.parsed_data && !error) {
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch(`${backendUrl}/api/resumes/${resumeId}`, {
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
+      const result = await response.json();
+      
+      if (result.success && result.resume) {
+        const resume = result.resume;
         const originalData = typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data;
         setData(originalData);
         if (originalData.targetRole || originalData.target_role) {
@@ -710,8 +720,12 @@ export default function AIResumeBuilder() {
     setIsSaving(true);
     try {
       if (resumeId && user?.uid !== 'guest') {
-        const { error } = await supabase.from('resumes').delete().eq('id', resumeId);
-        if (error) throw error;
+        const idToken = await auth.currentUser?.getIdToken();
+        const response = await fetch(`${backendUrl}/api/resumes/${resumeId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
+        if (!response.ok) throw new Error('Backend deletion failed');
       }
 
       // Clear local caches and state IMMEDIATELY

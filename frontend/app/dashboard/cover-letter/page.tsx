@@ -23,7 +23,6 @@ import {
   Trash2
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 import { auth } from '@/lib/firebase';
