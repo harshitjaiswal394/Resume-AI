@@ -10,6 +10,40 @@ import logging
 router = APIRouter()
 logger = logging.getLogger("resumatch-api.resumes")
 
+@router.get("/")
+async def list_resumes(user_id: str):
+    """Lists all resumes for a specific user from GCP Database."""
+    if not user_id or user_id == "guest":
+        return {"success": True, "resumes": []}
+
+    try:
+        with engine.connect() as conn:
+            results = conn.execute(
+                text("SELECT * FROM resumes WHERE user_id = :uid ORDER BY created_at DESC"),
+                {"uid": user_id}
+            ).fetchall()
+            
+            resumes_list = []
+            for row in results:
+                res = dict(row._asdict())
+                # Handle JSONB fields
+                json_fields = [
+                    'skills', 'experience', 'education', 'projects', 'certifications', 
+                    'languages', 'internships', 'achievements', 'parsed_data', 'score_breakdown'
+                ]
+                for field in json_fields:
+                    if res.get(field) and isinstance(res[field], str):
+                        try:
+                            res[field] = json.loads(res[field])
+                        except:
+                            pass
+                resumes_list.append(res)
+            
+            return {"success": True, "resumes": resumes_list}
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in list_resumes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 @router.post("/")
 async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = None):
     """Creates a new modular resume."""
@@ -92,6 +126,45 @@ async def get_resume(resume_id: str, user_id: str = "guest"):
         
         return {"success": True, "resume": res}
 
+@router.get("/{resume_id}/matches")
+async def get_resume_matches(resume_id: str):
+    """Fetches job matches for a specific resume from GCP Database."""
+    try:
+        with engine.connect() as conn:
+            results = conn.execute(
+                text("SELECT * FROM job_matches WHERE resume_id = :rid ORDER BY match_score DESC"),
+                {"rid": resume_id}
+            ).fetchall()
+            
+            matches_list = []
+            for row in results:
+                match = dict(row._asdict())
+                if match.get("apply_links") and isinstance(match["apply_links"], str):
+                    try:
+                        match["apply_links"] = json.loads(match["apply_links"])
+                    except:
+                        pass
+                matches_list.append(match)
+                
+            return {"success": True, "matches": matches_list}
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in get_resume_matches: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.put("/{resume_id}/matches/{job_id}")
+async def update_job_match(resume_id: str, job_id: str, payload: Dict[str, Any] = Body(...)):
+    """Updates a job match (e.g., marks it as saved)."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE job_matches SET is_saved = :saved WHERE id = :jid AND resume_id = :rid"),
+                {"saved": payload.get("is_saved", False), "jid": job_id, "rid": resume_id}
+            )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in update_job_match: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 @router.put("/{resume_id}")
 async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: str = "guest"):
     """Updates modular resume sections."""
@@ -138,6 +211,25 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     return {"success": True}
+
+@router.delete("/")
+async def delete_all_user_resumes(user_id: str):
+    """Deletes all resumes and matches for a user."""
+    if not user_id or user_id == "guest":
+        return {"success": True}
+    try:
+        with engine.begin() as conn:
+            # 1. Delete all matches for all user's resumes
+            conn.execute(
+                text("DELETE FROM job_matches WHERE resume_id IN (SELECT id FROM resumes WHERE user_id = :uid)"),
+                {"uid": user_id}
+            )
+            # 2. Delete all resumes
+            conn.execute(text("DELETE FROM resumes WHERE user_id = :uid"), {"uid": user_id})
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in delete_all_user_resumes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.delete("/{resume_id}")
 async def delete_resume(resume_id: str, user_id: str = "guest"):

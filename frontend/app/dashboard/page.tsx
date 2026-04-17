@@ -121,10 +121,12 @@ export default function Dashboard() {
           setResumes(prev => prev.map(r => r.id === selectedResume.id ? updatedResume : r));
 
           // Persist to DB
-          await supabase.from('resumes')
-            .update({ parsed_data: newParsedData })
-            .eq('id', selectedResume.id);
-
+          await fetch(`${backendUrl}/api/resumes/${selectedResume.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parsed_data: newParsedData })
+          });
+          
           toast.success('Bullet point optimized!');
         }
       }
@@ -199,15 +201,16 @@ export default function Dashboard() {
     if (!user || !isAuthReady) return;
 
     const fetchResumes = async () => {
-      const { data, error } = await supabase
-        .from('resumes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        setResumes(data);
-        if (data.length > 0 && !selectedResume) setSelectedResume(data[0]);
+      try {
+        const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.id}`);
+        const result = await response.json();
+        
+        if (result.success && result.resumes) {
+          setResumes(result.resumes);
+          if (result.resumes.length > 0 && !selectedResume) setSelectedResume(result.resumes[0]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch resumes from backend:', err);
       }
     };
 
@@ -217,12 +220,16 @@ export default function Dashboard() {
   useEffect(() => {
     if (!selectedResume) return;
     const fetchMatches = async () => {
-      const { data, error } = await supabase
-        .from('job_matches')
-        .select('*')
-        .eq('resume_id', selectedResume.id)
-        .order('match_score', { ascending: false });
-      if (!error) setJobMatches(data || []);
+      try {
+        const response = await fetch(`${backendUrl}/api/resumes/${selectedResume.id}/matches`);
+        const result = await response.json();
+        
+        if (result.success && result.matches) {
+          setJobMatches(result.matches || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch matches from backend:', err);
+      }
     };
     fetchMatches();
   }, [selectedResume]);
@@ -332,7 +339,7 @@ export default function Dashboard() {
     try {
       // 0. Single-Resume Policy: Delete all previous records and physical files
       await cleanupUserStorage();
-      await supabase.from('resumes').delete().eq('user_id', user!.id);
+      await fetch(`${backendUrl}/api/resumes?user_id=${user!.id}`, { method: 'DELETE' });
       setResumes([]);
       setSelectedResume(null);
       setJobMatches([]);
@@ -432,9 +439,8 @@ export default function Dashboard() {
                   // Hide analysis modal after a short delay
                   setTimeout(() => {
                     setIsAnalyzing(false);
-                    // Refresh the resumes list in the background
-                    supabase.from('resumes').select('*').eq('user_id', user!.id).order('created_at', { ascending: false })
-                      .then(({ data }) => { if (data) setResumes(data); });
+                    // Refresh the resumes list from Backend
+                    fetchResumes();
                   }, 800);
                 } else if (event.step) {
                   updateStepStatus(event.step, 'done');
@@ -465,7 +471,7 @@ export default function Dashboard() {
   const handleDeleteResume = async () => {
     // Single-Resume Policy: Wipe database and storage instantly
     await cleanupUserStorage();
-    await supabase.from('resumes').delete().eq('user_id', user!.id);
+    await fetch(`${backendUrl}/api/resumes?user_id=${user!.id}`, { method: 'DELETE' });
     setResumes([]);
     setSelectedResume(null);
     setJobMatches([]);
@@ -474,10 +480,11 @@ export default function Dashboard() {
 
   const handleSaveJob = async (jobId: string, isSaved: boolean) => {
     if (!user) return;
-    const { error } = await supabase
-      .from('job_matches')
-      .update({ is_saved: isSaved })
-      .eq('id', jobId);
+    const { error } = await fetch(`${backendUrl}/api/resumes/${selectedResume.id}/matches/${jobId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_saved: isSaved })
+    }).then(r => r.json());
 
     if (error) {
       toast.error('Failed to update job');
