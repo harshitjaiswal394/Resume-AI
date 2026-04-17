@@ -19,7 +19,8 @@ import {
   Loader2,
   Wand2,
   CheckCircle2,
-  Type
+  Type,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/lib/supabase';
@@ -150,9 +151,32 @@ export default function SmartCoverLetter() {
         throw new Error(result.detail || 'Generation failed');
       }
     } catch (e: any) {
-      toast.error(e.message);
+      console.error('Generation Error:', e);
+      toast.error(e.message || 'Failed to generate cover letter');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleDeleteResume = async () => {
+    if (!selectedResumeId) return;
+    
+    const confirmed = window.confirm("Are you sure? This will delete this resume and its analysis data.");
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase.from('resumes').delete().eq('id', selectedResumeId);
+      if (error) throw error;
+      
+      toast.success('Resume deleted');
+      // Reset state
+      setSelectedResumeId('');
+      setContent('');
+      // Refresh list
+      fetchResumes();
+    } catch (e: any) {
+      console.error('Delete error:', e);
+      toast.error('Failed to delete resume');
     }
   };
 
@@ -221,23 +245,36 @@ export default function SmartCoverLetter() {
               <CardContent className="p-5 md:p-10 pt-4 space-y-5 md:space-y-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Choose Base Resume</label>
-                  <Select value={selectedResumeId} onValueChange={setSelectedResumeId}>
-                    <SelectTrigger className="h-14 md:h-20 rounded-xl md:rounded-3xl border-slate-100 bg-white shadow-sm ring-1 ring-slate-100 focus:ring-4 focus:ring-indigo-50 hover:border-indigo-100 transition-all text-left px-4 md:px-6">
-                      <SelectValue placeholder="Select a resume" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl md:rounded-2xl border-slate-100 shadow-2xl">
-                      {(resumes || []).map(r => (
-                        <SelectItem key={r.id} value={r.id} className="py-3 focus:bg-indigo-50 rounded-lg md:rounded-xl">
-                          <div className="flex flex-col items-start gap-1">
-                            <span className="font-bold text-slate-900 text-sm">{getResumeLabel(r)}</span>
-                            <span className="text-[9px] text-slate-400 uppercase tracking-widest font-black">
-                              ID: {r.id.split('-')[0]}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={selectedResumeId} onValueChange={setSelectedResumeId}>
+                      <SelectTrigger className="h-14 md:h-20 rounded-xl md:rounded-3xl border-slate-100 bg-white shadow-sm ring-1 ring-slate-100 focus:ring-4 focus:ring-indigo-50 hover:border-indigo-100 transition-all text-left px-4 md:px-6 flex-1">
+                        <SelectValue placeholder="Select a resume" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl md:rounded-2xl border-slate-100 shadow-2xl">
+                        {(resumes || []).map(r => (
+                          <SelectItem key={r.id} value={r.id} className="py-3 focus:bg-indigo-50 rounded-lg md:rounded-xl">
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="font-bold text-slate-900 text-sm">{getResumeLabel(r)}</span>
+                              <span className="text-[9px] text-slate-400 uppercase tracking-widest font-black">
+                                ID: {r.id.split('-')[0]}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    {selectedResumeId && (
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={handleDeleteResume}
+                        className="h-14 md:h-20 w-14 md:w-20 rounded-xl md:rounded-3xl border-slate-100 bg-white text-slate-300 hover:text-rose-500 transition-colors shrink-0"
+                      >
+                        <Trash2 className="h-5 w-5 md:h-6 md:w-6" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-4">

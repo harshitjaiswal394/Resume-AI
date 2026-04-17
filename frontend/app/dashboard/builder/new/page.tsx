@@ -670,6 +670,37 @@ export default function AIResumeBuilder() {
     }
   };
 
+  const handleDeleteDraft = async () => {
+    if (!resumeId && !data.fullName) {
+      // Nothing to delete
+      router.push('/dashboard');
+      return;
+    }
+
+    const confirmed = window.confirm("Are you sure? This will permanently delete this resume draft and all related analysis.");
+    if (!confirmed) return;
+
+    setIsSaving(true);
+    try {
+      if (resumeId && user?.id !== 'guest') {
+        const { error } = await supabase.from('resumes').delete().eq('id', resumeId);
+        if (error) throw error;
+      }
+
+      // Clear local caches
+      localStorage.removeItem('resumatch_builder_data');
+      sessionStorage.removeItem('resumatch_builder_session');
+      
+      toast.success('Draft deleted successfully');
+      router.push('/dashboard');
+    } catch (e: any) {
+      console.error('Delete failed:', e);
+      toast.error('Failed to delete draft');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const renderResumeSection = (sectionId: string) => {
     switch (sectionId) {
       case 'summary':
@@ -890,6 +921,9 @@ export default function AIResumeBuilder() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={handleDeleteDraft} className="h-9 md:h-10 rounded-xl text-slate-300 hover:text-rose-500 px-3 md:px-4 transition-colors mr-2">
+              <Trash2 className="h-4 w-4" />
+            </Button>
             <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 md:mr-2" />}
               <span className="hidden md:inline">Save</span>
