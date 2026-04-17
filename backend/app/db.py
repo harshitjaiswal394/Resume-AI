@@ -114,7 +114,12 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
         return False
 
     with engine.begin() as conn:
-        # 1. Update Resume Record
+        # 1. Calculate Metadata
+        full_name = parsed_data.get("fullName") or parsed_data.get("full_name") or "Untitled"
+        role = parsed_data.get("targetRole") or parsed_data.get("target_role") or "Resume"
+        title = f"{full_name}'s {role}"
+        
+        # 2. Upsert Resume Record (Mirroring Production Schema)
         conn.execute(
             text("""
                 INSERT INTO resumes (
@@ -122,12 +127,14 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                     summary, skills, experience, education, projects, 
                     certifications, languages, internships, achievements,
                     resume_score, score_breakdown, raw_text, original_score,
+                    title, file_name, template_id, section_order,
                     updated_at, created_at
                 ) VALUES (
                     :id, :user_id, 'complete', :parsed, :target_role, :phone,
                     :summary, :skills, :experience, :education, :projects,
                     :certifications, :languages, :internships, :achievements,
                     :score, :breakdown, :text, :score,
+                    :title, :title, 'modern', '{summary,skills,experience,education,projects,certifications,languages,achievements,internships}',
                     NOW(), NOW()
                 )
                 ON CONFLICT (id) DO UPDATE SET
@@ -148,11 +155,13 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                     score_breakdown = EXCLUDED.score_breakdown,
                     raw_text = EXCLUDED.raw_text,
                     original_score = COALESCE(resumes.original_score, EXCLUDED.original_score),
+                    title = COALESCE(resumes.title, EXCLUDED.title),
+                    file_name = COALESCE(resumes.file_name, EXCLUDED.file_name),
                     updated_at = NOW()
             """),
             {
                 "parsed": json.dumps(parsed_data),
-                "target_role": parsed_data.get("targetRole") or parsed_data.get("target_role"),
+                "target_role": role,
                 "phone": parsed_data.get("phone") or parsed_data.get("phone_number"),
                 "summary": parsed_data.get("summary"),
                 "skills": json.dumps(parsed_data.get("skills") or []),
@@ -167,7 +176,8 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                 "breakdown": json.dumps(analysis),
                 "text": raw_text,
                 "id": resume_id,
-                "user_id": user_id
+                "user_id": user_id,
+                "title": title
             }
         )
         
@@ -187,7 +197,7 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                             ai_reasoning, apply_links, created_at
                         ) VALUES (
                             :rid, :uid, :title, :company, :loc,
-                            :score, CAST(:m_skills AS jsonb), CAST(:miss_skills AS jsonb),
+                            :score, :m_skills, :miss_skills,
                             :reason, :links, NOW()
                         )
                     """),
@@ -198,25 +208,23 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                         "company": m.get("company") or "Direct Opportunity",
                         "loc": m.get("location") or "Remote",
                         "score": m.get("matchScore") or m.get("match_score") or 0,
-                        "m_skills": json.dumps(m.get("matching_skills") or m.get("matchingSkills") or []),
-                        "miss_skills": json.dumps(m.get("missing_skills") or m.get("missingSkills") or []),
+                        "m_skills": m.get("matching_skills") or m.get("matchingSkills") or [],
+                        "miss_skills": m.get("missing_skills") or m.get("missingSkills") or [],
                         "reason": m.get("aiReasoning") or m.get("reasoning") or "Highly compatible matches.",
                         "links": json.dumps(m.get("apply_links") or {})
                     }
                 )
         
-        # 3. Create Audit Log
+        # 3. Create Audit Log (Mirroring Production 'metadata' column)
         conn.execute(
             text("""
-                INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, created_at)
-                VALUES (:uid, :action, :type, :rid, :details, NOW())
+                INSERT INTO audit_logs (user_id, action, metadata, created_at)
+                VALUES (:uid, :action, :meta, NOW())
             """),
             {
                 "uid": user_id,
                 "action": "resume_analysis_full",
-                "type": "resume",
-                "rid": resume_id,
-                "details": json.dumps({"score": analysis.get("score")})
+                "meta": json.dumps({"score": analysis.get("score")})
             }
         )
         
