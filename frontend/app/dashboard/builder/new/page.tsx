@@ -670,6 +670,183 @@ export default function AIResumeBuilder() {
     }
   };
 
+  const renderResumeSection = (sectionId: string) => {
+    switch (sectionId) {
+      case 'summary':
+        return (
+          <section className="space-y-2 md:space-y-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Profile</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            <p className="text-slate-600 leading-relaxed text-[11px] md:text-[13px] font-medium">{data.summary || "Add a summary to see the magic..."}</p>
+          </section>
+        );
+      case 'skills':
+        return (data.skills || []).length > 0 && (
+          <section className="space-y-2 md:space-y-3">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expertise</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            <div className="flex flex-wrap gap-1.5 md:gap-2">
+              {(data.skills || []).map((s: string, i: number) => (
+                <span key={i} className="text-[9px] md:text-[11px] font-bold text-slate-700 bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded border border-slate-100">{s}</span>
+              ))}
+            </div>
+          </section>
+        );
+      case 'experience':
+        return (data.experience || []).some(e => e.title) && (
+          <section className="space-y-4 md:space-y-6">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Experience</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            <div className="space-y-6 md:space-y-8">
+              {(data.experience || []).map((exp, i) => exp.title && (
+                <div key={i} className="space-y-2 md:space-y-3 relative">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-0.5">
+                      <h4 className="text-[13px] md:text-[15px] font-extrabold text-slate-900">{exp.title}</h4>
+                      <div className="text-[10px] md:text-[12px] font-bold text-indigo-500 uppercase tracking-wider">{exp.company}</div>
+                    </div>
+                    {exp.duration && <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded">{exp.duration}</span>}
+                  </div>
+                  <ul className="list-none space-y-1.5 md:space-y-2">
+                    {(exp.description || []).map((b, bi) => b.trim() && (
+                      <li key={bi} className="text-[10px] md:text-[12px] text-slate-600 leading-normal flex gap-2 md:gap-3">
+                        <span className="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full bg-indigo-200 mt-1 md:mt-1.5 flex-shrink-0" />
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      case 'education':
+        return (data.education || []).some(e => e.degree) && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Education</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:gap-6">
+              {(data.education || []).map((edu, i) => edu.degree && (
+                <div key={i} className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-[12px] md:text-[14px] font-bold text-slate-800">{edu.degree}</h4>
+                    <p className="text-[10px] md:text-[12px] text-slate-400 font-medium">{edu.institution}</p>
+                  </div>
+                  <span className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">{edu.year}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      case 'projects':
+        return (data.projects || []).some(p => p.title) && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Projects</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            {(data.projects || []).map((proj, i) => proj.title && (
+              <div key={i} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[12px] md:text-[14px] font-bold text-slate-800">{proj.title}</h4>
+                  {proj.link && <span className="text-[8px] text-indigo-500 font-bold uppercase">{proj.link}</span>}
+                </div>
+                <p className="text-[10px] md:text-[12px] text-slate-600 leading-relaxed">{proj.description}</p>
+              </div>
+            ))}
+          </section>
+        );
+      case 'certifications':
+        return (data.certifications || []).length > 0 && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Certifications</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+              {(data.certifications || []).map((cert, i) => (
+                <div key={i} className="flex justify-between items-center text-[10px] md:text-[12px]">
+                  <span className="font-bold text-slate-800">{cert.name}</span>
+                  <span className="text-slate-400 uppercase text-[8px]">{cert.year}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      case 'languages':
+        return (data.languages || []).length > 0 && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Languages</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            <div className="flex flex-wrap gap-4">
+              {(data.languages || []).map((lang, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-[10px] md:text-[12px] font-bold text-slate-800">{lang.language}</span>
+                  <span className="text-[8px] text-indigo-400 font-bold uppercase">• {lang.proficiency}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      case 'achievements':
+        return (data.achievements || []).length > 0 && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Highlights</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            {(data.achievements || []).map((ach, i) => (
+              <div key={i} className="space-y-1">
+                <h4 className="text-[11px] md:text-[13px] font-bold text-slate-800">{ach.title}</h4>
+                <p className="text-[10px] md:text-[12px] text-slate-600">{ach.description}</p>
+              </div>
+            ))}
+          </section>
+        );
+      case 'internships':
+        return (data.internships || []).some(inr => inr.role) && (
+          <section className="space-y-4 md:space-y-6">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Internships</h3>
+              <div className="h-px bg-indigo-50 flex-1" />
+            </div>
+            <div className="space-y-4">
+              {(data.internships || []).map((int, i) => int.role && (
+                <div key={i} className="space-y-2 relative">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-0.5">
+                      <h4 className="text-[13px] font-extrabold text-slate-900">{int.role}</h4>
+                      <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">{int.company}</div>
+                    </div>
+                  </div>
+                  <ul className="list-none space-y-1.5">
+                    {(int.description || []).map((b, bi) => b.trim() && (
+                      <li key={bi} className="text-[10px] text-slate-600 leading-normal flex gap-2">
+                        <span className="w-1 h-1 rounded-full bg-indigo-200 mt-1.5 flex-shrink-0" />
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      default:
+        return null;
+    }
+  };
+
   // --- Render Helpers ---
   const steps = [
     { id: 1, name: 'Personal', icon: User },
@@ -1161,175 +1338,7 @@ export default function AIResumeBuilder() {
           <div className="px-8 md:px-16 pb-8 md:pb-16 space-y-6 md:space-y-10 flex-1">
             {(data.sectionOrder || []).map((sectionId) => (
               <Reorder.Item as="div" key={sectionId} value={sectionId} className="cursor-grab active:cursor-grabbing">
-                {sectionId === 'summary' && (
-                  <section className="space-y-2 md:space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Profile</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    <p className="text-slate-600 leading-relaxed text-[11px] md:text-[13px] font-medium">{data.summary || "Add a summary to see the magic..."}</p>
-                  </section>
-                )}
-
-                {sectionId === 'skills' && (data.skills || []).length > 0 && (
-                  <section className="space-y-2 md:space-y-3">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expertise</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 md:gap-2">
-                      {(data.skills || []).map((s, i) => (
-                        <span key={i} className="text-[9px] md:text-[11px] font-bold text-slate-700 bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded border border-slate-100">{s}</span>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {sectionId === 'experience' && (data.experience || []).some(e => e.title) && (
-                  <section className="space-y-4 md:space-y-6">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Experience</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    <div className="space-y-6 md:space-y-8">
-                      {(data.experience || []).map((exp, i) => exp.title && (
-                        <div key={i} className="space-y-2 md:space-y-3 relative">
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-0.5">
-                              <h4 className="text-[13px] md:text-[15px] font-extrabold text-slate-900">{exp.title}</h4>
-                              <div className="text-[10px] md:text-[12px] font-bold text-indigo-500 uppercase tracking-wider">{exp.company}</div>
-                            </div>
-                            {exp.duration && <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded">{exp.duration}</span>}
-                          </div>
-                          <ul className="list-none space-y-1.5 md:space-y-2">
-                            {(exp.description || []).map((b, bi) => b.trim() && (
-                              <li key={bi} className="text-[10px] md:text-[12px] text-slate-600 leading-normal flex gap-2 md:gap-3">
-                                <span className="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full bg-indigo-200 mt-1 md:mt-1.5 flex-shrink-0" />
-                                {b}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {sectionId === 'education' && (data.education || []).some(e => e.degree) && (
-                  <section className="space-y-3 md:space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Education</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 md:gap-6">
-                      {(data.education || []).map((edu, i) => edu.degree && (
-                        <div key={i} className="flex justify-between items-start">
-                          <div>
-                            <h4 className="text-[12px] md:text-[14px] font-bold text-slate-800">{edu.degree}</h4>
-                            <p className="text-[10px] md:text-[12px] text-slate-400 font-medium">{edu.institution}</p>
-                          </div>
-                          <span className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">{edu.year}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {sectionId === 'projects' && (data.projects || []).some(p => p.title) && (
-                  <section className="space-y-3 md:space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Projects</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    {(data.projects || []).map((proj, i) => proj.title && (
-                      <div key={i} className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-[12px] md:text-[14px] font-bold text-slate-800">{proj.title}</h4>
-                          {proj.link && <span className="text-[8px] text-indigo-500 font-bold uppercase">{proj.link}</span>}
-                        </div>
-                        <p className="text-[10px] md:text-[12px] text-slate-600 leading-relaxed">{proj.description}</p>
-                      </div>
-                    ))}
-                  </section>
-                )}
-
-                {sectionId === 'certifications' && (data.certifications || []).length > 0 && (
-                  <section className="space-y-3 md:space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Certifications</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-                      {(data.certifications || []).map((cert, i) => (
-                        <div key={i} className="flex justify-between items-center text-[10px] md:text-[12px]">
-                          <span className="font-bold text-slate-800">{cert.name}</span>
-                          <span className="text-slate-400 uppercase text-[8px]">{cert.year}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {sectionId === 'languages' && (data.languages || []).length > 0 && (
-                  <section className="space-y-3 md:space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Languages</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    <div className="flex flex-wrap gap-4">
-                      {(data.languages || []).map((lang, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="text-[10px] md:text-[12px] font-bold text-slate-800">{lang.language}</span>
-                          <span className="text-[8px] text-indigo-400 font-bold uppercase">• {lang.proficiency}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {sectionId === 'achievements' && (data.achievements || []).length > 0 && (
-                  <section className="space-y-3 md:space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Highlights</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    {(data.achievements || []).map((ach, i) => (
-                      <div key={i} className="space-y-1">
-                        <h4 className="text-[11px] md:text-[13px] font-bold text-slate-800">{ach.title}</h4>
-                        <p className="text-[10px] md:text-[12px] text-slate-600">{ach.description}</p>
-                      </div>
-                    ))}
-                  </section>
-                )}
-
-                {sectionId === 'internships' && (data.internships || []).some(inr => inr.role) && (
-                  <section className="space-y-4 md:space-y-6">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Internships</h3>
-                      <div className="h-px bg-indigo-50 flex-1" />
-                    </div>
-                    <div className="space-y-4">
-                      {(data.internships || []).map((int, i) => int.role && (
-                        <div key={i} className="space-y-2 relative">
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-0.5">
-                              <h4 className="text-[13px] font-extrabold text-slate-900">{int.role}</h4>
-                              <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">{int.company}</div>
-                            </div>
-                          </div>
-                          <ul className="list-none space-y-1.5">
-                            {(int.description || []).map((b, bi) => b.trim() && (
-                              <li key={bi} className="text-[10px] text-slate-600 leading-normal flex gap-2">
-                                <span className="w-1 h-1 rounded-full bg-indigo-200 mt-1.5 flex-shrink-0" />
-                                {b}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
+                {renderResumeSection(sectionId)}
               </Reorder.Item>
             ))}
           </div>
@@ -1387,9 +1396,11 @@ export default function AIResumeBuilder() {
                 </div>
                 {/* ... Simplified version for mobile preview toggle ... */}
                 <div className="px-16 pb-16 space-y-10 flex-1">
-                  <p className="text-slate-600 font-medium">{data.summary || "Summary loading..."}</p>
-                  <div className="h-40 bg-slate-50 rounded-xl" /> {/* Placeholder for brevity */}
-                  <p className="text-center text-slate-300 font-bold uppercase tracking-widest text-[10px]">Tap PDF to view full resume</p>
+                  {(data.sectionOrder || []).map((sectionId) => (
+                    <div key={sectionId}>
+                      {renderResumeSection(sectionId)}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
