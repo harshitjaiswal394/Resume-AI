@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Body, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from app.services.ai_service import ai_service
 from app.services.resume_service import resume_service
