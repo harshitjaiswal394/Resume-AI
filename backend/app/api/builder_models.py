@@ -85,6 +85,7 @@ class ResumeUpdateRequest(BaseModel):
     original_score: Optional[float] = None
     resume_score: Optional[float] = None
     target_role: Optional[str] = None
+    years_of_experience: Optional[int] = None
 
 class OptimizeExperienceRequest(BaseModel):
     experience: ExperienceItem

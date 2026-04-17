@@ -326,35 +326,36 @@ export default function AIResumeBuilder() {
 
     if (resume && !error) {
       // Restore Discovery Metadata - Prioritize URL role if it was just passed from Dashboard
-      const urlRole = new URLSearchParams(window.location.search).get('role');
+      const params = new URLSearchParams(window.location.search);
+      const urlRole = params.get('role');
+      const urlExp = params.get('exp');
+      
       const newDiscovery = {
          role: urlRole || resume.target_role || '',
-         exp: resume.years_of_experience?.toString() || ''
+         exp: urlExp || resume.years_of_experience?.toString() || ''
       };
       setDiscovery(newDiscovery);
 
-      let restoredData: ResumeData;
+      let restoredData: ResumeData = { ...initialData };
       if (resume.parsed_data) {
         restoredData = typeof resume.parsed_data === 'string' 
           ? JSON.parse(resume.parsed_data) 
           : resume.parsed_data;
-      } else {
-        restoredData = {
-          fullName: (resume.title || '').split("'s Resume")[0] || '',
-          email: '',
-          phone: resume.phone_number || '',
-          summary: resume.summary || '',
-          skills: Array.isArray(resume.skills) ? resume.skills : [],
-          experience: Array.isArray(resume.experience) ? resume.experience : [],
-          education: Array.isArray(resume.education) ? resume.education : [],
-          projects: Array.isArray(resume.projects) ? resume.projects : [],
-          certifications: Array.isArray(resume.certifications) ? resume.certifications : [],
-          languages: Array.isArray(resume.languages) ? resume.languages : [],
-          internships: Array.isArray(resume.internships) ? resume.internships : [],
-          achievements: Array.isArray(resume.achievements) ? resume.achievements : [],
-          sectionOrder: resume.section_order || ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'languages', 'achievements', 'internships']
-        };
       }
+      
+      // CRITICAL: Merge individual columns into restoredData to ensure "My Resume" edits reflect here
+      if (resume.summary) restoredData.summary = resume.summary;
+      if (resume.skills) restoredData.skills = Array.isArray(resume.skills) ? resume.skills : restoredData.skills;
+      if (resume.experience) restoredData.experience = Array.isArray(resume.experience) ? resume.experience : restoredData.experience;
+      if (resume.education) restoredData.education = Array.isArray(resume.education) ? resume.education : restoredData.education;
+      if (resume.projects) restoredData.projects = Array.isArray(resume.projects) ? resume.projects : restoredData.projects;
+      if (resume.certifications) restoredData.certifications = Array.isArray(resume.certifications) ? resume.certifications : restoredData.certifications;
+      if (resume.languages) restoredData.languages = Array.isArray(resume.languages) ? resume.languages : restoredData.languages;
+      if (resume.internships) restoredData.internships = Array.isArray(resume.internships) ? resume.internships : restoredData.internships;
+      if (resume.achievements) restoredData.achievements = Array.isArray(resume.achievements) ? resume.achievements : restoredData.achievements;
+      if (resume.section_order) restoredData.sectionOrder = resume.section_order;
+      if (resume.phone_number) restoredData.phone = resume.phone_number;
+      if (resume.title && !restoredData.fullName) restoredData.fullName = resume.title.split("'s Resume")[0];
       
       setData(restoredData);
       
@@ -671,6 +672,25 @@ export default function AIResumeBuilder() {
     }
   };
 
+  const handleReimport = async () => {
+    if (!resumeId) return;
+    try {
+      const { data: resume, error } = await supabase.from('resumes').select('parsed_data').eq('id', resumeId).single();
+      if (resume?.parsed_data && !error) {
+        const originalData = typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data;
+        setData(originalData);
+        if (originalData.targetRole || originalData.target_role) {
+          setDiscovery(prev => ({ ...prev, role: originalData.targetRole || originalData.target_role }));
+        }
+        toast.success('Fields reset to original resume data');
+      } else {
+        toast.error('No stored resume data found to import');
+      }
+    } catch (e) {
+      toast.error('Failed to re-import data');
+    }
+  };
+
   const handleDeleteDraft = async () => {
     if (!resumeId && !data.fullName) {
       // Nothing to delete
@@ -930,6 +950,10 @@ export default function AIResumeBuilder() {
             <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 md:mr-2" />}
               <span className="hidden md:inline">Save</span>
+            </Button>
+            <Button variant="outline" onClick={handleReimport} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4 text-indigo-600 hover:bg-indigo-50">
+              <RefreshCw className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Import Original</span>
             </Button>
             <Button variant="ghost" onClick={handleCopyForWord} className="h-9 md:h-10 rounded-xl text-slate-500 hover:text-indigo-600 px-3 md:px-4 transition-colors">
               <Copy className="h-4 w-4 md:mr-2" />

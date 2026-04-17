@@ -31,12 +31,12 @@ async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = N
                         id, user_id, title, phone_number, summary, skills, experience, 
                         education, projects, certifications, languages, internships, 
                         achievements, section_order, template_id, status, file_url, file_name, file_type, file_size_bytes, parsed_data, 
-                        original_score, resume_score, created_at, updated_at
+                        original_score, resume_score, target_role, years_of_experience, created_at, updated_at
                     ) VALUES (
                         :id, :uid, :title, :phone, :summary, :skills, :experience,
                         :education, :projects, :certs, :langs, :interns, :achieve, 
                         :order, :template, 'draft', '', :title, 'pdf', 0, :parsed, 
-                        :orig_score, :r_score, NOW(), NOW()
+                        :orig_score, :r_score, :target_role, :years_exp, NOW(), NOW()
                     )
                 """),
                 {
@@ -57,7 +57,9 @@ async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = N
                     "template": payload.template_id,
                     "parsed": json.dumps(payload.parsed_data) if payload.parsed_data else None,
                     "orig_score": payload.original_score or 0,
-                    "r_score": payload.resume_score or 0
+                    "r_score": payload.resume_score or 0,
+                    "target_role": payload.target_role,
+                    "years_exp": payload.years_of_experience or 0
                 }
             )
     except Exception as e:
@@ -139,7 +141,14 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
 
 @router.delete("/{resume_id}")
 async def delete_resume(resume_id: str, user_id: str = "guest"):
-    """Deletes a resume."""
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM resumes WHERE id = :id"), {"id": resume_id})
-    return {"success": True}
+    """Deletes a resume and associated data."""
+    try:
+        with engine.begin() as conn:
+            # 1. Delete associated job matches
+            conn.execute(text("DELETE FROM job_matches WHERE resume_id = :id"), {"id": resume_id})
+            # 2. Delete the resume itself
+            conn.execute(text("DELETE FROM resumes WHERE id = :id"), {"id": resume_id})
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in delete_resume: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
