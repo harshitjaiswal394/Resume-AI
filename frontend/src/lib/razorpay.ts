@@ -36,13 +36,13 @@ export function useRazorpay() {
               plan: 'pro',
               credits_remaining: 999999, // Effectively unlimited
             })
-            .eq('id', user.id);
+            .eq('id', user.uid);
 
           if (error) throw error;
 
           // Also log the payment
           await supabase.from('audit_logs').insert({
-            user_id: user.id,
+            user_id: user.uid,
             action: 'payment_success',
             details: {
               payment_id: response.razorpay_payment_id,

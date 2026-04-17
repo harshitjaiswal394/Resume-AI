@@ -81,7 +81,7 @@ export default function LandingPage() {
         const { count, error } = await supabase
           .from('resumes')
           .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
+          .eq('user_id', user.uid);
 
         if (!error && count !== null) {
           setResumeCount(count);
@@ -236,7 +236,7 @@ export default function LandingPage() {
 
       if (resumeId === 'guest' && fileRef.current) {
         const file = fileRef.current;
-        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+        const filePath = `resumes/${user.uid}/${Date.now()}_${file.name}`;
 
         const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
         if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
@@ -246,7 +246,7 @@ export default function LandingPage() {
         const { data: resumeData, error: resumeError } = await supabase
           .from('resumes')
           .insert({
-            user_id: user.id,
+            user_id: user.uid,
             file_name: file.name,
             file_url: publicUrl,
             file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
@@ -260,11 +260,11 @@ export default function LandingPage() {
         resumeId = resumeData.id;
         setActiveResumeId(resumeId);
 
-        await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
+        await completeResumeAnalysis(user.uid, resumeId, fullAnalysisData);
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.id, resumeId, personalizeData, fullAnalysisData.parsed_data);
+        const result = await tailorResume(user.uid, resumeId, personalizeData, fullAnalysisData.parsed_data);
         if (!result.success) throw new Error(result.error || 'Failed to tailor results');
       }
 

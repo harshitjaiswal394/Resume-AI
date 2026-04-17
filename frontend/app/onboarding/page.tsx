@@ -129,7 +129,7 @@ export default function OnboardingFlow() {
         let userProfile = profile;
         if (!userProfile) {
           console.log('Profile not found in state, attempting manual fetch...');
-          const { data: pData } = await supabase.from('users').select('*').eq('id', user.id).single();
+          const { data: pData } = await supabase.from('users').select('*').eq('id', user.uid).single();
           userProfile = pData as any;
         }
 
@@ -137,7 +137,7 @@ export default function OnboardingFlow() {
           throw new Error('User profile not found. Please try refreshing the page.');
         }
 
-        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+        const filePath = `resumes/${user.uid}/${Date.now()}_${file.name}`;
 
         // Storage Upload
         const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
@@ -152,7 +152,7 @@ export default function OnboardingFlow() {
         const { data: resumeData, error: resumeError } = await supabase
           .from('resumes')
           .insert({
-            user_id: user.id,
+            user_id: user.uid,
             file_name: file.name,
             file_url: publicUrl,
             file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
@@ -178,7 +178,7 @@ export default function OnboardingFlow() {
 
       // Pass user_id and resume_id to backend for server-side persistence (same as dashboard)
       const streamUrl = (user && resumeId !== 'guest')
-        ? `${backendUrl}/api/resume/process-stream?user_id=${user.id}&resume_id=${resumeId}`
+        ? `${backendUrl}/api/resume/process-stream?user_id=${user.uid}&resume_id=${resumeId}`
         : `${backendUrl}/api/resume/process-stream`;
 
       const response = await fetch(streamUrl, {
@@ -215,7 +215,7 @@ export default function OnboardingFlow() {
 
                   // Only persist to DB if we have a real user and resume record
                   if (user && resumeId !== 'guest') {
-                    const persistenceResult = await completeResumeAnalysis(user.id, resumeId, event.data);
+                    const persistenceResult = await completeResumeAnalysis(user.uid, resumeId, event.data);
                     if (!persistenceResult.success) {
                       console.warn('Database persistence failed, but continuing with local data:', (persistenceResult as any).error);
                     }
@@ -275,7 +275,7 @@ export default function OnboardingFlow() {
       if (resumeId === 'guest' && fileRef.current) {
         console.log('Saving guest analysis to new user record...');
         const file = fileRef.current;
-        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+        const filePath = `resumes/${user.uid}/${Date.now()}_${file.name}`;
 
         // 1. Upload to storage
         const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
@@ -287,7 +287,7 @@ export default function OnboardingFlow() {
         const { data: resumeData, error: resumeError } = await supabase
           .from('resumes')
           .insert({
-            user_id: user.id,
+            user_id: user.uid,
             file_name: file.name,
             file_url: publicUrl,
             file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
@@ -302,11 +302,11 @@ export default function OnboardingFlow() {
         setActiveResumeId(resumeId);
 
         // 3. Persist the analysis data received earlier as a guest
-        await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
+        await completeResumeAnalysis(user.uid, resumeId, fullAnalysisData);
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.id, resumeId, personalizeData, fullAnalysisData.parsed_data);
+        const result = await tailorResume(user.uid, resumeId, personalizeData, fullAnalysisData.parsed_data);
         if (!result.success) throw new Error(result.error || 'Failed to tailor results');
       }
 
