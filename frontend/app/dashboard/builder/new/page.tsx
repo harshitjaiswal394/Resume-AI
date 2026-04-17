@@ -141,7 +141,12 @@ export default function AIResumeBuilder() {
     const loadDraft = async () => {
       const params = new URLSearchParams(window.location.search);
       const urlId = params.get('id');
+      const urlRole = params.get('role');
       let activeResumeId: string | null = urlId;
+
+      if (urlRole && !discovery.role) {
+        setDiscovery(prev => ({ ...prev, role: urlRole }));
+      }
       
       console.log('[Builder] Handshake: Auth is ready. Initiating Cloud Sovereignty check...', { urlId, userId: user?.id });
 
@@ -434,6 +439,45 @@ export default function AIResumeBuilder() {
     }
   };
 
+  const handleEnhanceBullet = async (expIdx: number, bulletIdx: number) => {
+    if (!discovery.role) {
+      toast.error('Please set a target role first.');
+      return;
+    }
+
+    const bullet = data.experience[expIdx].description[bulletIdx];
+    if (!bullet.trim()) return;
+
+    setIsOptimizing(true);
+    toast.promise(
+      (async () => {
+        const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // The backend expects an experience object with a description array
+          body: JSON.stringify({
+            experience: { ...data.experience[expIdx], description: [bullet] },
+            target_role: discovery.role,
+            years_of_experience: parseInt(discovery.exp) || 0
+          })
+        });
+        const result = await response.json();
+        if (result.success && result.optimized.description.length > 0) {
+          const newExp = [...data.experience];
+          newExp[expIdx].description[bulletIdx] = result.optimized.description[0];
+          setData({ ...data, experience: newExp });
+          return 'Bullet point enhanced!';
+        }
+        throw new Error('Enhancement failed');
+      })(),
+      {
+        loading: 'Polishing your bullet point...',
+        success: (msg) => { setIsOptimizing(false); return msg; },
+        error: (err) => { setIsOptimizing(false); return String(err); }
+      }
+    );
+  };
+
   // --- Storage & Flow ---
   const handleSave = async () => {
     setIsSaving(true);
@@ -649,7 +693,15 @@ export default function AIResumeBuilder() {
             <div>
               <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-none mb-1">AI Builder</h1>
               <div className="flex items-center gap-2">
-                <p className="text-xs md:text-sm text-slate-500 font-medium truncate max-w-[100px] md:max-w-none">Target: {discovery.role}</p>
+                <div className="group relative flex items-center gap-2 cursor-pointer" onClick={() => {
+                  const newRole = prompt("Enter your target role:", discovery.role);
+                  if (newRole !== null) setDiscovery({ ...discovery, role: newRole });
+                }}>
+                  <p className="text-xs md:text-sm text-slate-500 font-medium truncate max-w-[100px] md:max-w-none hover:text-indigo-600 transition-colors">
+                    Target: {discovery.role || "Set Role"}
+                  </p>
+                  <Wand2 className="h-3 w-3 text-slate-300 group-hover:text-indigo-400" />
+                </div>
                 {originalScore !== null && (
                   <Badge className="bg-green-50 text-green-600 border-green-100 font-black text-[8px] md:text-[10px] uppercase">
                     +{currentScore - originalScore}
@@ -818,7 +870,7 @@ export default function AIResumeBuilder() {
                             className="h-8 rounded-lg border-indigo-100 text-indigo-600 hover:bg-indigo-50 font-bold"
                           >
                             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                            <div className="h-px bg-indigo-50 flex-1" />
+                            Optimize Bullet Points
                           </Button>
                         </div>
                         {(exp.description || []).map((bullet, bIdx) => (
@@ -830,6 +882,14 @@ export default function AIResumeBuilder() {
                               }}
                               className="min-h-[60px] text-sm border-none focus-visible:ring-0 p-0 shadow-none"
                             />
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleEnhanceBullet(idx, bIdx)}
+                              className="h-8 w-8 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50"
+                            >
+                              <Wand2 className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" onClick={() => {
                               const newExp = [...data.experience]; newExp[idx].description.splice(bIdx, 1); setData({ ...data, experience: newExp });
                             }} className="h-8 w-8 text-slate-300 hover:text-red-500">

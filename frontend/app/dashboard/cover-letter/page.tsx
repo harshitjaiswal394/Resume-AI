@@ -124,7 +124,27 @@ export default function SmartCoverLetter() {
 
       const result = await response.json();
       if (result.success) {
-        setContent(result.content);
+        // AI cleanup: Remove common internal rationale/conversational filler
+        let cleanedContent = result.content;
+        
+        // Remove common AI rationale, drafting markers, and word count meta-data
+        const rationalePatterns = [
+          /^(Certainly!|Here is|To generate|As requested|Based on|Draft:|Revised:).*?:\n*/i,
+          /^I have crafted.*?:\n*/i,
+          /^This cover letter.*?:\n*/i,
+          /Count manually:.*?\n*/gi,
+          /Word Count:.*?\n*/gi,
+          /^Dear.*?\(Draft Output\)\n*/i
+        ];
+        
+        rationalePatterns.forEach(pattern => {
+          cleanedContent = cleanedContent.replace(pattern, '').trim();
+        });
+
+        // Final trimming of any leading "Draft:" or "DRAFT" labels
+        cleanedContent = cleanedContent.replace(/^Draft\s*[:\-\s]\s*/i, '').trim();
+
+        setContent(cleanedContent);
         toast.success('Smart Cover Letter generated!');
       } else {
         throw new Error(result.detail || 'Generation failed');
