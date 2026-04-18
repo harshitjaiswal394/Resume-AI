@@ -285,11 +285,17 @@ async def rewrite_bullet(request: RewriteBulletRequest):
         logger.error(f"Bullet rewrite failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@resume_router.delete("/storage/resumes")
-async def cleanup_user_storage(user_id: str = Depends(get_current_user)):
-    """Cleans up GCP storage for the authenticated user."""
+@resume_router.delete("/storage/resumes/{target_user_id}")
+async def cleanup_user_storage(target_user_id: str, user_id: str = Depends(get_current_user)):
+    """Cleans up GCP storage for the specified user (validated against token)."""
     if not user_id or user_id == "guest":
         return {"success": True}
+        
+    # Security check: Ensure user is only deleting their own data
+    if user_id != target_user_id:
+        logger.warning(f"Unauthorized deletion attempt by {user_id} on {target_user_id}")
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
     success = storage_service.delete_user_folder(user_id)
     return {"success": success}
 

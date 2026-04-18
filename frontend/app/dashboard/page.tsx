@@ -318,10 +318,13 @@ export default function Dashboard() {
   const cleanupUserStorage = async () => {
     if (!user) return;
     try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
       const idToken = await auth.currentUser?.getIdToken();
-      await fetch(`${backendUrl}/api/resume/storage/resumes`, { 
+      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.uid}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${idToken}` }
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        }
       });
     } catch (err) {
       console.error('Storage cleanup failed:', err);
