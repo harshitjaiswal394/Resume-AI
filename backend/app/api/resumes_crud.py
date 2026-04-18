@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+﻿from fastapi import APIRouter, HTTPException, Depends, Body
 from typing import List, Dict, Any, Optional
 from app.db import engine, get_db
 from app.api.auth import get_current_user
@@ -8,7 +8,7 @@ import uuid
 import json
 import logging
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 logger = logging.getLogger("resumatch-api.resumes")
 
 @router.get("/")
@@ -242,3 +242,4 @@ async def delete_resume(resume_id: str, user_id: str = Depends(get_current_user)
     except Exception as e:
         logger.error(f"DATABASE_ERROR in delete_resume: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+

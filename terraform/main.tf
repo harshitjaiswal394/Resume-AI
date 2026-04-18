@@ -162,6 +162,14 @@ resource "google_cloud_run_v2_service" "backend" {
         value = var.firebase_project_id
       }
       env {
+        name  = "GCP_DATABASE_URL"
+        value = var.database_url
+      }
+      env {
+        name  = "DATABASE_URL"
+        value = var.database_url
+      }
+      env {
         name  = "GCP_STORAGE_BUCKET"
         value = "resumatches-resumes-${var.project_id}-${var.environment}"
       }

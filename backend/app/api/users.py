@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+﻿from fastapi import APIRouter, HTTPException, Depends, Body
 from typing import Dict, Any, Optional
 from app.db import engine
 from sqlalchemy import text
 from app.api.auth import get_current_user
 import logging
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 logger = logging.getLogger("resumatch-api.users")
 
 @router.get("/me")
@@ -93,3 +93,4 @@ async def update_user_plan(
     except Exception as e:
         logger.error(f"Error updating plan: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error")
+

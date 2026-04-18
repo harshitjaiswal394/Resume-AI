@@ -1,11 +1,11 @@
-"""
-Auth API Routes — FastAPI endpoints for OTP, password reset, and user session.
+﻿"""
+Auth API Routes â€” FastAPI endpoints for OTP, password reset, and user session.
 """
 from fastapi import APIRouter, Body, Request, HTTPException, Header
 from typing import Dict, Any, Optional
 from app.services.auth_service import auth_service
 
-auth_router = APIRouter()
+auth_router = APIRouter(redirect_slashes=False)
 
 
 @auth_router.post("/send-otp")
@@ -92,3 +92,4 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     if not result["success"]:
         raise HTTPException(status_code=401, detail=result["error"])
     return result
+

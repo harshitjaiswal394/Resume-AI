@@ -108,7 +108,7 @@ jobs:
             -var="project_id=${{ env.PROJECT_ID }}" \
             -var="firebase_project_id=${{ secrets.FIREBASE_PROJECT_ID }}" \
             -var="domain_name=resumatches.com" \
-            -var="database_url=stub" \
+            -var="database_url=${{ secrets.GCP_DATABASE_URL }}" \
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \

@@ -4,13 +4,19 @@ variable "environment" {
   default     = "staging"
 }
 
-variable "project_id" {
-  description = "The GCP Project ID"
+variable "firebase_project_id" {
+  description = "The Firebase project ID"
   type        = string
 }
 
+variable "database_url" {
+  description = "The PostgreSQL connection URL for the staging database"
+  type        = string
+  sensitive   = true
+}
+
 variable "region" {
-  description = "GCP region"
+  description = "The GCP region to deploy to"
   type        = string
   default     = "us-east1"
 }

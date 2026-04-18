@@ -62,11 +62,16 @@ app.add_middleware(
 # Trust proxy headers (for HTTPS redirects behind GCP LB)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
-app.include_router(resume_router, prefix="/api/resume", tags=["resume"])
-app.include_router(resumes_crud_router, prefix="/api/resumes", tags=["builder"])
-app.include_router(builder_router, prefix="/api/builder", tags=["builder"])
-app.include_router(cover_letters_router, prefix="/api/cover-letter", tags=["cover-letter"])
-app.include_router(users_router, prefix="/api/users", tags=["users"])
+app.include_router(resume_router, prefix="/api/resume", tags=["resume"], include_in_schema=True)
+app.include_router(resumes_crud_router, prefix="/api/resumes", tags=["builder"], include_in_schema=True)
+app.include_router(builder_router, prefix="/api/builder", tags=["builder"], include_in_schema=True)
+app.include_router(cover_letters_router, prefix="/api/cover-letter", tags=["cover-letter"], include_in_schema=True)
+app.include_router(users_router, prefix="/api/users", tags=["users"], include_in_schema=True)
+
+# Note: FastAPI defaults to strict_slashes=True for routers included this way.
+# To fix globally, we should set it on the APIRouter objects themselves or here.
+# I will set it on the app to be safer if possible, but FastAPI doesn't have a global switch.
+# So I'll update the router objects instead.
 
 @app.get("/health")
 async def health_check():

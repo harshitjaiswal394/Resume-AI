@@ -9,7 +9,7 @@ import logging
 import json
 import asyncio
 
-resume_router = APIRouter()
+resume_router = APIRouter(redirect_slashes=False)
 logger = logging.getLogger("resumatch-api.endpoints")
 
 from app.api.auth import get_current_user, security
@@ -264,27 +264,6 @@ async def save_analysis(
             raise HTTPException(status_code=500, detail="Persistence failed")
         return {"success": True}
     except Exception as e:
-        logger.error(f"Save analysis failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-class OptimizeExperienceRequest(BaseModel):
-    bullet: str
-    target_role: Optional[str] = Field("Software Engineer", alias="targetRole")
-
-@resume_router.post("/optimize-experience/")
-async def optimize_experience(request: OptimizeExperienceRequest):
-    """Rewrites a single resume bullet point for higher impact."""
-    if not request.bullet.strip():
-        raise HTTPException(status_code=400, detail="Bullet text cannot be empty")
-        
-    try:
-        optimized = await ai_service.rewrite_bullet_point(request.bullet, request.target_role)
-        logger.info(f"AI Rewriting: '{request.bullet[:50]}...' -> '{optimized[:50]}...'")
-        return {"success": True, "optimized": optimized}
-    except Exception as e:
-        logger.error(f"Bullet rewrite failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @resume_router.delete("/storage/resumes/{target_user_id}")
 async def cleanup_user_storage(target_user_id: str, user_id: str = Depends(get_current_user)):
     """Cleans up GCP storage for the specified user (validated against token)."""

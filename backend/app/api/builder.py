@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+﻿from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any, Optional
 from app.services.ai_service import ai_service
 from app.services.scraper_service import scraper_service
@@ -7,7 +7,7 @@ import logging
 import json
 import time
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 logger = logging.getLogger("resumatch-api.builder")
 from app.api.auth import get_current_user
 
@@ -69,3 +69,4 @@ async def generate_summary(
         
     summary = await ai_service.generate_smart_summary(profile_data, target_role)
     return {"success": True, "summary": summary}
+
