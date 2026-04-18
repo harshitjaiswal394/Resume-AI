@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-east1
   REPOSITORY: resumatches-staging
 
@@ -44,7 +44,7 @@ jobs:
             -target=google_compute_network.vpc \
             -target=google_service_networking_connection.private_vpc_connection \
             -var="environment=staging" \
-            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
             -var="firebase_project_id=${{ secrets.FIREBASE_PROJECT_ID }}" \
             -var="domain_name=resumatches.com" \
             -var="database_url=stub" \
@@ -60,9 +60,9 @@ jobs:
 
       - name: Build & Push Backend
         run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend:${{ github.sha }} ./backend
-          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend:latest
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/backend --all-tags
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/backend:${{ github.sha }} ./backend
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/backend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/backend:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/backend --all-tags
 
       - name: Build & Push Frontend
         run: |
@@ -75,9 +75,9 @@ jobs:
             --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
             --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://staging.resumatches.com" \
             --build-arg NEXT_PUBLIC_BACKEND_URL="https://staging.resumatches.com" \
-            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend:${{ github.sha }} ./frontend
-          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend:latest
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/resumatches-staging/frontend --all-tags
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/frontend:${{ github.sha }} ./frontend
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/frontend:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/resumatches-staging/frontend --all-tags
 
   deploy:
     name: "2. Deploy (Staging)"
@@ -105,7 +105,7 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="environment=staging" \
-            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
             -var="firebase_project_id=${{ secrets.FIREBASE_PROJECT_ID }}" \
             -var="domain_name=resumatches.com" \
             -var="database_url=${{ secrets.GCP_DATABASE_URL }}" \

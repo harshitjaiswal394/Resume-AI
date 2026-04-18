@@ -12,7 +12,7 @@ terraform {
 }
 
 provider "google" {
-  project = var.project_id
+  project = var.gcp_project_id
   region  = var.region
 }
 
@@ -122,7 +122,7 @@ resource "google_cloud_run_v2_service" "backend" {
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-${var.environment}/backend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.gcp_project_id}/resumatches-${var.environment}/backend:${var.image_tag}"
       ports {
         container_port = 8090
       }
@@ -155,7 +155,7 @@ resource "google_cloud_run_v2_service" "backend" {
       }
       env {
         name  = "GCP_PROJECT_ID"
-        value = var.project_id
+        value = var.gcp_project_id
       }
       env {
         name  = "FIREBASE_PROJECT_ID"
@@ -171,7 +171,7 @@ resource "google_cloud_run_v2_service" "backend" {
       }
       env {
         name  = "GCP_STORAGE_BUCKET"
-        value = "resumatches-resumes-${var.project_id}-${var.environment}"
+        value = "resumatches-resumes-${var.gcp_project_id}-${var.environment}"
       }
     }
     vpc_access {
@@ -196,7 +196,7 @@ resource "google_cloud_run_v2_service" "frontend" {
 
   template {
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/resumatches-${var.environment}/frontend:${var.image_tag}"
+      image = "${var.region}-docker.pkg.dev/${var.gcp_project_id}/resumatches-${var.environment}/frontend:${var.image_tag}"
       ports {
         container_port = 3000
       }
@@ -206,7 +206,7 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
       env {
         name  = "GCP_PROJECT_ID"
-        value = var.project_id
+        value = var.gcp_project_id
       }
       env {
         name  = "FIREBASE_PROJECT_ID"
@@ -354,7 +354,7 @@ resource "google_compute_global_forwarding_rule" "http_forwarding_rule" {
 
 # 10. GCP Storage for Resumes
 resource "google_storage_bucket" "resumes_bucket" {
-  name                        = "resumatches-resumes-${var.project_id}-${var.environment}"
+  name                        = "resumatches-resumes-${var.gcp_project_id}-${var.environment}"
   location                    = var.region
   uniform_bucket_level_access = true
   force_destroy               = true
