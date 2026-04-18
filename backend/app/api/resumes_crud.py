@@ -224,8 +224,10 @@ async def delete_all_user_resumes(user_id: str = Depends(get_current_user)):
             conn.execute(text("DELETE FROM resumes WHERE user_id = :uid"), {"uid": user_id})
         return {"success": True}
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in delete_all_user_resumes: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        import traceback
+        error_msg = f"DATABASE_ERROR in delete_all_user_resumes: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=f"Database error during cleanup: {str(e)}")
 
 @router.delete("/{resume_id}")
 async def delete_resume(resume_id: str, user_id: str = Depends(get_current_user)):

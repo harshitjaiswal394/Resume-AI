@@ -267,12 +267,12 @@ async def save_analysis(
         logger.error(f"Save analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-class RewriteBulletRequest(BaseModel):
+class OptimizeExperienceRequest(BaseModel):
     bullet: str
     target_role: Optional[str] = Field("Software Engineer", alias="targetRole")
 
-@resume_router.post("/rewrite-bullet")
-async def rewrite_bullet(request: RewriteBulletRequest):
+@resume_router.post("/optimize-experience/")
+async def optimize_experience(request: OptimizeExperienceRequest):
     """Rewrites a single resume bullet point for higher impact."""
     if not request.bullet.strip():
         raise HTTPException(status_code=400, detail="Bullet text cannot be empty")

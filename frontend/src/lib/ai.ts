@@ -47,28 +47,28 @@ async function authorizedFetch(path: string, options: RequestInit = {}) {
 }
 
 export async function parseResume(text: string): Promise<ParsedResume> {
-  return authorizedFetch('/api/resume/parse', {
+  return authorizedFetch('/api/resume/parse/', {
     method: 'POST',
     body: JSON.stringify({ text })
   });
 }
 
 export async function analyzeResume(resume: ParsedResume) {
-  return authorizedFetch('/api/resume/analyze', {
+  return authorizedFetch('/api/resume/analyze/', {
     method: 'POST',
     body: JSON.stringify({ resume })
   });
 }
 
 export async function generateJobMatches(resume: ParsedResume, roles: string[]) {
-  return authorizedFetch('/api/resume/matches', {
+  return authorizedFetch('/api/resume/matches/', {
     method: 'POST',
     body: JSON.stringify({ resume, roles })
   });
 }
 
 export async function generateCoverLetter(resume: ParsedResume, jobRole: string) {
-  const data = await authorizedFetch('/api/resume/cover-letter', {
+  const data = await authorizedFetch('/api/resume/cover-letter/', {
     method: 'POST',
     body: JSON.stringify({ resume, jobRole })
   });
@@ -76,7 +76,7 @@ export async function generateCoverLetter(resume: ParsedResume, jobRole: string)
 }
 
 export async function rewriteBulletPoint(bullet: string, role: string) {
-  const data = await authorizedFetch('/api/resume/rewrite-bullet', {
+  const data = await authorizedFetch('/api/resume/optimize-experience/', {
     method: 'POST',
     body: JSON.stringify({ bullet, targetRole: role })
   });
