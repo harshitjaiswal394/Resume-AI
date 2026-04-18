@@ -5,12 +5,12 @@ variable "environment" {
 }
 
 variable "firebase_project_id" {
-  description = "The Firebase project ID"
+  description = "The Firebase Project ID (e.g., resumatch-ai-c5938)"
   type        = string
 }
 
 variable "database_url" {
-  description = "The PostgreSQL connection URL for the staging database"
+  description = "The database connection URL"
   type        = string
   sensitive   = true
 }
@@ -26,11 +26,6 @@ variable "domain_name" {
   type        = string
 }
 
-variable "database_url" {
-  description = "Connection string for the Supabase database"
-  type        = string
-  sensitive   = true
-}
 
 variable "nvidia_api_key_reasoning" {
   description = "NVIDIA Reasoning API Key"
@@ -56,10 +51,6 @@ variable "nvidia_api_key_reranking" {
   sensitive   = true
 }
 
-variable "firebase_project_id" {
-  description = "The Firebase Project ID (e.g., resumatch-ai-c5938)"
-  type        = string
-}
 
 variable "image_tag" {
   description = "The tag of the docker image to deploy"
