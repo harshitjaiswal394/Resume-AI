@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -48,7 +48,7 @@ export default function SmartCoverLetter() {
   const fetchResumes = async () => {
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.uid}`, {
+      const response = await fetch(`${backendUrl}/api/resumes/?user_id=${user.uid}`, {
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
       const result = await response.json();
@@ -429,3 +429,4 @@ export default function SmartCoverLetter() {
     </div>
   );
 }
+

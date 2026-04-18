@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 export const dynamic = 'force-dynamic';
 
@@ -150,7 +150,7 @@ export default function LandingPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${backendUrl}/api/resume/process-stream`, { method: 'POST', body: formData });
+      const response = await fetch(`${backendUrl}/api/resume/process-stream/`, { method: 'POST', body: formData });
       if (!response.ok) throw new Error('Backend connection failed');
       if (!response.body) throw new Error('No stream available');
 
@@ -623,7 +623,7 @@ export default function LandingPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-indigo-600"><Zap className="h-5 w-5" /><h3 className="font-bold text-slate-800">Your experience level</h3></div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {[{ id: '0-1', label: 'Fresher (0–1 yr)' }, { id: '1-3', label: '1–3 years' }, { id: '3-6', label: '3–6 years' }, { id: '6-10', label: '6–10 years' }, { id: '10+', label: '10+ years' }].map((level) => (
+                    {[{ id: '0-1', label: 'Fresher (0â€“1 yr)' }, { id: '1-3', label: '1â€“3 years' }, { id: '3-6', label: '3â€“6 years' }, { id: '6-10', label: '6â€“10 years' }, { id: '10+', label: '10+ years' }].map((level) => (
                       <button key={level.id} onClick={() => setPersonalizeData({ ...personalizeData, experienceLevel: level.id })} className={`px-4 py-4 rounded-2xl border-2 font-bold text-[15px] transition-all duration-200 ${personalizeData.experienceLevel === level.id ? 'border-indigo-600 bg-indigo-50/50 text-indigo-600 shadow-md' : 'border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50'}`}>
                         {level.label}
                       </button>
@@ -670,7 +670,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-12 text-center">
           <div className="max-w-3xl mx-auto mb-16 sm:mb-24 space-y-4">
             <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">Everything you need to land your next role</h2>
-            <p className="text-base sm:text-lg text-slate-500 font-medium">Built specifically for the Indian job market — from freshers to professionals targeting FAANG.</p>
+            <p className="text-base sm:text-lg text-slate-500 font-medium">Built specifically for the Indian job market â€” from freshers to professionals targeting FAANG.</p>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -684,14 +684,14 @@ export default function LandingPage() {
               },
               {
                 title: "Job Match %",
-                desc: "AI compares your resume against live job descriptions and shows how well you match each role — with a percentage score.",
+                desc: "AI compares your resume against live job descriptions and shows how well you match each role â€” with a percentage score.",
                 badge: "Free",
                 icon: <TrendingUp className="h-6 w-6" />,
                 color: "bg-purple-100/50 text-purple-600"
               },
               {
                 title: "Missing Skills Detection",
-                desc: "See exactly which skills employers are looking for that are absent from your resume — and how to add them effectively.",
+                desc: "See exactly which skills employers are looking for that are absent from your resume â€” and how to add them effectively.",
                 badge: "Free",
                 icon: <Search className="h-6 w-6" />,
                 color: "bg-amber-100/50 text-amber-600"
@@ -789,7 +789,7 @@ export default function LandingPage() {
                 <div>
                   <h3 className="text-xl sm:text-2xl font-bold mb-2">Free</h3>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl sm:text-5xl font-black">₹0</span>
+                    <span className="text-4xl sm:text-5xl font-black">â‚¹0</span>
                     <span className="text-slate-400 font-medium text-sm">/forever</span>
                   </div>
                 </div>
@@ -807,7 +807,7 @@ export default function LandingPage() {
                 <div>
                   <h3 className="text-xl sm:text-2xl font-bold mb-2">Pro</h3>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl sm:text-5xl font-black">₹299</span>
+                    <span className="text-4xl sm:text-5xl font-black">â‚¹299</span>
                     <span className="text-slate-500 font-medium text-sm">/month</span>
                   </div>
                 </div>
@@ -859,4 +859,5 @@ export default function LandingPage() {
     </div>
   );
 }
+
 

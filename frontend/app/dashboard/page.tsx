@@ -83,7 +83,7 @@ export default function Dashboard() {
     setOptimizingIndex(`${expIndex}-${bulletIndex}`);
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resume/rewrite-bullet`, {
+      const response = await fetch(`${backendUrl}/api/resume/rewrite-bullet/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ export default function Dashboard() {
 
           // Persist to DB
           const idToken = await auth.currentUser?.getIdToken();
-          await fetch(`${backendUrl}/api/resumes/${selectedResume.id}`, {
+          await fetch(`${backendUrl}/api/resumes/${selectedResume.id}/`, {
             method: 'PUT',
             headers: { 
               'Content-Type': 'application/json',
@@ -190,8 +190,8 @@ export default function Dashboard() {
     if (elapsedSeconds < 15) return 'Starting AI analysis...';
     if (elapsedSeconds < 45) return 'Parsing your resume with AI...';
     if (elapsedSeconds < 90) return 'Analyzing skills & generating insights...';
-    if (elapsedSeconds < 150) return 'Matching with job database — this takes a moment...';
-    return 'Almost there — finalizing your results...';
+    if (elapsedSeconds < 150) return 'Matching with job database â€” this takes a moment...';
+    return 'Almost there â€” finalizing your results...';
   };
 
   const updateStepStatus = (id: string, status: 'pending' | 'loading' | 'done') => {
@@ -207,7 +207,7 @@ export default function Dashboard() {
   const fetchResumes = async () => {
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resumes?user_id=${user?.uid}`, {
+      const response = await fetch(`${backendUrl}/api/resumes/?user_id=${user?.uid}`, {
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
       const result = await response.json();
@@ -320,7 +320,7 @@ export default function Dashboard() {
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
       const idToken = await auth.currentUser?.getIdToken();
-      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.uid}`, {
+      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.uid}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${idToken}`
@@ -351,7 +351,7 @@ export default function Dashboard() {
       // 0. Single-Resume Policy: Wipe database and storage instantly
       const idToken = await auth.currentUser?.getIdToken();
       await cleanupUserStorage();
-      await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
+      await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
@@ -360,7 +360,7 @@ export default function Dashboard() {
       setJobMatches([]);
 
       // 1. Create temporary database record (Backend will handle the GCS upload during processing)
-      const resumeResult = await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, {
+      const resumeResult = await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -383,7 +383,7 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${backendUrl}/api/resume/process-stream?user_id=${user!.uid}&resume_id=${resumeId}`, {
+      const response = await fetch(`${backendUrl}/api/resume/process-stream/?user_id=${user!.uid}&resume_id=${resumeId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${idToken}`
@@ -486,7 +486,7 @@ export default function Dashboard() {
     // Single-Resume Policy: Wipe database and storage instantly
     const idToken = await auth.currentUser?.getIdToken();
     await cleanupUserStorage();
-    await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
+    await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, { 
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${idToken}` }
     });
@@ -911,7 +911,7 @@ export default function Dashboard() {
                           <div className="flex flex-wrap gap-2">
                             {(selectedResume?.parsedData?.languages || selectedResume?.parsed_data?.languages || selectedResume?.languages || []).map((lang: any, i: number) => (
                               <Badge key={i} className="bg-indigo-50 text-indigo-600 border border-indigo-100 py-2 px-4 rounded-xl font-bold text-xs">
-                                {lang.language} — <span className="opacity-60">{lang.proficiency}</span>
+                                {lang.language} â€” <span className="opacity-60">{lang.proficiency}</span>
                               </Badge>
                             ))}
                           </div>
@@ -1116,5 +1116,6 @@ function MetricCard({ icon, title, score, color, feedback }: any) {
     </Card>
   );
 }
+
 
 

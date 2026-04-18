@@ -10,6 +10,7 @@ import logging
 import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # Configure deep logging
 logging.basicConfig(
@@ -57,6 +58,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Trust proxy headers (for HTTPS redirects behind GCP LB)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 app.include_router(resume_router, prefix="/api/resume", tags=["resume"])
 app.include_router(resumes_crud_router, prefix="/api/resumes", tags=["builder"])

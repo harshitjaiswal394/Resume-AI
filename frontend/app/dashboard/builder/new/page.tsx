@@ -171,7 +171,7 @@ export default function AIResumeBuilder() {
         console.log('[Builder] Authority: Logged-in user. Querying Account Master Sync...');
         try {
           const idToken = await auth.currentUser?.getIdToken();
-          const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.uid}`, {
+          const response = await fetch(`${backendUrl}/api/resumes/?user_id=${user.uid}`, {
             headers: { 'Authorization': `Bearer ${idToken}` }
           });
           const result = await response.json();
@@ -273,7 +273,7 @@ export default function AIResumeBuilder() {
 
     try {
       const isUpdate = !!resumeId;
-      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes/`;
+      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}/` : `${backendUrl}/api/resumes/`;
       const method = isUpdate ? 'PUT' : 'POST';
 
       const payload = {
@@ -326,7 +326,7 @@ export default function AIResumeBuilder() {
     console.log('[Builder] Fetching resume from backend:', id);
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resumes/${id}`, {
+      const response = await fetch(`${backendUrl}/api/resumes/${id}/`, {
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
       const result = await response.json();
@@ -401,7 +401,7 @@ export default function AIResumeBuilder() {
     setIsOptimizing(true);
     toast.promise(
       (async () => {
-        const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
+        const response = await fetch(`${backendUrl}/api/builder/optimize/-experience`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -466,7 +466,7 @@ export default function AIResumeBuilder() {
     setIsOptimizing(true);
     toast.promise(
       (async () => {
-        const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
+        const response = await fetch(`${backendUrl}/api/builder/optimize/-experience`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           // The backend expects an experience object with a description array
@@ -498,7 +498,7 @@ export default function AIResumeBuilder() {
     setIsSaving(true);
     try {
       const isUpdate = !!resumeId;
-      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes/`;
+      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}/` : `${backendUrl}/api/resumes/`;
       const method = isUpdate ? 'PUT' : 'POST';
 
       const payload = {
@@ -686,7 +686,7 @@ export default function AIResumeBuilder() {
   const handleReimport = async () => {
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resumes/${resumeId}`, {
+      const response = await fetch(`${backendUrl}/api/resumes/${resumeId}/`, {
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
       const result = await response.json();
@@ -721,7 +721,7 @@ export default function AIResumeBuilder() {
     try {
       if (resumeId && user?.uid !== 'guest') {
         const idToken = await auth.currentUser?.getIdToken();
-        const response = await fetch(`${backendUrl}/api/resumes/${resumeId}`, {
+        const response = await fetch(`${backendUrl}/api/resumes/${resumeId}/`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${idToken}` }
         });
@@ -866,7 +866,7 @@ export default function AIResumeBuilder() {
               {(data.languages || []).map((lang, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="text-[10px] md:text-[12px] font-bold text-slate-800">{lang.language}</span>
-                  <span className="text-[8px] text-indigo-400 font-bold uppercase">• {lang.proficiency}</span>
+                  <span className="text-[8px] text-indigo-400 font-bold uppercase">â€¢ {lang.proficiency}</span>
                 </div>
               ))}
             </div>
@@ -1426,7 +1426,7 @@ export default function AIResumeBuilder() {
 
           {/* Footer Branding (Subtle) */}
           <div className="p-8 md:p-12 border-t border-slate-50 text-center shrink-0">
-            <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
+            <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI â€¢ Nemotron Intelligence</p>
           </div>
         </Reorder.Group>
       </div>
@@ -1491,3 +1491,4 @@ export default function AIResumeBuilder() {
     </div>
   );
 }
+

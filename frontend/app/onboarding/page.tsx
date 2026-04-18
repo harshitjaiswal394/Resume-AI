@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 export const dynamic = 'force-dynamic';
 
@@ -152,8 +152,8 @@ export default function OnboardingFlow() {
       formData.append('file', file);
 
       const streamUrl = (user && resumeId !== 'guest')
-        ? `${backendUrl}/api/resume/process-stream?user_id=${user.uid}&resume_id=${resumeId}`
-        : `${backendUrl}/api/resume/process-stream`;
+        ? `${backendUrl}/api/resume/process-stream/?user_id=${user.uid}&resume_id=${resumeId}`
+        : `${backendUrl}/api/resume/process-stream/`;
 
       const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(streamUrl, {
@@ -355,7 +355,7 @@ export default function OnboardingFlow() {
               <div className="space-y-3">
                 <h1 className="text-[40px] font-extrabold tracking-tight text-[#0f172a] leading-tight">Upload your resume</h1>
                 <p className="text-lg text-slate-500">
-                  We&apos;ll analyze it in under 30 seconds — no account needed.
+                  We&apos;ll analyze it in under 30 seconds â€” no account needed.
                 </p>
               </div>
 
@@ -402,7 +402,7 @@ export default function OnboardingFlow() {
 
               <div className="flex items-center justify-center gap-2 text-slate-400 text-sm font-medium">
                 <Shield className="h-4 w-4 text-emerald-500" />
-                <span>256-bit encrypted · Your data is never shared · आपका डेटा सुरक्षित है</span>
+                <span>256-bit encrypted Â· Your data is never shared Â· à¤†à¤ªà¤•à¤¾ à¤¡à¥‡à¤Ÿà¤¾ à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤ à¤¹à¥ˆ</span>
               </div>
 
               {/* Don't have resume section */}
@@ -410,7 +410,7 @@ export default function OnboardingFlow() {
                 <h4 className="text-[11px] font-bold tracking-[0.15em] text-slate-400 uppercase">Don&apos;t have your resume handy?</h4>
                 <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                   <SampleCard title="Software Engineer (3 YOE)" size="128 KB" />
-                  <SampleCard title="Fresher — B.Tech CSE" size="96 KB" />
+                  <SampleCard title="Fresher â€” B.Tech CSE" size="96 KB" />
                 </div>
               </div>
             </motion.div>
@@ -529,10 +529,10 @@ export default function OnboardingFlow() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           {[
-                            { id: '0-1', label: 'Fresher (0–1 yr)' },
-                            { id: '1-3', label: '1–3 years' },
-                            { id: '3-6', label: '3–6 years' },
-                            { id: '6-10', label: '6–10 years' },
+                            { id: '0-1', label: 'Fresher (0â€“1 yr)' },
+                            { id: '1-3', label: '1â€“3 years' },
+                            { id: '3-6', label: '3â€“6 years' },
+                            { id: '6-10', label: '6â€“10 years' },
                             { id: '10+', label: '10+ years' }
                           ].map((level) => (
                             <button
@@ -733,3 +733,4 @@ function SampleCard({ title, size }: { title: string, size: string }) {
     </Card>
   );
 }
+

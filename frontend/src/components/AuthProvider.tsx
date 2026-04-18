@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const profileCreatedRef = React.useRef(false);
 
   useEffect(() => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       console.log('Firebase Auth state changed:', currentUser?.email);
@@ -64,11 +64,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
     console.log('Fetching profile for user via Backend:', userId);
     
     try {
-      const response = await fetch(`${backendUrl}/api/users/me`, {
+      const response = await fetch(`${backendUrl}/api/users/me/`, {
         headers: {
           'Authorization': `Bearer ${idToken}`
         }
@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         // Profile doesn't exist, create it via Backend
         console.log('Profile not found, creating new profile via Backend...');
-        const upsertResponse = await fetch(`${backendUrl}/api/users/me`, {
+        const upsertResponse = await fetch(`${backendUrl}/api/users/me/`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${idToken}`,
