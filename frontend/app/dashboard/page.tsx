@@ -319,7 +319,7 @@ export default function Dashboard() {
     if (!user) return;
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.uid}`, { 
+      await fetch(`${backendUrl}/api/resume/storage/resumes`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${idToken}` }
       });

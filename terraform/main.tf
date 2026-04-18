@@ -161,6 +161,10 @@ resource "google_cloud_run_v2_service" "backend" {
         name  = "FIREBASE_PROJECT_ID"
         value = var.firebase_project_id
       }
+      env {
+        name  = "GCP_STORAGE_BUCKET"
+        value = "resumatches-resumes-${var.project_id}-${var.environment}"
+      }
     }
     vpc_access {
       connector = google_vpc_access_connector.connector.id
