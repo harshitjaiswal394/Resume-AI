@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 export const dynamic = 'force-dynamic';
 
@@ -193,9 +193,12 @@ export default function OnboardingFlow() {
 
                   // Only persist to DB if we have a real user and resume record
                   if (user && resumeId !== 'guest') {
-                    const persistenceResult = await completeResumeAnalysis(user.uid, resumeId, event.data);
-                    if (!persistenceResult.success) {
-                      console.warn('Database persistence failed, but continuing with local data:', (persistenceResult as any).error);
+                    const idToken = await auth.currentUser?.getIdToken();
+                    if (idToken) {
+                      const persistenceResult = await completeResumeAnalysis(user.uid, resumeId, event.data, idToken);
+                      if (!persistenceResult.success) {
+                        console.warn('Database persistence failed, but continuing with local data:', (persistenceResult as any).error);
+                      }
                     }
                   }
 

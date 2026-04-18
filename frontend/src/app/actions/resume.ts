@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { resumes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-export async function startResumeAnalysis(userId: string, resumeId: string, formData: FormData) {
+export async function startResumeAnalysis(userId: string, resumeId: string, formData: FormData, idToken: string) {
   try {
     const file = formData.get('file') as File;
     const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
@@ -16,6 +16,9 @@ export async function startResumeAnalysis(userId: string, resumeId: string, form
     // Call backend with persistence parameters
     const response = await fetch(`${backendUrl}/api/resume/process?user_id=${userId}&resume_id=${resumeId}`, {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${idToken}`
+      },
       body: backendFormData,
     });
 
@@ -26,12 +29,15 @@ export async function startResumeAnalysis(userId: string, resumeId: string, form
   }
 }
 
-export async function completeResumeAnalysis(userId: string, resumeId: string, data: any) {
+export async function completeResumeAnalysis(userId: string, resumeId: string, data: any, idToken: string) {
   try {
     const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
     const response = await fetch(`${backendUrl}/api/resume/save-analysis`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
       body: JSON.stringify({ userId, resumeId, data }),
     });
 
@@ -42,12 +48,15 @@ export async function completeResumeAnalysis(userId: string, resumeId: string, d
   }
 }
 
-export async function tailorResume(userId: string, resumeId: string, preferences: any, parsedData: any) {
+export async function tailorResume(userId: string, resumeId: string, preferences: any, parsedData: any, idToken: string) {
   try {
     const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
     const response = await fetch(`${backendUrl}/api/resume/tailor`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
       body: JSON.stringify({ resumeId, userId, preferences, parsedData }),
     });
 

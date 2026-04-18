@@ -79,13 +79,16 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(securit
             
         return user_id
         
+    except httpx.RequestError as e:
+        logger.error(f"Network error fetching GCP public keys: {str(e)}")
+        raise HTTPException(status_code=503, detail="Auth Service Unavailable (Key Fetch Failed)")
     except JWTError as e:
         logger.error(f"JWT Verification failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail=f"Authentication failed: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
         logger.error(f"Unexpected Auth Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Auth Error")
+        raise HTTPException(status_code=500, detail=f"Internal Auth Error: {str(e)}")

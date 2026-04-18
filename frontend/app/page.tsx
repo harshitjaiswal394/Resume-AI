@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 export const dynamic = 'force-dynamic';
 
@@ -150,7 +150,7 @@ export default function LandingPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${backendUrl}/api/resume/process-stream/`, { method: 'POST', body: formData });
+      const response = await fetch(`${backendUrl}/api/resume/process-stream`, { method: 'POST', body: formData });
       if (!response.ok) throw new Error('Backend connection failed');
       if (!response.body) throw new Error('No stream available');
 
@@ -245,7 +245,7 @@ export default function LandingPage() {
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
         // 1. Create resume record via Backend
-        const createRes = await fetch(`${backendUrl}/api/resumes/`, {
+        const createRes = await fetch(`${backendUrl}/api/resumes`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',

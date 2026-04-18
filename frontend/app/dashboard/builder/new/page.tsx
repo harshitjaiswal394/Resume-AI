@@ -171,7 +171,7 @@ export default function AIResumeBuilder() {
         console.log('[Builder] Authority: Logged-in user. Querying Account Master Sync...');
         try {
           const idToken = await auth.currentUser?.getIdToken();
-          const response = await fetch(`${backendUrl}/api/resumes/?user_id=${user.uid}`, {
+          const response = await fetch(`${backendUrl}/api/resumes?user_id=${user.uid}`, {
             headers: { 'Authorization': `Bearer ${idToken}` }
           });
           const result = await response.json();
@@ -273,7 +273,7 @@ export default function AIResumeBuilder() {
 
     try {
       const isUpdate = !!resumeId;
-      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}/` : `${backendUrl}/api/resumes/`;
+      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes`;
       const method = isUpdate ? 'PUT' : 'POST';
 
       const payload = {
@@ -326,7 +326,7 @@ export default function AIResumeBuilder() {
     console.log('[Builder] Fetching resume from backend:', id);
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resumes/${id}/`, {
+      const response = await fetch(`${backendUrl}/api/resumes/${id}`, {
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
       const result = await response.json();
@@ -498,7 +498,7 @@ export default function AIResumeBuilder() {
     setIsSaving(true);
     try {
       const isUpdate = !!resumeId;
-      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}/` : `${backendUrl}/api/resumes/`;
+      const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes`;
       const method = isUpdate ? 'PUT' : 'POST';
 
       const payload = {
@@ -686,7 +686,7 @@ export default function AIResumeBuilder() {
   const handleReimport = async () => {
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resumes/${resumeId}/`, {
+      const response = await fetch(`${backendUrl}/api/resumes/${resumeId}`, {
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
       const result = await response.json();
@@ -721,7 +721,7 @@ export default function AIResumeBuilder() {
     try {
       if (resumeId && user?.uid !== 'guest') {
         const idToken = await auth.currentUser?.getIdToken();
-        const response = await fetch(`${backendUrl}/api/resumes/${resumeId}/`, {
+        const response = await fetch(`${backendUrl}/api/resumes/${resumeId}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${idToken}` }
         });

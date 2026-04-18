@@ -83,7 +83,7 @@ export default function Dashboard() {
     setOptimizingIndex(`${expIndex}-${bulletIndex}`);
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resume/optimize-experience/`, {
+      const response = await fetch(`${backendUrl}/api/resume/optimize-experience`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ export default function Dashboard() {
 
           // Persist to DB
           const idToken = await auth.currentUser?.getIdToken();
-          await fetch(`${backendUrl}/api/resumes/${selectedResume.id}/`, {
+          await fetch(`${backendUrl}/api/resumes/${selectedResume.id}`, {
             method: 'PUT',
             headers: { 
               'Content-Type': 'application/json',
@@ -207,7 +207,7 @@ export default function Dashboard() {
   const fetchResumes = async () => {
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resumes/?user_id=${user?.uid}`, {
+      const response = await fetch(`${backendUrl}/api/resumes?user_id=${user?.uid}`, {
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
       const result = await response.json();
@@ -320,7 +320,7 @@ export default function Dashboard() {
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
       const idToken = await auth.currentUser?.getIdToken();
-      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.uid}/`, {
+      await fetch(`${backendUrl}/api/resume/storage/resumes/${user.uid}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${idToken}`
@@ -351,7 +351,7 @@ export default function Dashboard() {
       // 0. Single-Resume Policy: Wipe database and storage instantly
       const idToken = await auth.currentUser?.getIdToken();
       await cleanupUserStorage();
-      await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, { 
+      await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
@@ -360,7 +360,7 @@ export default function Dashboard() {
       setJobMatches([]);
 
       // 1. Create temporary database record (Backend will handle the GCS upload during processing)
-      const resumeResult = await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, {
+      const resumeResult = await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -383,7 +383,7 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${backendUrl}/api/resume/process-stream/?user_id=${user!.uid}&resume_id=${resumeId}`, {
+      const response = await fetch(`${backendUrl}/api/resume/process-stream?user_id=${user!.uid}&resume_id=${resumeId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${idToken}`
@@ -486,7 +486,7 @@ export default function Dashboard() {
     // Single-Resume Policy: Wipe database and storage instantly
     const idToken = await auth.currentUser?.getIdToken();
     await cleanupUserStorage();
-    await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, { 
+    await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${idToken}` }
     });
