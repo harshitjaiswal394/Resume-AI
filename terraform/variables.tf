@@ -50,16 +50,9 @@ variable "nvidia_api_key_reranking" {
   sensitive   = true
 }
 
-variable "supabase_url" {
-  description = "Supabase project URL"
+variable "firebase_project_id" {
+  description = "The Firebase Project ID (e.g., resumatch-ai-c5938)"
   type        = string
-  sensitive   = true
-}
-
-variable "supabase_service_role_key" {
-  description = "Supabase service role key (server-side only)"
-  type        = string
-  sensitive   = true
 }
 
 variable "image_tag" {

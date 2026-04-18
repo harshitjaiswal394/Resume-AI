@@ -154,12 +154,12 @@ resource "google_cloud_run_v2_service" "backend" {
         value = var.nvidia_api_key_reranking
       }
       env {
-        name  = "SUPABASE_URL"
-        value = var.supabase_url
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
       }
       env {
-        name  = "SUPABASE_SERVICE_ROLE_KEY"
-        value = var.supabase_service_role_key
+        name  = "FIREBASE_PROJECT_ID"
+        value = var.firebase_project_id
       }
     }
     vpc_access {
@@ -193,12 +193,12 @@ resource "google_cloud_run_v2_service" "frontend" {
         value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
       }
       env {
-        name  = "NEXT_PUBLIC_SUPABASE_URL"
-        value = var.supabase_url
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
       }
       env {
-        name  = "SUPABASE_SERVICE_ROLE_KEY"
-        value = var.supabase_service_role_key
+        name  = "FIREBASE_PROJECT_ID"
+        value = var.firebase_project_id
       }
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"

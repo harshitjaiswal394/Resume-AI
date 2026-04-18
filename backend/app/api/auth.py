@@ -15,10 +15,10 @@ logger = logging.getLogger("resumatch-api.auth")
 # FastAPI security scheme
 security = HTTPBearer()
 
-# GCP Identity Platform constants
-GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-ISS_URL = f"https://securetoken.google.com/{GCP_PROJECT_ID}"
-AUD_URL = GCP_PROJECT_ID
+# GCP Identity Platform (Firebase) configuration
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID") or os.getenv("GCP_PROJECT_ID")
+ISS_URL = f"https://securetoken.google.com/{FIREBASE_PROJECT_ID}"
+AUD_URL = FIREBASE_PROJECT_ID
 
 # Cache for GCP public keys
 _GCP_PUB_KEYS = {}
@@ -45,9 +45,9 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(securit
     Decodes and validates a GCP Identity Platform JWT.
     Returns the user_id (sub).
     """
-    if not GCP_PROJECT_ID:
+    if not FIREBASE_PROJECT_ID:
         # Fallback for development if no project ID is set
-        logger.warning("GCP_PROJECT_ID not set. Auth will be bypassed or fail.")
+        logger.warning("FIREBASE_PROJECT_ID not set. Auth will be bypassed or fail.")
         return "development_user"
 
     jwt_token = token.credentials
