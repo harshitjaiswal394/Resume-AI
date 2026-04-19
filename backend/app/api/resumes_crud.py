@@ -14,6 +14,9 @@ logger = logging.getLogger("resumatch-api.resumes")
 @router.get("/")
 async def list_resumes(user_id: str = Depends(get_current_user)):
     """Lists all resumes for a specific user from GCP Database."""
+    import time
+    start_time = time.time()
+    logger.info(f"LIST_RESUMES_START - User: {user_id}")
     if not user_id or user_id == "guest":
         return {"success": True, "resumes": []}
 
@@ -40,18 +43,21 @@ async def list_resumes(user_id: str = Depends(get_current_user)):
                             pass
                 resumes_list.append(res)
             
+            latency = time.time() - start_time
+            logger.info(f"LIST_RESUMES_SUCCESS - User: {user_id} - Count: {len(resumes_list)} - Latency: {latency:.2f}s")
             return {"success": True, "resumes": resumes_list}
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in list_resumes: {str(e)}")
+        latency = time.time() - start_time
+        logger.error(f"LIST_RESUMES_FAIL - User: {user_id} - Latency: {latency:.2f}s - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.post("/")
 async def create_resume(payload: ResumeCreateRequest, user_id: str = Depends(get_current_user)):
     """Creates a new modular resume."""
+    import time
+    start_time = time.time()
     resume_id = str(uuid.uuid4())
-    
-    # Force authenticated user_id from JWT
-    db_user_id = user_id
+    logger.info(f"CREATE_RESUME_START - User: {user_id} - ID: {resume_id} - Title: {payload.title}")
 
     try:
         with engine.begin() as conn:
@@ -71,7 +77,7 @@ async def create_resume(payload: ResumeCreateRequest, user_id: str = Depends(get
                 """),
                 {
                     "id": resume_id,
-                    "uid": db_user_id,
+                    "uid": user_id,
                     "title": payload.title,
                     "phone": payload.phone_number,
                     "summary": payload.summary,
@@ -92,8 +98,11 @@ async def create_resume(payload: ResumeCreateRequest, user_id: str = Depends(get
                     "years_exp": payload.years_of_experience or 0
                 }
             )
+        latency = time.time() - start_time
+        logger.info(f"CREATE_RESUME_SUCCESS - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s")
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in create_resume: {str(e)}")
+        latency = time.time() - start_time
+        logger.error(f"CREATE_RESUME_FAIL - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     return {"success": True, "resume_id": resume_id}
@@ -101,26 +110,46 @@ async def create_resume(payload: ResumeCreateRequest, user_id: str = Depends(get
 @router.get("/{resume_id}")
 async def get_resume(resume_id: str, user_id: str = Depends(get_current_user)):
     """Fetches a modular resume by ID."""
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT * FROM resumes WHERE id = :id"),
-            {"id": resume_id}
-        ).fetchone()
-        
-        if not result:
-            raise HTTPException(status_code=404, detail="Resume not found")
+    import time
+    start_time = time.time()
+    logger.info(f"GET_RESUME_START - User: {user_id} - ID: {resume_id}")
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT * FROM resumes WHERE id = :id"),
+                {"id": resume_id}
+            ).fetchone()
             
-        res = dict(result._asdict())
-        # Handle JSONB fields with comprehensive lookup
-        json_fields = [
-            'skills', 'experience', 'education', 'projects', 'certifications', 
-            'languages', 'internships', 'achievements', 'parsed_data', 'score_breakdown'
-        ]
-        for field in json_fields:
-            if res.get(field) and isinstance(res[field], str):
-                res[field] = json.loads(res[field])
-        
-        return {"success": True, "resume": res}
+            if not result:
+                logger.warning(f"GET_RESUME_NOT_FOUND - User: {user_id} - ID: {resume_id}")
+                raise HTTPException(status_code=404, detail="Resume not found")
+                
+            res = dict(result._asdict())
+            
+            # Security Check: Ownership
+            if res.get('user_id') != user_id:
+                logger.warning(f"GET_RESUME_FORBIDDEN - User: {user_id} - ID: {resume_id} - Owner: {res.get('user_id')}")
+                raise HTTPException(status_code=403, detail="Unauthorized to access this resume")
+
+            # Handle JSONB fields with comprehensive lookup
+            json_fields = [
+                'skills', 'experience', 'education', 'projects', 'certifications', 
+                'languages', 'internships', 'achievements', 'parsed_data', 'score_breakdown'
+            ]
+            for field in json_fields:
+                if res.get(field) and isinstance(res[field], str):
+                    res[field] = json.loads(res[field])
+            
+            latency = time.time() - start_time
+            logger.info(f"GET_RESUME_SUCCESS - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s")
+            return {"success": True, "resume": res}
+    except HTTPException:
+        raise
+    except Exception as e:
+        latency = time.time() - start_time
+        logger.error(f"GET_RESUME_FAIL - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.get("/{resume_id}/matches")
 async def get_resume_matches(resume_id: str, user_id: str = Depends(get_current_user)):
@@ -198,6 +227,10 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
         
         set_clauses.append(f"{key} = :{key}")
     
+    import time
+    start_time = time.time()
+    logger.info(f"UPDATE_RESUME_START - User: {user_id} - ID: {resume_id} - Fields: {list(update_data.keys())}")
+    
     query = f"UPDATE resumes SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id AND user_id = :uid"
     
     try:
@@ -208,13 +241,19 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
                 check_query = text("SELECT id, user_id FROM resumes WHERE id = :id")
                 rows = conn.execute(check_query, {"id": resume_id}).fetchall()
                 if not rows:
+                    logger.warning(f"UPDATE_RESUME_NOT_FOUND - User: {user_id} - ID: {resume_id}")
                     raise HTTPException(status_code=404, detail="Resume not found")
                 else:
+                    logger.warning(f"UPDATE_RESUME_FORBIDDEN - User: {user_id} - ID: {resume_id}")
                     raise HTTPException(status_code=403, detail="Unauthorized to update this resume")
             
-            logger.info(f"[DB-FIX] Successfully updated resume {resume_id}")
+            latency = time.time() - start_time
+            logger.info(f"UPDATE_RESUME_SUCCESS - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in update_resume: {str(e)}")
+        latency = time.time() - start_time
+        logger.error(f"UPDATE_RESUME_FAIL - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     return {"success": True}
@@ -243,14 +282,24 @@ async def delete_all_user_resumes(user_id: str = Depends(get_current_user)):
 @router.delete("/{resume_id}")
 async def delete_resume(resume_id: str, user_id: str = Depends(get_current_user)):
     """Deletes a resume and associated data."""
+    import time
+    start_time = time.time()
+    logger.info(f"DELETE_RESUME_START - User: {user_id} - ID: {resume_id}")
     try:
         with engine.begin() as conn:
             # 1. Delete associated job matches
             conn.execute(text("DELETE FROM job_matches WHERE resume_id = :id AND resume_id IN (SELECT id FROM resumes WHERE user_id = :uid)"), {"id": resume_id, "uid": user_id})
             # 2. Delete the resume itself
-            conn.execute(text("DELETE FROM resumes WHERE id = :id AND user_id = :uid"), {"id": resume_id, "uid": user_id})
+            result = conn.execute(text("DELETE FROM resumes WHERE id = :id AND user_id = :uid"), {"id": resume_id, "uid": user_id})
+            
+            if result.rowcount == 0:
+                logger.warning(f"DELETE_RESUME_NOT_FOUND_OR_FORBIDDEN - User: {user_id} - ID: {resume_id}")
+            
+        latency = time.time() - start_time
+        logger.info(f"DELETE_RESUME_SUCCESS - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s")
         return {"success": True}
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in delete_resume: {str(e)}")
+        latency = time.time() - start_time
+        logger.error(f"DELETE_RESUME_FAIL - User: {user_id} - ID: {resume_id} - Latency: {latency:.2f}s - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 

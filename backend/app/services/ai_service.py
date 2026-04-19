@@ -110,6 +110,8 @@ class AIService:
         }}
         Resume Data: {json.dumps(resume_data)}
         """
+        start_time = time.time()
+        logger.info("ANALYZE_RESUME_START")
         try:
             from app.services.nvidia_service import nvidia_service
             response = nvidia_service.client.chat.completions.create(
@@ -136,10 +138,15 @@ class AIService:
                 # Ensure resume_score is always present for the gauge
                 parsed["resume_score"] = parsed.get("score", 75)
                 
+                latency = time.time() - start_time
+                logger.info(f"ANALYZE_RESUME_SUCCESS - Latency: {latency:.2f}s")
                 return parsed
+            
+            logger.warning("ANALYZE_RESUME_EMPTY - Using fallback scores")
             raise ValueError("Empty AI response")
         except Exception as e:
-            logger.error(f"Analysis failed: {str(e)}")
+            latency = time.time() - start_time
+            logger.error(f"ANALYZE_RESUME_FAIL - Latency: {latency:.2f}s - Error: {str(e)}")
             return {
                 "score": 75, 
                 "resume_score": 75,

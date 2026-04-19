@@ -59,11 +59,10 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(securit
         header = jwt.get_unverified_header(jwt_token)
         kid = header.get('kid')
         if not kid or kid not in public_keys:
+            logger.warning(f"AUTH_FAIL - Invalid kid: {kid}")
             raise HTTPException(status_code=401, detail="Invalid token kid")
             
         # 3. Verify JWT
-        # In Identity Platform, the issuer is always securetoken.google.com/PROJECT_ID
-        # The audience is the project ID
         payload = jwt.decode(
             jwt_token, 
             public_keys[kid], 
@@ -75,20 +74,22 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(securit
         # 4. Extract User ID
         user_id = payload.get("sub")
         if not user_id:
+            logger.warning("AUTH_FAIL - Missing sub in token")
             raise HTTPException(status_code=401, detail="Token missing subject (user_id)")
             
+        logger.debug(f"AUTH_SUCCESS - User: {user_id}")
         return user_id
         
     except httpx.RequestError as e:
-        logger.error(f"Network error fetching GCP public keys: {str(e)}")
+        logger.error(f"AUTH_ERROR - Key Fetch Failed: {str(e)}")
         raise HTTPException(status_code=503, detail="Auth Service Unavailable (Key Fetch Failed)")
     except JWTError as e:
-        logger.error(f"JWT Verification failed: {str(e)}")
+        logger.warning(f"AUTH_FAIL - JWT Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication failed: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
-        logger.error(f"Unexpected Auth Error: {str(e)}")
+        logger.error(f"AUTH_CRITICAL_FAIL - Unexpected: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal Auth Error: {str(e)}")

@@ -44,18 +44,25 @@ async def optimize_experience(
 ):
     """Optimizes a work experience block for ATS & target role."""
     start_time = time.time()
-    logger.info(f"OPTIMIZE_EXP_START - Role: {request.target_role}")
+    logger.info(f"OPTIMIZE_EXP_START - User: {user_id} - Role: {request.target_role}")
     try:
+        # Log input size for debugging large payloads
+        input_bullets_count = len(request.experience.description) if hasattr(request.experience, 'description') else 0
+        logger.debug(f"OPTIMIZE_EXP_INPUT - User: {user_id} - Bullets: {input_bullets_count}")
+        
         optimized = await ai_service.optimize_work_experience(
             request.experience.dict(), 
             request.target_role, 
             request.years_of_experience
         )
-        logger.info(f"OPTIMIZE_EXP_SUCCESS - Latency: {time.time() - start_time:.2f}s")
+        
+        latency = time.time() - start_time
+        logger.info(f"OPTIMIZE_EXP_SUCCESS - User: {user_id} - Latency: {latency:.2f}s")
         return {"success": True, "optimized": optimized}
     except Exception as e:
-        logger.error(f"OPTIMIZE_EXP_FAIL - Latency: {time.time() - start_time:.2f}s - Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        latency = time.time() - start_time
+        logger.error(f"OPTIMIZE_EXP_FAIL - User: {user_id} - Latency: {latency:.2f}s - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 @router.post("/generate-summary")
 async def generate_summary(
@@ -63,12 +70,23 @@ async def generate_summary(
     user_id: str = Depends(get_current_user)
 ):
     """Generates a professional summary based on profile data."""
+    start_time = time.time()
     profile_data = payload.get("profileData")
     target_role = payload.get("targetRole", "Software Engineer")
     
+    logger.info(f"GENERATE_SUMMARY_START - User: {user_id} - Role: {target_role}")
+    
     if not profile_data:
+        logger.warning(f"GENERATE_SUMMARY_INVALID - User: {user_id} - Missing profile data")
         raise HTTPException(status_code=400, detail="Profile data is required")
         
-    summary = await ai_service.generate_smart_summary(profile_data, target_role)
-    return {"success": True, "summary": summary}
+    try:
+        summary = await ai_service.generate_smart_summary(profile_data, target_role)
+        latency = time.time() - start_time
+        logger.info(f"GENERATE_SUMMARY_SUCCESS - User: {user_id} - Latency: {latency:.2f}s")
+        return {"success": True, "summary": summary}
+    except Exception as e:
+        latency = time.time() - start_time
+        logger.error(f"GENERATE_SUMMARY_FAIL - User: {user_id} - Latency: {latency:.2f}s - Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 

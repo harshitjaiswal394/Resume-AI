@@ -29,7 +29,11 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
     Perform a vector similarity search with industry-standard filtering.
     Filters available: domain, work_mode, location, experience_level, days_old
     """
+    import time
+    start_time = time.time()
+    
     filters = filters or {}
+    logger.info(f"VECTOR_SEARCH_START - Limit: {limit} - Filters: {list(filters.keys())}")
     
     with engine.connect() as conn:
         embedding_str = f"[{','.join(map(str, embedding))}]"
@@ -96,6 +100,8 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
                     job_dict[key] = value
             results.append(job_dict)
             
+        latency = time.time() - start_time
+        logger.info(f"VECTOR_SEARCH_SUCCESS - Results: {len(results)} - Latency: {latency:.2f}s")
         return results
 
 import json
@@ -104,6 +110,9 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
     Saves the entire analysis outcome (Parsed Data, Analysis, Matches) to the DB.
     Replicates the functionality previously held in Next.js Server Actions.
     """
+    import time
+    start_time = time.time()
+    
     parsed_data = data.get("parsed_data", {})
     analysis = data.get("analysis", {})
     matches = data.get("matches", [])
@@ -111,10 +120,12 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
     
     # 0. Allow Firebase IDs and modular IDs (no longer strictly UUID)
     if not user_id or user_id == "guest" or not resume_id or resume_id == "guest":
-        logger.warning(f"Skipping persistence: invalid user_id({user_id}) or resume_id({resume_id})")
+        logger.warning(f"PERSIST_PIPELINE_SKIP - User: {user_id} - Resume: {resume_id}")
         return False
 
-    with engine.begin() as conn:
+    logger.info(f"PERSIST_PIPELINE_START - User: {user_id} - Resume: {resume_id}")
+    try:
+        with engine.begin() as conn:
         # 1. Calculate Metadata
         full_name = parsed_data.get("fullName") or parsed_data.get("full_name") or "Untitled"
         role = parsed_data.get("targetRole") or parsed_data.get("target_role") or "Resume"
@@ -229,6 +240,8 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
             }
         )
         
+    latency = time.time() - start_time
+    logger.info(f"PERSIST_PIPELINE_SUCCESS - User: {user_id} - Latency: {latency:.2f}s")
     return True
 
 
