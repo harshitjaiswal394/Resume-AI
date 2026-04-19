@@ -136,6 +136,10 @@ resource "google_cloud_run_v2_service" "backend" {
         name  = "DATABASE_URL"
         value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
       }
+      env {
+        name  = "GCP_DATABASE_URL"
+        value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
+      }
       # Other envs...
       env {
         name  = "NVIDIA_API_KEY_REASONING"
@@ -160,14 +164,6 @@ resource "google_cloud_run_v2_service" "backend" {
       env {
         name  = "FIREBASE_PROJECT_ID"
         value = var.firebase_project_id
-      }
-      env {
-        name  = "GCP_DATABASE_URL"
-        value = var.database_url
-      }
-      env {
-        name  = "DATABASE_URL"
-        value = var.database_url
       }
       env {
         name  = "GCP_STORAGE_BUCKET"
