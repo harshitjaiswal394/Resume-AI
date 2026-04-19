@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any, Optional
 from app.services.ai_service import ai_service
 from app.services.scraper_service import scraper_service
@@ -7,7 +7,7 @@ import logging
 import json
 import time
 
-router = APIRouter(redirect_slashes=False)
+router = APIRouter()
 logger = logging.getLogger("resumatch-api.builder")
 from app.api.auth import get_current_user
 
@@ -36,6 +36,7 @@ async def parse_job_url(
     return {"success": True, "data": parsed_jd, "raw_content": raw_content}
 
 @router.post("/optimize-experience")
+@router.post("/optimize/experience")
 async def optimize_experience(
     request: OptimizeExperienceRequest,
     user_id: str = Depends(get_current_user)

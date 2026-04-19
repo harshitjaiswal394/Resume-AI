@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body
 from typing import List, Dict, Any, Optional
 from app.db import engine, get_db
 from app.api.auth import get_current_user
@@ -169,7 +169,7 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
         return {"success": True, "message": "No changes detected"}
         
     set_clauses = []
-    params = {"id": resume_id}
+    params = {"id": resume_id, "uid": user_id}
     
     json_fields = {
         'experience', 'education', 'projects', 'skills', 
@@ -196,7 +196,7 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
         
         set_clauses.append(f"{key} = :{key}")
     
-    query = f"UPDATE resumes SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id"
+    query = f"UPDATE resumes SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id AND user_id = :uid"
     
     try:
         with engine.begin() as conn:
@@ -235,9 +235,9 @@ async def delete_resume(resume_id: str, user_id: str = Depends(get_current_user)
     try:
         with engine.begin() as conn:
             # 1. Delete associated job matches
-            conn.execute(text("DELETE FROM job_matches WHERE resume_id = :id"), {"id": resume_id})
+            conn.execute(text("DELETE FROM job_matches WHERE resume_id = :id AND resume_id IN (SELECT id FROM resumes WHERE user_id = :uid)"), {"id": resume_id, "uid": user_id})
             # 2. Delete the resume itself
-            conn.execute(text("DELETE FROM resumes WHERE id = :id"), {"id": resume_id})
+            conn.execute(text("DELETE FROM resumes WHERE id = :id AND user_id = :uid"), {"id": resume_id, "uid": user_id})
         return {"success": True}
     except Exception as e:
         logger.error(f"DATABASE_ERROR in delete_resume: {str(e)}")
