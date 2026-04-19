@@ -12,48 +12,59 @@ def run_migration():
     engine = create_engine(DATABASE_URL)
     
     migration_sql = """
-    -- 1. Reset job_matches skills to match Production (ARRAY/text[])
-    -- Since we are mirroring, we drop and recreate to ensure perfect type compliance
-    ALTER TABLE job_matches DROP COLUMN IF EXISTS matching_skills;
-    ALTER TABLE job_matches DROP COLUMN IF EXISTS missing_skills;
-    ALTER TABLE job_matches ADD COLUMN matching_skills text[];
-    ALTER TABLE job_matches ADD COLUMN missing_skills text[];
-
-    -- 2. Correct audit_logs schema (Rename details back to metadata if it exists)
     DO $$ 
+    DECLARE 
+        r RECORD;
     BEGIN
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_logs' AND column_name='details') THEN
-            ALTER TABLE audit_logs RENAME COLUMN details TO metadata;
-        END IF;
+        -- 1. DROP ALL FOREIGN KEY CONSTRAINTS across the entire database
+        -- This is necessary to change ID types that are referenced by other tables (like resume_embeddings)
+        FOR r IN (
+            SELECT conname, relname 
+            FROM pg_constraint c 
+            JOIN pg_class t ON c.conrelid = t.oid 
+            WHERE contype = 'f'
+        ) LOOP
+            EXECUTE 'ALTER TABLE ' || quote_ident(r.relname) || ' DROP CONSTRAINT ' || quote_ident(r.conname);
+        END LOOP;
+
+        -- 2. ALTER COLUMNS TO TEXT
+        -- Users & Authors
+        ALTER TABLE IF EXISTS users ALTER COLUMN id TYPE TEXT USING id::text;
+        
+        -- Resumes & Content
+        ALTER TABLE IF EXISTS resumes ALTER COLUMN id TYPE TEXT USING id::text;
+        ALTER TABLE IF EXISTS resumes ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+        
+        -- Embeddings
+        ALTER TABLE IF EXISTS resume_embeddings ALTER COLUMN id TYPE TEXT USING id::text;
+        ALTER TABLE IF EXISTS resume_embeddings ALTER COLUMN resume_id TYPE TEXT USING resume_id::text;
+
+        -- Job Matches
+        ALTER TABLE IF EXISTS job_matches ALTER COLUMN id TYPE TEXT USING id::text;
+        ALTER TABLE IF EXISTS job_matches ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+        ALTER TABLE IF EXISTS job_matches ALTER COLUMN resume_id TYPE TEXT USING resume_id::text;
+
+        -- Job Descriptions
+        ALTER TABLE IF EXISTS job_descriptions ALTER COLUMN id TYPE TEXT USING id::text;
+        ALTER TABLE IF EXISTS job_descriptions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+
+        -- Cover Letters
+        ALTER TABLE IF EXISTS cover_letters ALTER COLUMN id TYPE TEXT USING id::text;
+        ALTER TABLE IF EXISTS cover_letters ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+        ALTER TABLE IF EXISTS cover_letters ALTER COLUMN resume_id TYPE TEXT USING resume_id::text;
+
+        -- Logs
+        ALTER TABLE IF EXISTS audit_logs ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+
+        -- 3. Defaults & Schema Corrections
+        ALTER TABLE IF EXISTS job_matches DROP COLUMN IF EXISTS matching_skills;
+        ALTER TABLE IF EXISTS job_matches DROP COLUMN IF EXISTS missing_skills;
+        ALTER TABLE IF EXISTS job_matches ADD COLUMN IF NOT EXISTS matching_skills text[];
+        ALTER TABLE IF EXISTS job_matches ADD COLUMN IF NOT EXISTS missing_skills text[];
+    
+        ALTER TABLE IF EXISTS resumes ALTER COLUMN title SET DEFAULT 'Untitled Resume';
+        ALTER TABLE IF EXISTS resumes ALTER COLUMN status SET DEFAULT 'draft';
     END $$;
-
-    -- 3. Ensure resumes table has defaults
-    ALTER TABLE resumes ALTER COLUMN title SET DEFAULT 'Untitled Resume';
-    ALTER TABLE resumes ALTER COLUMN status SET DEFAULT 'draft';
-
-    -- 4. CONVERT UUID COLUMNS TO TEXT FOR FIREBASE SUPPORT
-    -- Drop constraints first
-    ALTER TABLE IF EXISTS resumes DROP CONSTRAINT IF EXISTS resumes_user_id_fkey;
-    ALTER TABLE IF EXISTS job_matches DROP CONSTRAINT IF EXISTS job_matches_user_id_fkey;
-    ALTER TABLE IF EXISTS job_matches DROP CONSTRAINT IF EXISTS job_matches_resume_id_fkey;
-    ALTER TABLE IF EXISTS cover_letters DROP CONSTRAINT IF EXISTS cover_letters_user_id_fkey;
-    ALTER TABLE IF EXISTS cover_letters DROP CONSTRAINT IF EXISTS cover_letters_resume_id_fkey;
-    ALTER TABLE IF EXISTS job_descriptions DROP CONSTRAINT IF EXISTS job_descriptions_user_id_fkey;
-    ALTER TABLE IF EXISTS audit_logs DROP CONSTRAINT IF EXISTS audit_logs_user_id_fkey;
-
-    -- Alter column types
-    ALTER TABLE IF EXISTS users ALTER COLUMN id TYPE TEXT USING id::text;
-    ALTER TABLE IF EXISTS resumes ALTER COLUMN id TYPE TEXT USING id::text;
-    ALTER TABLE IF EXISTS resumes ALTER COLUMN user_id TYPE TEXT USING user_id::text;
-    ALTER TABLE IF EXISTS job_matches ALTER COLUMN id TYPE TEXT USING id::text;
-    ALTER TABLE IF EXISTS job_matches ALTER COLUMN user_id TYPE TEXT USING user_id::text;
-    ALTER TABLE IF EXISTS job_matches ALTER COLUMN resume_id TYPE TEXT USING resume_id::text;
-    ALTER TABLE IF EXISTS job_descriptions ALTER COLUMN id TYPE TEXT USING id::text;
-    ALTER TABLE IF EXISTS job_descriptions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
-    ALTER TABLE IF EXISTS cover_letters ALTER COLUMN id TYPE TEXT USING id::text;
-    ALTER TABLE IF EXISTS cover_letters ALTER COLUMN user_id TYPE TEXT USING user_id::text;
-    ALTER TABLE IF EXISTS cover_letters ALTER COLUMN resume_id TYPE TEXT USING resume_id::text;
-    ALTER TABLE IF EXISTS audit_logs ALTER COLUMN user_id TYPE TEXT USING user_id::text;
     """
     
     try:

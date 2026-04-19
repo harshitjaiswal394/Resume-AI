@@ -401,9 +401,13 @@ export default function AIResumeBuilder() {
     setIsOptimizing(true);
     toast.promise(
       (async () => {
-        const response = await fetch(`${backendUrl}/api/builder/optimize/-experience`, {
+        const idToken = await auth.currentUser?.getIdToken();
+        const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
           body: JSON.stringify({
             experience: data.experience[index],
             target_role: discovery.role,
@@ -434,9 +438,13 @@ export default function AIResumeBuilder() {
   const handleGenerateSummary = async () => {
     setIsOptimizing(true);
     try {
+      const idToken = await auth.currentUser?.getIdToken();
       const response = await fetch(`${backendUrl}/api/builder/generate-summary`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify({
           profileData: data,
           targetRole: discovery.role
@@ -466,9 +474,13 @@ export default function AIResumeBuilder() {
     setIsOptimizing(true);
     toast.promise(
       (async () => {
-        const response = await fetch(`${backendUrl}/api/builder/optimize/-experience`, {
+        const idToken = await auth.currentUser?.getIdToken();
+        const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
           // The backend expects an experience object with a description array
           body: JSON.stringify({
             experience: { ...data.experience[expIdx], description: [bullet] },

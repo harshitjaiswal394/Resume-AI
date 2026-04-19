@@ -265,7 +265,7 @@ export default function LandingPage() {
         setActiveResumeId(resumeId);
 
         // 2. Persist the analysis data
-        await fetch(`${backendUrl}/api/save-analysis`, {
+        await fetch(`${backendUrl}/api/resume/save-analysis`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -281,7 +281,7 @@ export default function LandingPage() {
       if (resumeId !== 'guest') {
         const idToken = await auth.currentUser?.getIdToken();
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
-        const tailorRes = await fetch(`${backendUrl}/api/resumes/tailor`, {
+        const tailorRes = await fetch(`${backendUrl}/api/resume/tailor`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',

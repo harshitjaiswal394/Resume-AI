@@ -83,7 +83,7 @@ export default function Dashboard() {
     setOptimizingIndex(`${expIndex}-${bulletIndex}`);
     try {
       const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch(`${backendUrl}/api/resume/optimize-experience`, {
+      const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
