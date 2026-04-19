@@ -248,8 +248,13 @@ class AIService:
 
     async def generate_smart_cover_letter(self, resume_data: Dict[str, Any], jd_text: str) -> str:
         """Generates a tailored letter matching candidate skills with JD using hierarchical fallback."""
+        system_prompt = (
+            "You are a world-class professional recruiter. Generate a tailored cover letter (150-200 words). "
+            "Return ONLY the letter text itself. Do not include any internal monologue, counting, drafting process, "
+            "or conversational filler. Start exactly with 'Dear Hiring Manager,' and end with the candidate's name."
+        )
         prompt = f"""
-        You are a professional recruiter. Generate a tailored cover letter (150-200 words).
+        Generate a tailored cover letter based on the following candidate data and job description.
         
         CANDIDATE DATA:
         {json.dumps(resume_data)}
@@ -257,14 +262,15 @@ class AIService:
         JOB DESCRIPTION:
         {jd_text[:5000]}
         
-        Requirements:
-        - Professional tone.
-        - Highlight impact and specific matching skills.
-        - No generic content.
-        - Return ONLY the letter body text.
+        STRICT REQUIREMENTS:
+        - Word count: 150-200 words.
+        - Tone: Professional and impactful.
+        - Content: Highlight matching skills and specific achievements from the candidate data. No generic filler.
+        - Format: Start with 'Dear Hiring Manager,' and end with 'Sincerely, [Candidate Name]'.
+        - Output: ONE BLOCK OF TEXT ONLY. NO PREAMBLE. NO REASONING.
         """
         
-        content = await self._call_ai_with_fallback(prompt, temperature=0.7)
+        content = await self._call_ai_with_fallback(prompt, system_prompt=system_prompt, temperature=0.7)
         return content or "Professional Cover Letter: [Generation error]"
 
 
