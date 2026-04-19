@@ -8,6 +8,10 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -311,10 +315,22 @@ resource "google_compute_url_map" "url_map" {
   }
 }
 
+resource "random_id" "cert_suffix" {
+  byte_length = 4
+  keepers = {
+    # Re-generate if domains change
+    domains = var.environment == "prod" ? "resumatches.com,www.resumatches.com" : "staging.resumatches.com,www.staging.resumatches.com"
+  }
+}
+
 resource "google_compute_managed_ssl_certificate" "cert" {
-  name = "resumatch-cert-${var.environment}"
+  name = "resumatch-cert-${var.environment}-${random_id.cert_suffix.hex}"
   managed {
     domains = var.environment == "prod" ? ["resumatches.com", "www.resumatches.com"] : ["staging.resumatches.com", "www.staging.resumatches.com"]
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
