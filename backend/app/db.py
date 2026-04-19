@@ -109,13 +109,9 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
     matches = data.get("matches", [])
     raw_text = data.get("raw_text", "")
     
-    # 0. Validate UUID status to prevent Postgres crash on "guest" string
-    import uuid
-    try:
-        uuid.UUID(str(user_id))
-        uuid.UUID(str(resume_id))
-    except ValueError:
-        logger.warning(f"Skipping persistence: invalid UUID structure for user({user_id}) or resume({resume_id})")
+    # 0. Allow Firebase IDs and modular IDs (no longer strictly UUID)
+    if not user_id or user_id == "guest" or not resume_id or resume_id == "guest":
+        logger.warning(f"Skipping persistence: invalid user_id({user_id}) or resume_id({resume_id})")
         return False
 
     with engine.begin() as conn:

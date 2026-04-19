@@ -30,6 +30,30 @@ def run_migration():
     -- 3. Ensure resumes table has defaults
     ALTER TABLE resumes ALTER COLUMN title SET DEFAULT 'Untitled Resume';
     ALTER TABLE resumes ALTER COLUMN status SET DEFAULT 'draft';
+
+    -- 4. CONVERT UUID COLUMNS TO TEXT FOR FIREBASE SUPPORT
+    -- Drop constraints first
+    ALTER TABLE IF EXISTS resumes DROP CONSTRAINT IF EXISTS resumes_user_id_fkey;
+    ALTER TABLE IF EXISTS job_matches DROP CONSTRAINT IF EXISTS job_matches_user_id_fkey;
+    ALTER TABLE IF EXISTS job_matches DROP CONSTRAINT IF EXISTS job_matches_resume_id_fkey;
+    ALTER TABLE IF EXISTS cover_letters DROP CONSTRAINT IF EXISTS cover_letters_user_id_fkey;
+    ALTER TABLE IF EXISTS cover_letters DROP CONSTRAINT IF EXISTS cover_letters_resume_id_fkey;
+    ALTER TABLE IF EXISTS job_descriptions DROP CONSTRAINT IF EXISTS job_descriptions_user_id_fkey;
+    ALTER TABLE IF EXISTS audit_logs DROP CONSTRAINT IF EXISTS audit_logs_user_id_fkey;
+
+    -- Alter column types
+    ALTER TABLE IF EXISTS users ALTER COLUMN id TYPE TEXT USING id::text;
+    ALTER TABLE IF EXISTS resumes ALTER COLUMN id TYPE TEXT USING id::text;
+    ALTER TABLE IF EXISTS resumes ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+    ALTER TABLE IF EXISTS job_matches ALTER COLUMN id TYPE TEXT USING id::text;
+    ALTER TABLE IF EXISTS job_matches ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+    ALTER TABLE IF EXISTS job_matches ALTER COLUMN resume_id TYPE TEXT USING resume_id::text;
+    ALTER TABLE IF EXISTS job_descriptions ALTER COLUMN id TYPE TEXT USING id::text;
+    ALTER TABLE IF EXISTS job_descriptions ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+    ALTER TABLE IF EXISTS cover_letters ALTER COLUMN id TYPE TEXT USING id::text;
+    ALTER TABLE IF EXISTS cover_letters ALTER COLUMN user_id TYPE TEXT USING user_id::text;
+    ALTER TABLE IF EXISTS cover_letters ALTER COLUMN resume_id TYPE TEXT USING resume_id::text;
+    ALTER TABLE IF EXISTS audit_logs ALTER COLUMN user_id TYPE TEXT USING user_id::text;
     """
     
     try:
