@@ -276,7 +276,7 @@ resource "google_compute_url_map" "url_map" {
   default_service = google_compute_backend_service.frontend_service.id
 
   host_rule {
-    hosts        = [var.environment == "prod" ? "resumatches.com" : "staging.resumatches.com"]
+    hosts        = var.environment == "prod" ? ["resumatches.com", "www.resumatches.com"] : ["staging.resumatches.com", "www.staging.resumatches.com"]
     path_matcher = "allpaths"
   }
 
@@ -294,7 +294,7 @@ resource "google_compute_url_map" "url_map" {
 resource "google_compute_managed_ssl_certificate" "cert" {
   name = "resumatch-cert-${var.environment}"
   managed {
-    domains = [var.environment == "prod" ? "resumatches.com" : "staging.resumatches.com"]
+    domains = var.environment == "prod" ? ["resumatches.com", "www.resumatches.com"] : ["staging.resumatches.com", "www.staging.resumatches.com"]
   }
 }
 
@@ -320,6 +320,14 @@ data "google_dns_managed_zone" "primary" {
 
 resource "google_dns_record_set" "root" {
   name         = var.environment == "prod" ? data.google_dns_managed_zone.primary.dns_name : "staging.${data.google_dns_managed_zone.primary.dns_name}"
+  managed_zone = data.google_dns_managed_zone.primary.name
+  type         = "A"
+  ttl          = 300
+  rrdatas      = [google_compute_global_address.lb_ip.address]
+}
+
+resource "google_dns_record_set" "www" {
+  name         = var.environment == "prod" ? "www.${data.google_dns_managed_zone.primary.dns_name}" : "www.staging.${data.google_dns_managed_zone.primary.dns_name}"
   managed_zone = data.google_dns_managed_zone.primary.name
   type         = "A"
   ttl          = 300
