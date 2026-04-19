@@ -201,12 +201,32 @@ resource "google_cloud_run_v2_service" "frontend" {
         value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
       }
       env {
-        name  = "GCP_PROJECT_ID"
+        name  = "NEXT_PUBLIC_GCP_PROJECT_ID"
         value = var.gcp_project_id
       }
       env {
-        name  = "FIREBASE_PROJECT_ID"
+        name  = "NEXT_PUBLIC_FIREBASE_PROJECT_ID"
         value = var.firebase_project_id
+      }
+      env {
+        name  = "NEXT_PUBLIC_FIREBASE_API_KEY"
+        value = var.firebase_api_key
+      }
+      env {
+        name  = "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"
+        value = var.firebase_auth_domain
+      }
+      env {
+        name  = "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"
+        value = var.firebase_storage_bucket
+      }
+      env {
+        name  = "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"
+        value = var.firebase_messaging_sender_id
+      }
+      env {
+        name  = "NEXT_PUBLIC_FIREBASE_APP_ID"
+        value = var.firebase_app_id
       }
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"

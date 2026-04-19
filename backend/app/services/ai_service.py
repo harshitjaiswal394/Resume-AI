@@ -340,30 +340,25 @@ class AIService:
 
     async def generate_smart_summary(self, profile_data: Dict[str, Any], target_role: str) -> str:
         """Generates a high-impact professional summary."""
+        system_prompt = (
+            "You are a world-class professional resume writer. Generate a compelling 3-sentence professional summary. "
+            "Return ONLY the summary text. Do not include any internal monologue, counting, drafting process, "
+            "or conversational filler."
+        )
         prompt = f"""
-        Generate a compelling 3-sentence professional summary for a {target_role} position.
-        Candidate Data: {json.dumps(profile_data)}
+        Generate a compelling 3-sentence professional summary for a {target_role} position based on this data:
+        {json.dumps(profile_data)}
         
-        Guidelines:
-        - Sentence 1: Hard-hitting intro with years of specific experience.
-        - Sentence 2: Key technical achievement or specialization.
-        - Sentence 3: Value proposition/Goal.
+        STRICT GUIDELINES:
+        1. Sentence 1: Hard-hitting intro with years of specific experience and primary job title.
+        2. Sentence 2: Key technical achievement, tool specialization, or specific domain impact.
+        3. Sentence 3: Strong value proposition and career goal.
         - Tone: Executive and professional.
-        Return ONLY the summary text.
+        - Format: ONE BLOCK OF TEXT ONLY. NO PREAMBLE. NO REASONING.
         """
-        try:
-            from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
-                model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=512
-            )
-            content = self._get_completion_content(response)
-            return content.strip().strip('"') if content else "Highly motivated professional..."
-        except Exception as e:
-            logger.error(f"Summary generation failed: {str(e)}")
-            return "Experienced professional with a strong background in technology."
+        
+        content = await self._call_ai_with_fallback(prompt, system_prompt=system_prompt, temperature=0.7)
+        return content or "Experienced professional with a strong track record of success in technology and leadership."
 
     async def parse_job_url(self, html_content: str) -> Dict[str, Any]:
         """Extracts structured JD data from raw HTML using Nemotron-Nano."""

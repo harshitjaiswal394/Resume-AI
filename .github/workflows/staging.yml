@@ -52,6 +52,11 @@ jobs:
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
             -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+            -var="firebase_api_key=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" \
+            -var="firebase_auth_domain=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
+            -var="firebase_storage_bucket=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
+            -var="firebase_messaging_sender_id=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
+            -var="firebase_app_id=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
             -var="image_tag=${{ github.sha }}"
         working-directory: ./terraform
 
@@ -113,6 +118,11 @@ jobs:
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
             -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+            -var="firebase_api_key=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" \
+            -var="firebase_auth_domain=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
+            -var="firebase_storage_bucket=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
+            -var="firebase_messaging_sender_id=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
+            -var="firebase_app_id=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
             -var="image_tag=${{ github.sha }}"
         working-directory: ./terraform
 
