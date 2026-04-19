@@ -37,6 +37,7 @@ async def parse_job_url(
 
 @router.post("/optimize-experience")
 @router.post("/optimize/experience")
+@router.post("/optimize/-experience")
 async def optimize_experience(
     request: OptimizeExperienceRequest,
     user_id: str = Depends(get_current_user)
