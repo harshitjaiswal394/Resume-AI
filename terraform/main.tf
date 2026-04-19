@@ -138,11 +138,11 @@ resource "google_cloud_run_v2_service" "backend" {
       }
       env {
         name  = "DATABASE_URL"
-        value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
+        value = var.database_url
       }
       env {
         name  = "GCP_DATABASE_URL"
-        value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
+        value = var.database_url
       }
       # Other envs...
       env {
@@ -202,7 +202,7 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
       env {
         name  = "DATABASE_URL"
-        value = "postgresql://resumatch_app:change-me-via-secret@${google_sql_database_instance.db_instance.private_ip_address}:5432/resumatch_${var.environment}"
+        value = var.database_url
       }
       env {
         name  = "NEXT_PUBLIC_GCP_PROJECT_ID"
