@@ -50,10 +50,18 @@ def shutdown_event():
         scheduler.shutdown()
         logger.info("Background scheduler shut down.")
 
-# Configure CORS
+# Configure CORS - Use specific origins for credentials support
+ALLOWED_ORIGINS = [
+    "https://staging.resumatches.com",
+    "https://www.staging.resumatches.com",
+    "https://resumatches.com",
+    "https://www.resumatches.com",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

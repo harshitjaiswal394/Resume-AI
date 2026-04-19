@@ -51,7 +51,7 @@ class ResumeCreateRequest(BaseModel):
     years_of_experience: Optional[int] = 0
     phone_number: Optional[str] = ""
     summary: Optional[str] = ""
-    skills: List[str] = []
+    skills: List[Any] = []
     experience: List[ExperienceItem] = []
     education: List[EducationItem] = []
     projects: List[ProjectItem] = []
@@ -70,7 +70,7 @@ class ResumeUpdateRequest(BaseModel):
     title: Optional[str] = None
     phone_number: Optional[str] = None
     summary: Optional[str] = None
-    skills: Optional[List[str]] = None
+    skills: Optional[List[Any]] = None
     experience: Optional[List[ExperienceItem]] = None
     education: Optional[List[EducationItem]] = None
     projects: Optional[List[ProjectItem]] = None

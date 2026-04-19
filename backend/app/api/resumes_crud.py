@@ -8,7 +8,7 @@ import uuid
 import json
 import logging
 
-router = APIRouter(redirect_slashes=False)
+router = APIRouter()
 logger = logging.getLogger("resumatch-api.resumes")
 
 @router.get("/")
@@ -152,10 +152,12 @@ async def update_job_match(resume_id: str, job_id: str, payload: Dict[str, Any] 
     """Updates a job match (e.g., marks it as saved)."""
     try:
         with engine.begin() as conn:
-            conn.execute(
-                text("UPDATE job_matches SET is_saved = :saved WHERE id = :jid AND resume_id = :rid"),
-                {"saved": payload.get("is_saved", False), "jid": job_id, "rid": resume_id}
+            result = conn.execute(
+                text("UPDATE job_matches SET is_saved = :saved WHERE id = :jid AND resume_id = :rid AND resume_id IN (SELECT id FROM resumes WHERE user_id = :uid)"),
+                {"saved": payload.get("is_saved", False), "jid": job_id, "rid": resume_id, "uid": user_id}
             )
+            if result.rowcount == 0:
+                raise HTTPException(status_code=403, detail="Unauthorized to update this job match")
         return {"success": True}
     except Exception as e:
         logger.error(f"DATABASE_ERROR in update_job_match: {str(e)}")
@@ -200,7 +202,16 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
     
     try:
         with engine.begin() as conn:
-            conn.execute(text(query), params)
+            result = conn.execute(text(query), params)
+            if result.rowcount == 0:
+                # If no rows were updated, check if it's because it doesn't exist or because of ownership
+                check_query = text("SELECT id, user_id FROM resumes WHERE id = :id")
+                rows = conn.execute(check_query, {"id": resume_id}).fetchall()
+                if not rows:
+                    raise HTTPException(status_code=404, detail="Resume not found")
+                else:
+                    raise HTTPException(status_code=403, detail="Unauthorized to update this resume")
+            
             logger.info(f"[DB-FIX] Successfully updated resume {resume_id}")
     except Exception as e:
         logger.error(f"DATABASE_ERROR in update_resume: {str(e)}")
