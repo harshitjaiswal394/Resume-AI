@@ -264,6 +264,9 @@ async def save_analysis(
             raise HTTPException(status_code=500, detail="Persistence failed")
         return {"success": True}
     except Exception as e:
+        logger.error(f"Save analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @resume_router.delete("/storage/resumes/{target_user_id}")
 async def cleanup_user_storage(target_user_id: str, user_id: str = Depends(get_current_user)):
     """Cleans up GCP storage for the specified user (validated against token)."""

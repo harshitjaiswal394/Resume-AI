@@ -351,7 +351,7 @@ export default function Dashboard() {
       // 0. Single-Resume Policy: Wipe database and storage instantly
       const idToken = await auth.currentUser?.getIdToken();
       await cleanupUserStorage();
-      await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
+      await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
@@ -486,7 +486,7 @@ export default function Dashboard() {
     // Single-Resume Policy: Wipe database and storage instantly
     const idToken = await auth.currentUser?.getIdToken();
     await cleanupUserStorage();
-    await fetch(`${backendUrl}/api/resumes?user_id=${user!.uid}`, { 
+    await fetch(`${backendUrl}/api/resumes/?user_id=${user!.uid}`, { 
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${idToken}` }
     });
