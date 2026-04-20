@@ -16,7 +16,6 @@ permissions:
 jobs:
   terraform-destroy:
     name: "Terraform Destroy (Staging)"
-    if: ${{ github.event.inputs.confirm_destroy == 'DESTROY-STAGING' }}
     runs-on: ubuntu-latest
     environment: dev
     
