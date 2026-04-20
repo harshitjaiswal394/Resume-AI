@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import uuid
@@ -30,6 +30,13 @@ class CertificationItem(BaseModel):
     name: Optional[str] = ""
     issuer: Optional[str] = ""
     year: Optional[str] = ""
+
+    @model_validator(mode='before')
+    @classmethod
+    def validate_certification(cls, data: Any) -> Any:
+        if isinstance(data, str):
+            return {"name": data, "issuer": "", "year": ""}
+        return data
 
 class LanguageItem(BaseModel):
     language: Optional[str] = ""

@@ -286,7 +286,9 @@ export default function AIResumeBuilder() {
         experience: data.experience,
         education: data.education,
         projects: data.projects,
-        certifications: data.certifications,
+        certifications: (data.certifications || []).map(c => 
+          typeof c === 'string' ? { name: c, issuer: '', year: '' } : c
+        ),
         languages: data.languages,
         internships: data.internships,
         achievements: data.achievements,
@@ -502,7 +504,9 @@ export default function AIResumeBuilder() {
         experience: data.experience,
         education: data.education,
         projects: data.projects,
-        certifications: data.certifications,
+        certifications: (data.certifications || []).map(c => 
+          typeof c === 'string' ? { name: c, issuer: '', year: '' } : c
+        ),
         languages: data.languages,
         internships: data.internships,
         achievements: data.achievements,
