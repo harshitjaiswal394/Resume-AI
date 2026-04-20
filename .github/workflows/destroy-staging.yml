@@ -4,12 +4,7 @@ on:
   push:
     branches: [ "staging" ]
   workflow_dispatch:
-    inputs:
-      confirm_destroy:
-        description: 'Type "DESTROY-STAGING" to confirm'
-        required: true
-        type: string
-
+    
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-east1
