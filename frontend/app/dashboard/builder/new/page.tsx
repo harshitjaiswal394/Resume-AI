@@ -540,11 +540,16 @@ export default function AIResumeBuilder() {
       console.error('Save error:', e);
       let errorMsg = e.message || 'Server error';
       
-      // Handle FastAPI validation errors (422) if they come back as an array of objects
-      if (Array.isArray(e.message)) {
-        errorMsg = e.message.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
-      } else if (typeof e.message === 'object' && e.message !== null) {
-        errorMsg = JSON.stringify(e.message);
+      // Use details if present (populated by handleSave from result.detail)
+      const details = e.details || (Array.isArray(e.message) ? e.message : null);
+      
+      if (details && Array.isArray(details)) {
+        errorMsg = details.map((err: any) => {
+          const field = err.loc ? err.loc.join('.') : 'unknown';
+          return `${field}: ${err.msg}`;
+        }).join(', ');
+      } else if (typeof details === 'object' && details !== null) {
+        errorMsg = JSON.stringify(details);
       }
       
       toast.error(`Save failed: ${errorMsg}. Progress kept locally.`);
