@@ -536,8 +536,9 @@ export default function AIResumeBuilder() {
         }
         toast.success(isUpdate ? 'Progress synced to cloud' : 'Resume saved to cloud dashboard');
       } else {
-        const error = new Error('Validation failed');
+        const error = new Error(result.detail || `Server error (${response.status})`);
         (error as any).details = result.detail;
+        (error as any).status = response.status;
         throw error;
       }
     } catch (e: any) {
