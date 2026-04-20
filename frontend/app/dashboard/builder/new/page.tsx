@@ -532,11 +532,22 @@ export default function AIResumeBuilder() {
         }
         toast.success(isUpdate ? 'Progress synced to cloud' : 'Resume saved to cloud dashboard');
       } else {
-        throw new Error(result.detail || 'Failed to sync');
+        const error = new Error('Validation failed');
+        (error as any).details = result.detail;
+        throw error;
       }
     } catch (e: any) {
       console.error('Save error:', e);
-      toast.error(`Save failed: ${e.message || 'Server error'}. Progress kept locally.`);
+      let errorMsg = e.message || 'Server error';
+      
+      // Handle FastAPI validation errors (422) if they come back as an array of objects
+      if (Array.isArray(e.message)) {
+        errorMsg = e.message.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+      } else if (typeof e.message === 'object' && e.message !== null) {
+        errorMsg = JSON.stringify(e.message);
+      }
+      
+      toast.error(`Save failed: ${errorMsg}. Progress kept locally.`);
     } finally {
       setIsSaving(false);
     }
