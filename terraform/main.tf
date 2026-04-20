@@ -230,7 +230,7 @@ resource "google_compute_url_map" "url_map" {
 }
 
 resource "google_compute_managed_ssl_certificate" "cert" {
-  name = "resumatch-cert-v2"
+  name = "resumatch-cert-v3"
   managed {
     domains = ["resumatches.com", "www.resumatches.com"]
   }
