@@ -263,8 +263,10 @@ class AIService:
             ]
         }
 
-        prompt = f"""
-        You are a professional recruiter. Generate a tailored cover letter (150-200 words).
+        system_prompt = "You are a professional, high-impact cover letter generator. Your goal is to return ONLY the final text of the cover letter. Absolutely no preamble, no word counts, no internal reasoning, and no commentary. Start directly with the greeting."
+        
+        user_prompt = f"""
+        Generate a tailored cover letter (150-200 words) using the candidate and job details below.
         
         CANDIDATE DATA:
         {json.dumps(pruned_resume)}
@@ -273,31 +275,37 @@ class AIService:
         {jd_text[:3000]}
         
         Requirements:
-        - Professional tone.
-        - Highlight impact and specific matching skills.
-        - No generic content.
-        - Return ONLY the letter body text.
+        - Professional and concise tone.
+        - Highlight specific achievements that match the JD.
+        - Output ONLY the final letter text.
         """
         
         try:
+            start_time = time.time()
             from app.services.nvidia_service import nvidia_service
             response = nvidia_service.client.chat.completions.create(
                 model="meta/llama-3.1-8b-instruct",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.1, # Extremely low temp for strict instruction adherence
                 max_tokens=1000
             )
             content = self._get_completion_content(response)
+            latency = time.time() - start_time
+            
             if content:
-                logger.info("Fast model (8B) used for cover letter generation")
-                return content.strip().strip('"').strip('`')
+                logger.info(f"AI_COVER_LETTER_SUCCESS - Model: 8B - Latency: {latency:.2f}s")
+                return content.strip().strip('"').strip('`').strip()
             
             # Fallback to standard pipeline if 8B returns nothing
-            content = await self._call_ai_with_fallback(prompt, temperature=0.7)
+            content = await self._call_ai_with_fallback(user_prompt, system_prompt=system_prompt, temperature=0.1)
             return content or "Professional Cover Letter: [Generation error]"
         except Exception as e:
-            logger.warning(f"Fast model generation failed: {str(e)}. Falling back to reasoning pipeline...")
-            content = await self._call_ai_with_fallback(prompt, temperature=0.7)
+            latency = time.time() - start_time
+            logger.warning(f"AI_COVER_LETTER_FAST_FAIL - Latency: {latency:.2f}s - Error: {str(e)}. Falling back...")
+            content = await self._call_ai_with_fallback(user_prompt, system_prompt=system_prompt, temperature=0.1)
             return content or "Professional Cover Letter: [Generation error fallback]"
 
 
