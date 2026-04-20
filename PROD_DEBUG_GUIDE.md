@@ -4,7 +4,7 @@ This guide provides a comprehensive list of commands for troubleshooting traffic
 
 ---
 
-## ðŸ›°ï¸ Stage 1: DNS & SSL (Entry Point)
+## Stage 1: DNS & SSL (Entry Point)
 Traffic must resolve to your Load Balancer and establish an HTTPS handshake.
 
 ### Check Nameserver Propagation
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -Command "gcloud compute ssl-certificates des
 
 ---
 
-## ðŸš¦ Stage 2: Load Balancer & Routing
+## Stage 2: Load Balancer & Routing
 The URL-Map must correctly route `/api` traffic to the backend.
 
 ### List URL Map Rules
@@ -44,7 +44,7 @@ powershell -ExecutionPolicy Bypass -Command "gcloud compute backend-services get
 
 ---
 
-## ðŸ“¦ Stage 3: Cloud Run Inspection
+## Stage 3: Cloud Run Inspection
 Validate service configuration, environment variables, and IAM roles.
 
 ### Check Environment Variables
@@ -67,7 +67,7 @@ powershell -ExecutionPolicy Bypass -Command "gcloud run services list --region u
 
 ---
 
-## ðŸ§ª Stage 4: Live Traffic Testing
+## Stage 4: Live Traffic Testing
 Use `curl` to simulate requests and identify where they fail.
 
 ### Test Backend Directly
@@ -109,7 +109,7 @@ powershell -ExecutionPolicy Bypass -Command "gcloud logging read 'resource.type=
 
 ---
 
-## ðŸ’¡ Troubleshooting Tips
+## Troubleshooting Tips
 - **DNS Cache**: If `nslookup` shows old results, try `ipconfig /flushdns`.
 - **Cert Delays**: Managed SSL certificates take 30-60 minutes to go `ACTIVE` after DNS is corrected.
 - **Trace IDs**: Look for `x-cloud-trace-context` in headers to track a single request across services.

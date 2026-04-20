@@ -247,25 +247,66 @@ class AIService:
             return "Professional Cover Letter: [Generation error, original text preserved]"
 
     async def generate_smart_cover_letter(self, resume_data: Dict[str, Any], jd_text: str) -> str:
-        """Generates a tailored letter matching candidate skills with JD using hierarchical fallback."""
-        prompt = f"""
-        You are a professional recruiter. Generate a tailored cover letter (150-200 words).
+        """Generates a tailored letter matching candidate skills with JD using 8B model for speed."""
+        
+        # Optimization: Prune payload to only include essentials (fullName, summary, top skills, top 2 exp)
+        pruned_resume = {
+            "fullName": resume_data.get("fullName", "Candidate"),
+            "summary": resume_data.get("summary", ""),
+            "skills": resume_data.get("skills", [])[:15],
+            "experience": [
+                {
+                    "title": exp.get("title", ""),
+                    "company": exp.get("company", ""),
+                    "description": exp.get("description", [])[:3]
+                } for exp in resume_data.get("experience", [])[:2]
+            ]
+        }
+
+        system_prompt = "You are a professional, high-impact cover letter generator. Your goal is to return ONLY the final text of the cover letter. Absolutely no preamble, no word counts, no internal reasoning, and no commentary. Start directly with the greeting."
+        
+        user_prompt = f"""
+        Generate a tailored cover letter (150-200 words) using the candidate and job details below.
         
         CANDIDATE DATA:
-        {json.dumps(resume_data)}
+        {json.dumps(pruned_resume)}
         
         JOB DESCRIPTION:
-        {jd_text[:5000]}
+        {jd_text[:3000]}
         
         Requirements:
-        - Professional tone.
-        - Highlight impact and specific matching skills.
-        - No generic content.
-        - Return ONLY the letter body text.
+        - Professional and concise tone.
+        - Highlight specific achievements that match the JD.
+        - Output ONLY the final letter text.
         """
         
-        content = await self._call_ai_with_fallback(prompt, temperature=0.7)
-        return content or "Professional Cover Letter: [Generation error]"
+        try:
+            start_time = time.time()
+            from app.services.nvidia_service import nvidia_service
+            response = nvidia_service.client.chat.completions.create(
+                model="meta/llama-3.1-8b-instruct",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.1, # Extremely low temp for strict instruction adherence
+                max_tokens=1000
+            )
+            content = self._get_completion_content(response)
+            latency = time.time() - start_time
+            
+            if content:
+                logger.info(f"AI_COVER_LETTER_SUCCESS - Model: 8B - Latency: {latency:.2f}s")
+                return content.strip().strip('"').strip('`').strip()
+            
+            # Fallback to standard pipeline if 8B returns nothing
+            content = await self._call_ai_with_fallback(user_prompt, system_prompt=system_prompt, temperature=0.1)
+            return content or "Professional Cover Letter: [Generation error]"
+        except Exception as e:
+            latency = time.time() - start_time
+            logger.warning(f"AI_COVER_LETTER_FAST_FAIL - Latency: {latency:.2f}s - Error: {str(e)}. Falling back...")
+            content = await self._call_ai_with_fallback(user_prompt, system_prompt=system_prompt, temperature=0.1)
+            return content or "Professional Cover Letter: [Generation error fallback]"
 
 
     async def clean_job_description(self, raw_text: str) -> str:
@@ -333,28 +374,38 @@ class AIService:
         return experience
 
     async def generate_smart_summary(self, profile_data: Dict[str, Any], target_role: str) -> str:
-        """Generates a high-impact professional summary."""
-        prompt = f"""
-        Generate a compelling 3-sentence professional summary for a {target_role} position.
-        Candidate Data: {json.dumps(profile_data)}
+        """Generates a high-impact professional summary using 70B model for quality."""
+        
+        system_prompt = "You are a professional resume writer specializing in high-impact, ATS-optimized summaries. Return ONLY the summary text. No preamble, no word counts, and no reasoning. Ensure every sentence is complete and professional."
+        
+        user_prompt = f"""
+        Generate a compelling, impact-focused professional summary (2-3 lines) for a {target_role} position.
+        
+        CANDIDATE DATA:
+        {json.dumps(profile_data)}
         
         Guidelines:
-        - Sentence 1: Hard-hitting intro with years of specific experience.
-        - Sentence 2: Key technical achievement or specialization.
-        - Sentence 3: Value proposition/Goal.
-        - Tone: Executive and professional.
-        Return ONLY the summary text.
+        - Use specific achievements and quantifiable results from the experience data.
+        - Start with a hard-hitting value proposition.
+        - Return ONLY the professional summary as finished, cohesive sentences.
         """
+        
         try:
             from app.services.nvidia_service import nvidia_service
             response = nvidia_service.client.chat.completions.create(
-                model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=512
+                model="meta/llama-3.1-70b-instruct",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=600
             )
             content = self._get_completion_content(response)
-            return content.strip().strip('"') if content else "Highly motivated professional..."
+            if content:
+                return content.strip().strip('"').strip('`').strip()
+            
+            return "Professional summary: [Generation failed]"
         except Exception as e:
             logger.error(f"Summary generation failed: {str(e)}")
             return "Experienced professional with a strong background in technology."

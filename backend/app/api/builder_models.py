@@ -1,18 +1,18 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import uuid
 
 class ExperienceItem(BaseModel):
-    title: str
-    company: str
+    title: Optional[str] = ""
+    company: Optional[str] = ""
     location: Optional[str] = ""
     duration: Optional[str] = ""
-    description: List[str] = []
+    description: List[str] = Field(default_factory=list)
 
 class EducationItem(BaseModel):
-    degree: str
-    institution: str
+    degree: Optional[str] = ""
+    institution: Optional[str] = ""
     year: Optional[str] = ""
     description: Optional[str] = ""
 
@@ -21,29 +21,36 @@ class SkillItem(BaseModel):
     category: Optional[str] = "Technical"
 
 class ProjectItem(BaseModel):
-    title: str
-    description: str
+    title: Optional[str] = ""
+    description: Optional[str] = ""
     link: Optional[str] = ""
-    tech_stack: List[str] = []
+    tech_stack: List[str] = Field(default_factory=list)
 
 class CertificationItem(BaseModel):
-    name: str
-    issuer: str
+    name: Optional[str] = ""
+    issuer: Optional[str] = ""
     year: Optional[str] = ""
 
+    @model_validator(mode='before')
+    @classmethod
+    def validate_certification(cls, data: Any) -> Any:
+        if isinstance(data, str):
+            return {"name": data, "issuer": "", "year": ""}
+        return data
+
 class LanguageItem(BaseModel):
-    language: str
-    proficiency: str # e.g. Native, Professional, Basic
+    language: Optional[str] = ""
+    proficiency: Optional[str] = "" # e.g. Native, Professional, Basic
 
 class InternshipItem(BaseModel):
-    role: str
-    company: str
+    role: Optional[str] = ""
+    company: Optional[str] = ""
     duration: Optional[str] = ""
-    description: List[str] = []
+    description: List[str] = Field(default_factory=list)
 
 class AchievementItem(BaseModel):
-    title: str
-    description: str
+    title: Optional[str] = ""
+    description: Optional[str] = ""
 
 class ResumeCreateRequest(BaseModel):
     title: str = "My Resume"
