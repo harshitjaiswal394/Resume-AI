@@ -31,13 +31,16 @@ import {
   GraduationCap,
   Eye,
   FileDown,
+  FileDown,
   Wand2,
   Loader2,
   Upload,
   Mail,
   Phone,
   Copy,
-  RefreshCw
+  RefreshCw,
+  MoreVertical,
+  Settings
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
@@ -967,44 +970,73 @@ export default function AIResumeBuilder() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={handleDeleteDraft} className="h-9 md:h-10 rounded-xl text-slate-300 hover:text-rose-500 px-3 md:px-4 transition-colors mr-2">
-              <Trash2 className="h-4 w-4" />
+          <div className="flex items-center gap-1.5 md:gap-2">
+            {/* Desktop-only secondary buttons */}
+            <div className="hidden lg:flex items-center gap-2">
+               <Button variant="ghost" onClick={handleDeleteDraft} className="h-10 rounded-xl text-slate-300 hover:text-rose-500 px-4 transition-colors">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" onClick={handleReimport} className="h-10 rounded-xl border-slate-200 px-4 text-indigo-600 hover:bg-indigo-50">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                <span className="hidden xl:inline">Import Original</span>
+              </Button>
+              <Button variant="ghost" onClick={handleCopyForWord} className="h-10 rounded-xl text-slate-500 hover:text-indigo-600 px-4 transition-colors">
+                <Copy className="h-4 w-4 mr-2" />
+                <span className="hidden xl:inline">Copy</span>
+              </Button>
+              <Button variant="outline" onClick={handleDownloadDocx} className="h-10 rounded-xl border-slate-200 px-4 text-slate-600 hover:text-slate-900">
+                <FileDown className="h-4 w-4 mr-2" />
+                <span className="hidden xl:inline">Word</span>
+              </Button>
+            </div>
+
+            {/* Mobile Actions Menu */}
+            <div className="lg:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="rounded-full text-slate-500">
+                    <MoreVertical className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="rounded-t-[24px] p-6 pb-12 space-y-4">
+                  <SheetHeader className="mb-4">
+                    <SheetTitle>Actions</SheetTitle>
+                  </SheetHeader>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" onClick={handleReimport} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
+                      <RefreshCw className="h-4 w-4 text-indigo-500" />
+                      Restore Original
+                    </Button>
+                    <Button variant="outline" onClick={handleCopyForWord} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
+                      <Copy className="h-4 w-4 text-slate-500" />
+                      Copy Content
+                    </Button>
+                    <Button variant="outline" onClick={handleDownloadDocx} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
+                      <FileDown className="h-4 w-4 text-slate-500" />
+                      Export Word
+                    </Button>
+                    <Button variant="outline" onClick={handleDeleteDraft} className="h-12 rounded-2xl justify-start gap-3 px-4 border-rose-100 text-rose-500 hover:bg-rose-50">
+                      <Trash2 className="h-4 w-4" />
+                      Delete Draft
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+
+            {/* Save Button (Compact on mobile) */}
+            <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4 shrink-0 transition-all active:scale-95">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" /> : <Save className="h-4 w-4 md:mr-2 text-indigo-600" />}
+              <span className="hidden sm:inline">Save</span>
             </Button>
-            <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 md:mr-2" />}
-              <span className="hidden md:inline">Save</span>
-            </Button>
-            <Button variant="outline" onClick={handleReimport} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4 text-indigo-600 hover:bg-indigo-50">
-              <RefreshCw className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Import Original</span>
-            </Button>
-            <Button variant="ghost" onClick={handleCopyForWord} className="h-9 md:h-10 rounded-xl text-slate-500 hover:text-indigo-600 px-3 md:px-4 transition-colors">
-              <Copy className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Copy</span>
-            </Button>
-            <Button variant="outline" onClick={handleDownloadDocx} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4 text-slate-600 hover:text-slate-900">
-              <FileDown className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Word</span>
-            </Button>
-            <Button onClick={handleDownloadPDF} className="h-9 md:h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 px-3 md:px-4">
+
+            {/* View/Download PDF (Primary) */}
+            <Button onClick={handleDownloadPDF} className="h-9 md:h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 px-3 md:px-4 shrink-0 ml-1">
               <Download className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">PDF</span>
+              <span className="hidden sm:inline font-bold">PDF</span>
             </Button>
           </div>
         </header>
-
-        <div className="px-4 md:px-12 py-4 md:py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4">
-          <div className="flex-1 max-w-xl">
-            <div className="flex items-center justify-between mb-2">
-              {(steps || []).map((s) => (
-                <div
-                  key={s.id}
-                  className={`flex flex-col items-center gap-1.5 md:gap-2 transition-all duration-300 ${step >= s.id ? 'text-indigo-600' : 'text-slate-400'}`}
-                >
-                  <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${step >= s.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-slate-200'}`}>
-                    <s.icon className="h-4 w-4 md:h-5 md:w-5" />
-                  </div>
                   <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-wider hidden sm:block">{s.name}</span>
                 </div>
               ))}
@@ -1453,7 +1485,7 @@ export default function AIResumeBuilder() {
               <Eye className="h-6 w-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[90vh] p-0 border-none rounded-t-[32px] overflow-hidden">
+          <SheetContent side="bottom" className="h-[90vh] p-0 border-none rounded-t-[32px] overflow-y-auto">
             <SheetHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white shrink-0">
               <div>
                 <SheetTitle className="text-xl font-black">Live Preview</SheetTitle>
@@ -1471,7 +1503,7 @@ export default function AIResumeBuilder() {
                 </Button>
               </div>
             </SheetHeader>
-            <div className="flex-1 bg-slate-100/50 p-4 overflow-y-auto flex justify-center pb-20">
+            <div className="flex-1 bg-slate-100/50 p-4 flex justify-center pb-32">
               {/* Scaled Preview for Mobile Sheet */}
               <div className="bg-white shadow-2xl w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.4] sm:scale-[0.6] flex flex-col font-sans" ref={previewRef}>
                 {/* We reuse the same content as desktop preview here or refactor it. 
