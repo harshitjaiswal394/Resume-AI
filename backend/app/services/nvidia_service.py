@@ -220,7 +220,7 @@ Required JSON format:
   "experience": [{{"title": "string", "company": "string", "location": "string", "duration": "string", "description": ["achievement1"]}}],
   "education": [{{"degree": "string", "institution": "string", "year": "string", "description": "optional detail"}}],
   "projects": [{{"title": "string", "description": "string", "link": "url or null", "tech_stack": ["tech1"]}}],
-  "certifications": [{"name": "string", "issuer": "string", "year": "string"}],
+  "certifications": [{{ "name": "string", "issuer": "string", "year": "string" }}],
   "languages": [{{"language": "string", "proficiency": "Native/Professional/Basic"}}],
   "internships": [{{"role": "string", "company": "string", "duration": "string", "description": ["detail1"]}}],
   "achievements": [{{"title": "string", "description": "string"}}]
