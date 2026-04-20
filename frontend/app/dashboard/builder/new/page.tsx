@@ -31,7 +31,6 @@ import {
   GraduationCap,
   Eye,
   FileDown,
-  FileDown,
   Wand2,
   Loader2,
   Upload,
