@@ -247,15 +247,30 @@ class AIService:
             return "Professional Cover Letter: [Generation error, original text preserved]"
 
     async def generate_smart_cover_letter(self, resume_data: Dict[str, Any], jd_text: str) -> str:
-        """Generates a tailored letter matching candidate skills with JD using hierarchical fallback."""
+        """Generates a tailored letter matching candidate skills with JD using 8B model for speed."""
+        
+        # Optimization: Prune payload to only include essentials (fullName, summary, top skills, top 2 exp)
+        pruned_resume = {
+            "fullName": resume_data.get("fullName", "Candidate"),
+            "summary": resume_data.get("summary", ""),
+            "skills": resume_data.get("skills", [])[:15],
+            "experience": [
+                {
+                    "title": exp.get("title", ""),
+                    "company": exp.get("company", ""),
+                    "description": exp.get("description", [])[:3]
+                } for exp in resume_data.get("experience", [])[:2]
+            ]
+        }
+
         prompt = f"""
         You are a professional recruiter. Generate a tailored cover letter (150-200 words).
         
         CANDIDATE DATA:
-        {json.dumps(resume_data)}
+        {json.dumps(pruned_resume)}
         
         JOB DESCRIPTION:
-        {jd_text[:5000]}
+        {jd_text[:3000]}
         
         Requirements:
         - Professional tone.
@@ -264,8 +279,26 @@ class AIService:
         - Return ONLY the letter body text.
         """
         
-        content = await self._call_ai_with_fallback(prompt, temperature=0.7)
-        return content or "Professional Cover Letter: [Generation error]"
+        try:
+            from app.services.nvidia_service import nvidia_service
+            response = nvidia_service.client.chat.completions.create(
+                model="meta/llama-3.1-8b-instruct",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1000
+            )
+            content = self._get_completion_content(response)
+            if content:
+                logger.info("Fast model (8B) used for cover letter generation")
+                return content.strip().strip('"').strip('`')
+            
+            # Fallback to standard pipeline if 8B returns nothing
+            content = await self._call_ai_with_fallback(prompt, temperature=0.7)
+            return content or "Professional Cover Letter: [Generation error]"
+        except Exception as e:
+            logger.warning(f"Fast model generation failed: {str(e)}. Falling back to reasoning pipeline...")
+            content = await self._call_ai_with_fallback(prompt, temperature=0.7)
+            return content or "Professional Cover Letter: [Generation error fallback]"
 
 
     async def clean_job_description(self, raw_text: str) -> str:
