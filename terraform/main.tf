@@ -214,7 +214,7 @@ resource "google_compute_url_map" "url_map" {
   default_service = google_compute_backend_service.frontend_service.id
 
   host_rule {
-    hosts        = ["resumatches.com"]
+    hosts        = ["resumatches.com", "www.resumatches.com"]
     path_matcher = "allpaths"
   }
 
@@ -232,7 +232,7 @@ resource "google_compute_url_map" "url_map" {
 resource "google_compute_managed_ssl_certificate" "cert" {
   name = "resumatch-cert-v2"
   managed {
-    domains = ["resumatches.com"]
+    domains = ["resumatches.com", "www.resumatches.com"]
   }
 
   lifecycle {
@@ -265,6 +265,14 @@ data "google_dns_managed_zone" "primary" {
 
 resource "google_dns_record_set" "root" {
   name         = data.google_dns_managed_zone.primary.dns_name
+  managed_zone = data.google_dns_managed_zone.primary.name
+  type         = "A"
+  ttl          = 300
+  rrdatas      = [google_compute_global_address.lb_ip.address]
+}
+
+resource "google_dns_record_set" "www" {
+  name         = "www.${data.google_dns_managed_zone.primary.dns_name}"
   managed_zone = data.google_dns_managed_zone.primary.name
   type         = "A"
   ttl          = 300
