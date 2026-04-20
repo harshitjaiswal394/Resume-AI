@@ -1,6 +1,8 @@
 name: Destroy Staging Infrastructure
 
 on:
+  push:
+    branches: [ "staging" ]
   workflow_dispatch:
     inputs:
       confirm_destroy:
