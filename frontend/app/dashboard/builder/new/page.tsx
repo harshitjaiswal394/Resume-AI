@@ -1037,8 +1037,22 @@ export default function AIResumeBuilder() {
             </Button>
           </div>
         </header>
-                  <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-wider hidden sm:block">{s.name}</span>
-                </div>
+        <div className="px-4 md:px-12 py-4 md:py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4 overflow-hidden">
+          <div className="flex-1 w-full flex flex-col gap-4">
+            <div className="flex items-center overflow-x-auto no-scrollbar gap-4 md:gap-8 pb-1 md:pb-0">
+              {(steps || []).map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setStep(s.id)}
+                  className={`flex items-center gap-2 pb-3 border-b-2 transition-all whitespace-nowrap px-1 ${
+                    step === s.id ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <div className={`p-1.5 rounded-lg ${step === s.id ? 'bg-indigo-50' : 'bg-transparent'}`}>
+                    <s.icon className={`h-4 w-4 ${step === s.id ? 'text-indigo-600' : 'text-slate-400'}`} />
+                  </div>
+                  <span className="text-xs md:text-sm">{s.name}</span>
+                </button>
               ))}
             </div>
             <Progress value={(step / steps.length) * 100} className="h-1 bg-slate-200" />
