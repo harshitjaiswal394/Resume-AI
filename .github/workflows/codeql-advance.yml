@@ -20,8 +20,6 @@ on:
     - cron: '43 14 * * 1'
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: us-east1
   REPOSITORY: resumatches-official
 
 jobs:
