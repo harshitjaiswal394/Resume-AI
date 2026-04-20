@@ -10,7 +10,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-east1
-  REPOSITORY: resumatches-official
+  
 
 permissions:
   contents: read
