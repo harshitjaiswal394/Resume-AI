@@ -1057,9 +1057,19 @@ export default function AIResumeBuilder() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-semibold text-slate-700">Professional Summary</label>
-                      <Button variant="ghost" size="sm" onClick={handleGenerateSummary} className="text-indigo-600 hover:text-indigo-700 h-8 gap-1 p-1">
-                        <Wand2 className="h-3 w-3" />
-                        AI Generate
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleGenerateSummary} 
+                        disabled={isOptimizing}
+                        className="text-indigo-600 hover:text-indigo-700 h-8 gap-1 p-1 disabled:opacity-50"
+                      >
+                        {isOptimizing ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3 w-3" />
+                        )}
+                        {isOptimizing ? 'Generating...' : 'AI Generate'}
                       </Button>
                     </div>
                     <Textarea

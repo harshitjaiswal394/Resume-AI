@@ -374,28 +374,38 @@ class AIService:
         return experience
 
     async def generate_smart_summary(self, profile_data: Dict[str, Any], target_role: str) -> str:
-        """Generates a high-impact professional summary."""
-        prompt = f"""
-        Generate a compelling 3-sentence professional summary for a {target_role} position.
-        Candidate Data: {json.dumps(profile_data)}
+        """Generates a high-impact professional summary using 70B model for quality."""
+        
+        system_prompt = "You are a professional resume writer specializing in high-impact, ATS-optimized summaries. Return ONLY the summary text. No preamble, no word counts, and no reasoning. Ensure every sentence is complete and professional."
+        
+        user_prompt = f"""
+        Generate a compelling, impact-focused professional summary (2-3 lines) for a {target_role} position.
+        
+        CANDIDATE DATA:
+        {json.dumps(profile_data)}
         
         Guidelines:
-        - Sentence 1: Hard-hitting intro with years of specific experience.
-        - Sentence 2: Key technical achievement or specialization.
-        - Sentence 3: Value proposition/Goal.
-        - Tone: Executive and professional.
-        Return ONLY the summary text.
+        - Use specific achievements and quantifiable results from the experience data.
+        - Start with a hard-hitting value proposition.
+        - Return ONLY the professional summary as finished, cohesive sentences.
         """
+        
         try:
             from app.services.nvidia_service import nvidia_service
             response = nvidia_service.client.chat.completions.create(
-                model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=512
+                model="meta/llama-3.1-70b-instruct",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=600
             )
             content = self._get_completion_content(response)
-            return content.strip().strip('"') if content else "Highly motivated professional..."
+            if content:
+                return content.strip().strip('"').strip('`').strip()
+            
+            return "Professional summary: [Generation failed]"
         except Exception as e:
             logger.error(f"Summary generation failed: {str(e)}")
             return "Experienced professional with a strong background in technology."
