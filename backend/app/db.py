@@ -159,39 +159,36 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
             }
         )
         
-        # 2. Sync Job Matches (Delete old, Insert new)
+        # 2. Sync Job Matches (Optimized Bulk Insert)
         if matches:
             conn.execute(
                 text("DELETE FROM job_matches WHERE resume_id = :id"),
                 {"id": resume_id}
             )
             
+            # Formulate a single multi-row insert for high speed
+            from sqlalchemy import insert, Table, MetaData
+            metadata = MetaData()
+            job_matches_table = Table('job_matches', metadata, autoload_with=engine)
+            
+            bulk_matches = []
             for m in matches:
-                conn.execute(
-                    text("""
-                        INSERT INTO job_matches (
-                            resume_id, user_id, job_title, company, location, 
-                            match_score, matching_skills, missing_skills, 
-                            ai_reasoning, apply_links, created_at
-                        ) VALUES (
-                            :rid, :uid, :title, :company, :loc,
-                            :score, :m_skills, :miss_skills,
-                            :reason, :links, NOW()
-                        )
-                    """),
-                    {
-                        "rid": resume_id,
-                        "uid": user_id,
-                        "title": m.get("title") or m.get("role") or "Career Match",
-                        "company": m.get("company") or "Direct Opportunity",
-                        "loc": m.get("location") or "Remote",
-                        "score": m.get("matchScore") or m.get("match_score") or 0,
-                        "m_skills": m.get("matching_skills") or m.get("matchingSkills") or [],
-                        "miss_skills": m.get("missing_skills") or m.get("missingSkills") or [],
-                        "reason": m.get("aiReasoning") or m.get("reasoning") or "Highly compatible matches.",
-                        "links": json.dumps(m.get("apply_links") or {})
-                    }
-                )
+                bulk_matches.append({
+                    "resume_id": resume_id,
+                    "user_id": user_id,
+                    "job_title": m.get("title") or m.get("role") or "Career Match",
+                    "company": m.get("company") or "Direct Opportunity",
+                    "location": m.get("location") or "Remote",
+                    "match_score": m.get("matchScore") or m.get("match_score") or 0,
+                    "matching_skills": m.get("matching_skills") or m.get("matchingSkills") or [],
+                    "missing_skills": m.get("missing_skills") or m.get("missingSkills") or [],
+                    "ai_reasoning": m.get("aiReasoning") or m.get("reasoning") or "Highly compatible matches.",
+                    "apply_links": json.dumps(m.get("apply_links") or {}),
+                    "created_at": text("NOW()")
+                })
+            
+            if bulk_matches:
+                conn.execute(insert(job_matches_table), bulk_matches)
         
         # 3. Create Audit Log
         conn.execute(

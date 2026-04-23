@@ -138,66 +138,57 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
     """
     logger.info(f"Starting stream processing for file: {filename}")
     try:
-        # 1. Extraction
-        yield f"data: {json.dumps({'step': 'parsing', 'status': 'loading', 'label': 'Parsing resume structure'})}\n\n"
+        # 1. Extraction (Fast)
+        yield f"data: {json.dumps({'step': 'parsing', 'status': 'loading', 'label': 'Reading document content'})}\n\n"
         text = await resume_service.extract_text(content, filename)
-        yield f"data: {json.dumps({'step': 'parsing', 'status': 'done', 'label': 'Parsing resume structure'})}\n\n"
+        yield f"data: {json.dumps({'step': 'parsing', 'status': 'done', 'label': 'Reading document content'})}\n\n"
 
-        # 2. Parsing (High-fidelity)
-        yield f"data: {json.dumps({'step': 'ats', 'status': 'loading', 'label': 'Checking ATS compatibility'})}\n\n"
-        parse_task = asyncio.create_task(ai_service.parse_resume(text))
-        parsed_data = None
-        while not parse_task.done():
-            # Parallel heartbeat for the parsing phase
-            done, pending = await asyncio.wait({parse_task}, timeout=15.0)
-            if not done:
-                yield f"data: {json.dumps({'type': 'ping', 'status': 'parsing'})}\n\n"
-            else:
-                parsed_data = await parse_task
-        yield f"data: {json.dumps({'step': 'ats', 'status': 'done', 'label': 'Checking ATS compatibility'})}\n\n"
+        # 2. Fast Metadata (Stage 1 - Unblocks Matching)
+        yield f"data: {json.dumps({'step': 'ats', 'status': 'loading', 'label': 'Optimizing processing flow'})}\n\n"
+        fast_meta = await ai_service.fast_parse_metadata(text)
+        roles = [fast_meta.get("target_role") or fast_meta.get("targetRole") or "Software Engineer"]
+        yield f"data: {json.dumps({'step': 'ats', 'status': 'done', 'label': 'Pipeline optimized'})}\n\n"
 
-        # 3. Analysis & Matching (PARALLEL)
-        yield f"data: {json.dumps({'step': 'skills', 'status': 'loading', 'label': 'Extracted keywords & finding matches'})}\n\n"
+        # 3. Stage 2 - Deep Combined Analysis & Job Matching (HYPER-PARALLEL)
+        yield f"data: {json.dumps({'step': 'skills', 'status': 'loading', 'label': 'Deep analysis & finding matches'})}\n\n"
         
-        roles = ["Software Engineer"]
-        if isinstance(parsed_data, dict):
-            roles = [parsed_data.get('target_role') or parsed_data.get('targetRole') or 'Software Engineer']
-            
-        analysis_task = asyncio.create_task(ai_service.analyze_resume(parsed_data))
-        matches_task = asyncio.create_task(ai_service.generate_job_matches(parsed_data, roles, filters={"days_old": 25}))
+        # Trigger the 2 heavy-weight tasks in parallel
+        combined_task = asyncio.create_task(ai_service.analyze_resume(text))
+        matches_task = asyncio.create_task(ai_service.generate_job_matches(fast_meta, roles, filters={"days_old": 25}))
         
-        # Reliable Heartbeat Loop: Sends pings every 15s to keep LB/CloudRun connection alive
-        pending = {analysis_task, matches_task}
+        # Reliable Heartbeat Loop: Sends pings every 15s to keep connection alive
+        pending = {combined_task, matches_task}
         while pending:
             done, pending = await asyncio.wait(pending, timeout=15.0)
             if not done:
-                yield f"data: {json.dumps({'type': 'ping', 'status': 'waiting'})}\n\n"
-            else:
-                # One or more tasks finished
-                pass
+                yield f"data: {json.dumps({'type': 'ping', 'status': 'deep_processing'})}\n\n"
         
         try:
-            analysis = await analysis_task
+            # Stage 2 Results
+            combined_result = await combined_task
+            parsed_data = combined_result.get("parsed_data", {})
+            analysis = combined_result.get("analysis", {})
             matches = await matches_task
         except Exception as e:
-            logger.error(f"AI Pipeline error during gather: {str(e)}")
+            logger.error(f"AI Pipeline Stage 2 error: {str(e)}")
+            parsed_data = fast_meta
             analysis = {"score": 75, "resume_score": 75}
             matches = []
 
         yield f"data: {json.dumps({'step': 'skills', 'status': 'done', 'label': 'Analysis complete'})}\n\n"
-        yield f"data: {json.dumps({'step': 'suggestions', 'status': 'done', 'label': 'Suggestions generated'})}\n\n"
+        yield f"data: {json.dumps({'step': 'suggestions', 'status': 'done', 'label': 'Matches finalized'})}\n\n"
         
         # 4. Enrichment
         for match in (matches or []):
             if isinstance(match, dict):
                 match["apply_links"] = job_portal_service.generate_links(
-                    match.get("role", "Software Engineer"), 
-                    parsed_data.get("skills", []),
+                    match.get("role", match.get("title", "Software Engineer")), 
+                    parsed_data.get("skills", fast_meta.get("skills", [])),
                     "India"
                 )
-        yield f"data: {json.dumps({'step': 'matching', 'status': 'done', 'label': 'Matches found'})}\n\n"
+        yield f"data: {json.dumps({'step': 'matching', 'status': 'done', 'label': 'Results ready'})}\n\n"
 
-        # 6. Persistence (Only for registered users)
+        # 6. Persistence (Background)
         if user_id and user_id != "guest" and resume_id and resume_id != "guest":
             try:
                 final_data_struct = {
@@ -211,7 +202,7 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
             except Exception as pe:
                 logger.error(f"Persistence failed (non-critical): {str(pe)}")
 
-        # 7. Final Result
+        # 7. Final Response
         final_data = {
             "step": "final",
             "success": True,

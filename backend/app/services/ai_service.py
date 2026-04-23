@@ -20,6 +20,23 @@ class AIService:
         }
         logger.info("AIService initialized with NVIDIA NIM Pipeline Engine (70B/8B/405B)")
 
+    async def fast_parse_metadata(self, text: str) -> Dict[str, Any]:
+        """Extremely fast extraction of core fields (name, role, skills) to unblock matching."""
+        from app.services.nvidia_service import nvidia_service
+        prompt = f"Extract Name, Primary Role, and Top 10 Skills from this resume as JSON. Resume: {text[:3000]}"
+        try:
+            response = await nvidia_service.client.chat.completions.create(
+                model="meta/llama-3.1-8b-instruct",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=500,
+                response_format={"type": "json_object"} if "llama-3.1" in "meta/llama-3.1-8b-instruct" else None
+            )
+            content = self._get_completion_content(response)
+            return nvidia_service._clean_json(content) if content else {}
+        except Exception as e:
+            logger.error(f"Fast parse failed: {str(e)}")
+            return {"targetRole": "Software Engineer", "skills": []}
+
     async def parse_resume(self, text: str) -> Dict[str, Any]:
         """
         Parses resume text using Nemotron-Nano for high-speed structured extraction.
@@ -90,66 +107,89 @@ class AIService:
         logger.error(f"AI_PROCESS_CRITICAL - All models failed. Last error: {str(last_error)}")
         return ""
 
-    async def analyze_resume(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyzes profile and provides insights/score using Nemotron-3-Super."""
-        prompt = f"""
-        Analyze this resume profile for ATS compatibility and recruiter appeal.
-        Return ONLY a VALID JSON object with:
+    async def analyze_resume(self, text: str) -> Dict[str, Any]:
+        """
+        Hyper-Optimized: Combined Deep Parsing & ATS Analysis in ONE call.
+        Returns both 'parsed_data' and the 'analysis' metrics.
+        """
+        logger.info("Executing Combined Parse & Analysis using Llama 70B")
+        
+        system_msg = "You are a senior recruiter and ATS API. Respond ONLY with valid JSON. No markdown."
+        
+        user_msg = f"""
+        Perform a full structured extraction and ATS analysis on this resume.
+        
+        RESUME:
+        {text[:12000]}
+        
+        Required JSON format:
         {{
-            "score": int (0-100),
-            "atsScore": int (0-100),
-            "keywordScore": int (0-100),
-            "readabilityScore": int (0-100),
-            "weaknesses": ["Issue 1", "Issue 2"],
-            "recommendations": ["Action 1", "Action 2"],
-            "suggestedRoles": ["Role 1", "Role 2"],
-            "insights": {{
-               "strengths": ["Item 1"],
-               "weaknesses": ["Item 1"]
+            "parsed_data": {{
+                "fullName": "string",
+                "email": "string",
+                "phone": "string",
+                "summary": "2-3 sentences",
+                "targetRole": "string",
+                "skills": ["skill1"],
+                "experience": [{{"title": "string", "company": "string", "description": ["achievement1"]}}],
+                "education": [{{"degree": "string", "institution": "string", "year": "string"}}],
+                "projects": [{{"title": "string", "tech_stack": ["tech1"]}}],
+                "certifications": ["cert1"],
+                "achievements": ["achievement1"]
+            }},
+            "analysis": {{
+                "score": int,
+                "atsScore": int,
+                "keywordScore": int,
+                "readabilityScore": int,
+                "weaknesses": ["list"],
+                "recommendations": ["list"],
+                "suggestedRoles": ["list"],
+                "insights": {{"strengths": ["list"], "weaknesses": ["list"]}}
             }}
         }}
-        Resume Data: {json.dumps(resume_data)}
         """
+        
         try:
             from app.services.nvidia_service import nvidia_service
             response = await nvidia_service.client.chat.completions.create(
                 model=os.getenv("NIM_MODEL_REASONING", "meta/llama-3.1-70b-instruct"),
                 messages=[
-                    {"role": "system", "content": "You are a professional ATS resume analyzer. Output only valid JSON."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg}
                 ],
                 temperature=0.1,
-                max_tokens=1024
+                max_tokens=3072, # Larger for combined response
+                response_format={"type": "json_object"}
             )
+            
             content = self._get_completion_content(response)
             if content:
-                parsed = nvidia_service._clean_json(content)
-                # Standardize scores and ensure all expected keys exist for UI safety
-                parsed.setdefault("score", 75)
-                parsed.setdefault("atsScore", 70)
-                parsed.setdefault("keywordScore", 75)
-                parsed.setdefault("readabilityScore", 80)
-                parsed.setdefault("weaknesses", [])
-                parsed.setdefault("recommendations", [])
-                parsed.setdefault("suggestedRoles", ["Software Engineer"])
+                full_result = nvidia_service._clean_json(content)
                 
-                # Ensure resume_score is always present for the gauge
-                parsed["resume_score"] = parsed.get("score", 75)
+                # Split the combined result
+                parsed = full_result.get("parsed_data", {})
+                analysis = full_result.get("analysis", {})
                 
-                return parsed
+                # Standardize scores
+                analysis["resume_score"] = analysis.get("score") or analysis.get("matchScore") or 75
+                
+                return {
+                    "parsed_data": parsed,
+                    "analysis": analysis
+                }
             raise ValueError("Empty AI response")
         except Exception as e:
-            logger.error(f"Analysis failed: {str(e)}")
+            logger.error(f"Combined analysis failed: {str(e)}")
+            # Fallback to high-safety defaults
             return {
-                "score": 75, 
-                "resume_score": 75,
-                "atsScore": 70, 
-                "keywordScore": 80,
-                "readabilityScore": 85,
-                "weaknesses": ["Analysis timed out"], 
-                "recommendations": ["Try again later"], 
-                "suggestedRoles": ["Software Engineer"],
-                "insights": {"strengths": ["Data integrity preserved"], "weaknesses": ["Backend timeout"]}
+                "parsed_data": await self.parse_resume(text),
+                "analysis": {
+                    "score": 75, "resume_score": 75, "atsScore": 70, "keywordScore": 75,
+                    "readabilityScore": 80, "weaknesses": ["Analysis degraded - using fallback"],
+                    "recommendations": ["Check connectivity"], "suggestedRoles": ["Software Engineer"],
+                    "insights": {"strengths": ["Original text preserved"], "weaknesses": ["Timeout"]}
+                }
             }
 
     async def generate_job_matches(self, resume_data: Dict[str, Any], roles: List[str], filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
