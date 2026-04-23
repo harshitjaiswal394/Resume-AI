@@ -14,11 +14,11 @@ from app.db import execute_vector_search
 class AIService:
     def __init__(self):
         self.models = {
-            "primary": os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
-            "fallback": "meta/llama-3.1-70b-instruct",
+            "primary": os.getenv("NIM_MODEL_REASONING", "meta/llama-3.1-70b-instruct"),
+            "fallback": "meta/llama-3.1-405b-instruct",
             "parsing": os.getenv("NIM_MODEL_PARSING", "meta/llama-3.1-8b-instruct")
         }
-        logger.info("AIService initialized with NVIDIA NIM Pipeline Engine and Tiered Fallback")
+        logger.info("AIService initialized with NVIDIA NIM Pipeline Engine (70B/8B/405B)")
 
     async def parse_resume(self, text: str) -> Dict[str, Any]:
         """
@@ -65,7 +65,7 @@ class AIService:
                     messages.append({"role": "system", "content": system_prompt})
                 messages.append({"role": "user", "content": prompt})
                 
-                response = nvidia_service.client.chat.completions.create(
+                response = await nvidia_service.client.chat.completions.create(
                     model=model,
                     messages=messages,
                     temperature=temperature,
@@ -112,8 +112,8 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
-                model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
+            response = await nvidia_service.client.chat.completions.create(
+                model=os.getenv("NIM_MODEL_REASONING", "meta/llama-3.1-70b-instruct"),
                 messages=[
                     {"role": "system", "content": "You are a professional ATS resume analyzer. Output only valid JSON."},
                     {"role": "user", "content": prompt}
@@ -235,8 +235,8 @@ class AIService:
         try:
             from app.services.nvidia_service import nvidia_service
             prompt = f"Create a cover letter for {job_role} based on: {json.dumps(resume_data)}"
-            response = nvidia_service.client.chat.completions.create(
-                model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
+            response = await nvidia_service.client.chat.completions.create(
+                model=os.getenv("NIM_MODEL_REASONING", "meta/llama-3.1-70b-instruct"),
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2048
             )
@@ -283,13 +283,13 @@ class AIService:
         try:
             start_time = time.time()
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
-                model="meta/llama-3.1-8b-instruct",
+            response = await nvidia_service.client.chat.completions.create(
+                model="meta/llama-3.1-70b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.1, # Extremely low temp for strict instruction adherence
+                temperature=0.1,
                 max_tokens=1000
             )
             content = self._get_completion_content(response)
@@ -327,7 +327,7 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await nvidia_service.client.chat.completions.create(
                 model="meta/llama-3.1-8b-instruct",
                 messages=[
                     {"role": "system", "content": "You are a professional recruiting assistant specialized in JD cleaning. Extract core details only."},
@@ -392,7 +392,7 @@ class AIService:
         
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await nvidia_service.client.chat.completions.create(
                 model="meta/llama-3.1-70b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -428,7 +428,7 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await nvidia_service.client.chat.completions.create(
                 model="meta/llama-3.1-8b-instruct",
                 messages=[{"role": "system", "content": "You are a job data extraction API. Output ONLY JSON."},
                          {"role": "user", "content": prompt}],

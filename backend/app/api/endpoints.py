@@ -143,35 +143,46 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         text = await resume_service.extract_text(content, filename)
         yield f"data: {json.dumps({'step': 'parsing', 'status': 'done', 'label': 'Parsing resume structure'})}\n\n"
 
-        # 2. Parsing (Flash)
+        # 2. Parsing (High-fidelity)
         yield f"data: {json.dumps({'step': 'ats', 'status': 'loading', 'label': 'Checking ATS compatibility'})}\n\n"
-        parsed_data = await ai_service.parse_resume(text)
+        parse_task = asyncio.create_task(ai_service.parse_resume(text))
+        parsed_data = None
+        while not parse_task.done():
+            # Parallel heartbeat for the parsing phase
+            done, pending = await asyncio.wait({parse_task}, timeout=15.0)
+            if not done:
+                yield f"data: {json.dumps({'type': 'ping', 'status': 'parsing'})}\n\n"
+            else:
+                parsed_data = await parse_task
         yield f"data: {json.dumps({'step': 'ats', 'status': 'done', 'label': 'Checking ATS compatibility'})}\n\n"
 
         # 3. Analysis & Matching (PARALLEL)
-        # 3. Analysis & Matching (PARALLEL)
         yield f"data: {json.dumps({'step': 'skills', 'status': 'loading', 'label': 'Extracted keywords & finding matches'})}\n\n"
         
-        # Standardize roles
         roles = ["Software Engineer"]
-        if hasattr(parsed_data, 'get'):
+        if isinstance(parsed_data, dict):
             roles = [parsed_data.get('target_role') or parsed_data.get('targetRole') or 'Software Engineer']
             
-        analysis_task = ai_service.analyze_resume(parsed_data)
-        matches_task = ai_service.generate_job_matches(parsed_data, roles, filters={"days_old": 25})
+        analysis_task = asyncio.create_task(ai_service.analyze_resume(parsed_data))
+        matches_task = asyncio.create_task(ai_service.generate_job_matches(parsed_data, roles, filters={"days_old": 25}))
         
-        # Run with heartbeats to prevent LB timeout
-        yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+        # Reliable Heartbeat Loop: Sends pings every 15s to keep LB/CloudRun connection alive
+        pending = {analysis_task, matches_task}
+        while pending:
+            done, pending = await asyncio.wait(pending, timeout=15.0)
+            if not done:
+                yield f"data: {json.dumps({'type': 'ping', 'status': 'waiting'})}\n\n"
+            else:
+                # One or more tasks finished
+                pass
         
-        # Wait for both tasks securely
         try:
-            # Gather with a timeout to be safe, but the LB timeout is protected by the 'ping' earlier
-            # If matching takes > 60s, we still want to finish
-            analysis, matches = await asyncio.gather(analysis_task, matches_task)
+            analysis = await analysis_task
+            matches = await matches_task
         except Exception as e:
-            logger.error(f"AI Pipeline error: {str(e)}")
-            analysis = analysis or {"score": 75, "resume_score": 75}
-            matches = matches or []
+            logger.error(f"AI Pipeline error during gather: {str(e)}")
+            analysis = {"score": 75, "resume_score": 75}
+            matches = []
 
         yield f"data: {json.dumps({'step': 'skills', 'status': 'done', 'label': 'Analysis complete'})}\n\n"
         yield f"data: {json.dumps({'step': 'suggestions', 'status': 'done', 'label': 'Suggestions generated'})}\n\n"

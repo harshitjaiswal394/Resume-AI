@@ -535,12 +535,12 @@ export default function Dashboard() {
               onClick={() => {
                 handleTailor(preferences);
               }}
-              disabled={isTailoring}
+              disabled={isTailoring || isAnalyzing}
               variant="outline"
               className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-slate-200 font-bold text-xs md:text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 gap-2 flex-grow sm:flex-grow-0"
             >
-              {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isTailoring ? 'Analysing...' : 'Re-analyze'}
+              {(isTailoring || isAnalyzing) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {(isTailoring || isAnalyzing) ? 'Analyzing...' : 'Re-analyze'}
             </Button>
             <Button
               onClick={() => router.push('/dashboard/builder')}
@@ -560,9 +560,10 @@ export default function Dashboard() {
             </Button>
             <Button
               onClick={() => fileInputRef.current?.click()}
-              className="h-10 md:h-11 px-4 md:px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs md:text-sm text-white shadow-lg shadow-indigo-100 transition-all flex-grow sm:flex-grow-0"
+              disabled={isAnalyzing}
+              className="h-10 md:h-11 px-4 md:px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs md:text-sm text-white shadow-lg shadow-indigo-100 transition-all flex-grow sm:flex-grow-0 disabled:opacity-50"
             >
-              Upload
+              {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
             </Button>
             <input
               type="file"

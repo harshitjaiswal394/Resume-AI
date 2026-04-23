@@ -4,23 +4,21 @@ import base64
 import asyncio
 import logging
 import httpx
+import time
 from typing import List, Dict, Any, Optional
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 logger = logging.getLogger("nvidia-service")
 
 class NvidiaService:
     def __init__(self):
-        # Load environment variables (ensure they are available)
+        # Load environment variables
         self.api_key_reasoning = os.getenv("NVIDIA_API_KEY_REASONING")
         self.api_key_parsing = os.getenv("NVIDIA_API_KEY_PARSING")
         self.api_key_embedding = os.getenv("NVIDIA_API_KEY_EMBEDDING")
         self.api_key_reranking = os.getenv("NVIDIA_API_KEY_RERANKING")
         
-        if not self.api_key_reasoning:
-            logger.error("NVIDIA_API_KEY_REASONING not found")
-        
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=self.api_key_reasoning or "missing_key"
         )
@@ -247,7 +245,7 @@ Respond with ONLY the JSON object:"""
                 # Second attempt (retry): Use powerful model (Llama 70b)
                 current_model = "meta/llama-3.1-8b-instruct" if attempt == 0 else "meta/llama-3.1-70b-instruct"
                 
-                response = self.client.chat.completions.create(
+                response = await self.client.chat.completions.create(
                     model=current_model,
                     messages=messages,
                     temperature=0.05,
@@ -367,8 +365,8 @@ Respond with ONLY the JSON object:"""
         # Only process top 5 to keep costs/latency down
         top_jobs = jobs[:5]
         
-        results = []
-        for job in top_jobs:
+        # Process in parallel using asyncio.gather to prevent cumulative latency
+        async def analyze_job(job):
             prompt = f"""
             Compare this candidate profile with the job description and provide a match analysis.
             Candidate Skills: {', '.join(profile.get('skills', []))}
@@ -387,11 +385,11 @@ Respond with ONLY the JSON object:"""
             """
             
             try:
-                response = self.client.chat.completions.create(
-                    model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
+                response = await self.client.chat.completions.create(
+                    model=os.getenv("NIM_MODEL_REASONING", "meta/llama-3.1-70b-instruct"),
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
-                    max_tokens=1024, # Increased for safer completion
+                    max_tokens=1024,
                 )
                 
                 content = response.choices[0].message.content
@@ -401,16 +399,17 @@ Respond with ONLY the JSON object:"""
                     raise ValueError("Failed to decode reasoning JSON")
                     
                 job.update(analysis)
-                results.append(job)
+                return job
             except Exception as e:
                 logger.error(f"Reasoning failed for job {job['id']}: {str(e)}")
-                # Populate with basic match data if AI fails
                 job['matchScore'] = job.get('similarity', 0.5) * 100
                 job['reasoning'] = "Basic similarity match performed."
                 job['missingSkills'] = []
                 job['matchingSkills'] = profile.get('skills', [])[:3]
-                results.append(job)
-                
+                return job
+
+        tasks = [analyze_job(job) for job in top_jobs]
+        results = await asyncio.gather(*tasks)
         return results
 
 nvidia_service = NvidiaService()
