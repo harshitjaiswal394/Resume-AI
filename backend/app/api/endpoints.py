@@ -268,7 +268,13 @@ async def process_resume_stream(
     content = await file.read()
     return StreamingResponse(
         process_resume_stream_generator(content, file.filename, user_id, resume_id),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Encoding": "none"
+        }
     )
 
 @resume_router.post("/process")
