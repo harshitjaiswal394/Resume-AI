@@ -20,7 +20,9 @@ class NvidiaService:
         
         self.client = AsyncOpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
-            api_key=self.api_key_reasoning or "missing_key"
+            api_key=self.api_key_reasoning or "missing_key",
+            timeout=60.0,
+            max_retries=3
         )
         
         self.rerank_url = "https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-nemotron-rerank-1b-v2/reranking"
