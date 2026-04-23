@@ -159,7 +159,8 @@ class AIService:
                     {"role": "user", "content": user_msg}
                 ],
                 temperature=0.1,
-                max_tokens=3072, # Larger for combined response
+                max_tokens=3072, 
+                timeout=120.0, # Increased for slow NVIDIA API days
                 response_format={"type": "json_object"}
             )
             
@@ -167,11 +168,8 @@ class AIService:
             if content:
                 full_result = nvidia_service._clean_json(content)
                 
-                # Split the combined result
                 parsed = full_result.get("parsed_data", {})
                 analysis = full_result.get("analysis", {})
-                
-                # Standardize scores
                 analysis["resume_score"] = analysis.get("score") or analysis.get("matchScore") or 75
                 
                 return {
@@ -181,14 +179,15 @@ class AIService:
             raise ValueError("Empty AI response")
         except Exception as e:
             logger.error(f"Combined analysis failed: {str(e)}")
-            # Fallback to high-safety defaults
+            # FAST FALLBACK: Don't call another 3-minute AI function. Just return defaults.
             return {
-                "parsed_data": await self.parse_resume(text),
+                "parsed_data": {"fullName": "Candidate", "targetRole": "Software Engineer", "skills": []},
                 "analysis": {
                     "score": 75, "resume_score": 75, "atsScore": 70, "keywordScore": 75,
-                    "readabilityScore": 80, "weaknesses": ["Analysis degraded - using fallback"],
-                    "recommendations": ["Check connectivity"], "suggestedRoles": ["Software Engineer"],
-                    "insights": {"strengths": ["Original text preserved"], "weaknesses": ["Timeout"]}
+                    "readabilityScore": 80, "weaknesses": ["Analysis timed out"],
+                    "recommendations": ["System is busy, showing basic results"], 
+                    "suggestedRoles": ["Professional"],
+                    "insights": {"strengths": ["Document read successfully"], "weaknesses": ["AI deep analysis timed out"]}
                 }
             }
 
