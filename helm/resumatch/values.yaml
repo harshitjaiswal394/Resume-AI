@@ -1,0 +1,56 @@
+# Global settings
+global:
+  domain: jaiswal.shop
+  namespace: resumatch-ai
+
+# Backend service configurations
+backend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/harshitjaiswal394/resume-ai-backend
+    tag: latest
+    pullPolicy: Always
+  service:
+    port: 8090
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+  config:
+    SUPABASE_URL: "https://your-project.supabase.co"
+  secrets:
+    DATABASE_URL: ""
+    SUPABASE_SERVICE_ROLE_KEY: ""
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+    NVIDIA_API_KEY_REASONING: ""
+    NVIDIA_API_KEY_PARSING: ""
+    NVIDIA_API_KEY_EMBEDDING: ""
+    NVIDIA_API_KEY_RERANKING: ""
+    NVIDIA_API_KEY: ""
+    GEMINI_API_KEY: ""
+    ANTHROPIC_API_KEY: ""
+    RAZORPAY_KEY_ID: ""
+    RAZORPAY_KEY_SECRET: ""
+    RAZORPAY_WEBHOOK_SECRET: ""
+    CRON_SECRET: ""
+
+# Frontend service configurations
+frontend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/harshitjaiswal394/resume-ai-frontend
+    tag: latest
+    pullPolicy: Always
+  service:
+    port: 3000
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+  # Frontend uses the same Supabase/API config

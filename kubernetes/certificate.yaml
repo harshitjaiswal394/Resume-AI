@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: resumatch-cert
+  namespace: resumatch-ai
+spec:
+  secretName: resumatch-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - jaiswal.shop
+  - www.jaiswal.shop

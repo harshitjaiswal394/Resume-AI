@@ -1,0 +1,231 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: resumatch-ai
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+      - name: backend
+        image: us-east1-docker.pkg.dev/project-fd5c6032-c8d6-497d-9c2/resumatches-official/backend:latest
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - containerPort: 8090
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "25m"
+            memory: "192Mi"
+        env:
+        # ── ConfigMap values (non-sensitive) ──────────────────────────────────
+        - name: SUPABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: SUPABASE_URL
+        - name: NEXT_PUBLIC_SUPABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NEXT_PUBLIC_SUPABASE_URL
+        - name: BACKEND_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: BACKEND_API_URL
+        - name: NEXT_PUBLIC_BACKEND_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NEXT_PUBLIC_BACKEND_API_URL
+        - name: NEXT_PUBLIC_APP_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NEXT_PUBLIC_APP_URL
+        - name: GCP_PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: GCP_PROJECT_ID
+        - name: GCP_STORAGE_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: GCP_STORAGE_BUCKET
+        - name: FIREBASE_PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: FIREBASE_PROJECT_ID
+        # NIM Model names (non-sensitive)
+        - name: NIM_MODEL_OCR
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NIM_MODEL_OCR
+        - name: NIM_MODEL_PARSING
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NIM_MODEL_PARSING
+        - name: NIM_MODEL_EMBEDDING
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NIM_MODEL_EMBEDDING
+        - name: NIM_MODEL_RERANKING
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NIM_MODEL_RERANKING
+        - name: NIM_MODEL_REASONING
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NIM_MODEL_REASONING
+
+        # ── Secret values (sensitive) ─────────────────────────────────────────
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: DATABASE_URL
+        - name: SUPABASE_SERVICE_ROLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: SUPABASE_SERVICE_ROLE_KEY
+        - name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+              optional: true
+        # NVIDIA NIM API keys
+        - name: NVIDIA_API_KEY_REASONING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_REASONING
+        - name: NVIDIA_API_KEY_PARSING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_PARSING
+        - name: NVIDIA_API_KEY_EMBEDDING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_EMBEDDING
+        - name: NVIDIA_API_KEY_RERANKING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_RERANKING
+        - name: NVIDIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY
+              optional: true
+        # AI providers
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: GEMINI_API_KEY
+              optional: true
+        - name: NEXT_PUBLIC_GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NEXT_PUBLIC_GEMINI_API_KEY
+              optional: true
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: ANTHROPIC_API_KEY
+              optional: true
+        # GCP Production DB (staging migration)
+        - name: GCP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: GCP_DATABASE_URL
+              optional: true
+        # Razorpay
+        - name: RAZORPAY_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_KEY_ID
+              optional: true
+        - name: RAZORPAY_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_KEY_SECRET
+              optional: true
+        - name: RAZORPAY_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_WEBHOOK_SECRET
+              optional: true
+        # Cron
+        - name: CRON_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: CRON_SECRET
+              optional: true
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: resumatch-ai
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+  selector:
+    app: backend
