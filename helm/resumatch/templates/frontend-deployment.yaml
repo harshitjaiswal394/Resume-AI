@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.frontend.service.port }}
+        resources:
+          {{- toYaml .Values.frontend.resources | nindent 10 }}
+        env:
+        - name: NEXT_PUBLIC_SUPABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NEXT_PUBLIC_SUPABASE_URL
+        - name: NEXT_PUBLIC_BACKEND_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NEXT_PUBLIC_BACKEND_API_URL
+        - name: BACKEND_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: BACKEND_API_URL
+        - name: NEXT_PUBLIC_APP_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: NEXT_PUBLIC_APP_URL
+
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: DATABASE_URL
+        - name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: GEMINI_API_KEY
+        - name: NVIDIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: ANTHROPIC_API_KEY
+        - name: RAZORPAY_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_KEY_ID
+        - name: RAZORPAY_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_KEY_SECRET
+        - name: RAZORPAY_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_WEBHOOK_SECRET
+
+        livenessProbe:
+          tcpSocket:
+            port: {{ .Values.frontend.service.port }}
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: {{ .Values.frontend.service.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 10

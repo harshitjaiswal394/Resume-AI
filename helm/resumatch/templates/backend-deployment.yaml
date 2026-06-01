@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.backend.service.port }}
+        resources:
+          {{- toYaml .Values.backend.resources | nindent 10 }}
+        env:
+        - name: SUPABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: SUPABASE_URL
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: DATABASE_URL
+        - name: SUPABASE_SERVICE_ROLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: SUPABASE_SERVICE_ROLE_KEY
+        - name: NVIDIA_API_KEY_REASONING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_REASONING
+        - name: NVIDIA_API_KEY_PARSING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_PARSING
+        - name: NVIDIA_API_KEY_EMBEDDING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_EMBEDDING
+        - name: NVIDIA_API_KEY_RERANKING
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY_RERANKING
+        - name: NVIDIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_API_KEY
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: GEMINI_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: ANTHROPIC_API_KEY
+        - name: RAZORPAY_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_KEY_ID
+        - name: RAZORPAY_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_KEY_SECRET
+        - name: RAZORPAY_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: RAZORPAY_WEBHOOK_SECRET
+        - name: CRON_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: CRON_SECRET
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.backend.service.port }}
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.backend.service.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 10

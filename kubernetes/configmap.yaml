@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resumatch-config
+  namespace: resumatch-ai
+data:
+  # Supabase configuration
+  SUPABASE_URL: "https://fukxrsqmulucvfvowcou.supabase.co"
+  NEXT_PUBLIC_SUPABASE_URL: "https://fukxrsqmulucvfvowcou.supabase.co"
+
+  # API URLs
+  # NEXT_PUBLIC_BACKEND_API_URL is used by the browser-facing frontend.
+  NEXT_PUBLIC_BACKEND_API_URL: "https://jaiswal.shop"
+
+  # BACKEND_API_URL is used for server-side requests from the Next.js server runtime.
+  BACKEND_API_URL: "http://backend-service.resumatch-ai.svc.cluster.local:8090"
+  NEXT_PUBLIC_APP_URL: "https://jaiswal.shop"
+
+  # NIM Model Configuration (non-sensitive)
+  NIM_MODEL_OCR: "nvidia/nemotron-ocr-v2"
+  NIM_MODEL_PARSING: "nvidia/nvidia-nemotron-nano-9b-v2"
+  NIM_MODEL_EMBEDDING: "nvidia/llama-nemotron-embed-1b-v2"
+  NIM_MODEL_RERANKING: "nvidia/llama-nemotron-rerank-1b-v2"
+  NIM_MODEL_REASONING: "nvidia/nemotron-3-super-120b-a12b"
+
+  # GCP Configuration (non-sensitive)
+  GCP_PROJECT_ID: "project-fd5c6032-c8d6-497d-9c2"
+  GCP_STORAGE_BUCKET: "resumatches-resumes-project-fd5c6032-c8d6-497d-9c2-staging"
+  FIREBASE_PROJECT_ID: "resumatch-ai-c5938"

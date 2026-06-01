@@ -1,0 +1,47 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: resumatch-gateway
+  namespace: resumatch-ai
+  annotations:
+    # Use GKE's managed Gateway class for Google Cloud Load Balancing
+    networking.gke.io/certmap: resumatch-cert-map
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: Same
+  - name: https
+    protocol: HTTPS
+    port: 443
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: resumatch-tls-secret
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+# HTTP-to-HTTPS Redirect Route (GKE)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https-redirect
+  namespace: resumatch-ai
+spec:
+  parentRefs:
+  - name: resumatch-gateway
+    sectionName: http
+  hostnames:
+  - jaiswal.shop
+  - www.jaiswal.shop
+  rules:
+  - filters:
+    - type: RequestRedirect
+      requestRedirect:
+        scheme: https
+        statusCode: 301

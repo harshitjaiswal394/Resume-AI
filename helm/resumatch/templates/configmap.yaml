@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resumatch-config
+  namespace: {{ .Values.global.namespace }}
+data:
+  SUPABASE_URL: {{ .Values.backend.config.SUPABASE_URL | quote }}
+  NEXT_PUBLIC_SUPABASE_URL: {{ .Values.backend.config.SUPABASE_URL | quote }}
+  NEXT_PUBLIC_BACKEND_API_URL: "https://{{ .Values.global.domain }}"
+  NEXT_PUBLIC_APP_URL: "https://{{ .Values.global.domain }}"
+  BACKEND_API_URL: "http://backend-service.{{ .Values.global.namespace }}.svc.cluster.local:{{ .Values.backend.service.port }}"
