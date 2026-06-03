@@ -51,4 +51,7 @@ CMD ["gunicorn", "app.main:app", \
      "--timeout", "600", \
      "--log-level", "info", \
      "--access-logfile", "-", \
-     "--error-logfile", "-"]
+     "--error-logfile", "-", \
+     "--capture-output",\
+     "--access-logformat","%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s %(D)s"]
+     ]
