@@ -45,7 +45,7 @@ EXPOSE 8090
 # Using Gunicorn as manager and UvicornWorker for ASGI (FastAPI) compatibility
 CMD ["gunicorn", "app.main:app", \
      "-b", "0.0.0.0:8090", \
-     "-w", "2", \
+     "-w", "1", \
      "-k", "uvicorn.workers.UvicornWorker", \
      "--worker-connections", "1000", \
      "--timeout", "600", \
@@ -53,4 +53,5 @@ CMD ["gunicorn", "app.main:app", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "--capture-output",\
+     "--enable-stdio-inheritance", \
      "--access-logformat","%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s %(D)s"]
