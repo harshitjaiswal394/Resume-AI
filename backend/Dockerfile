@@ -43,12 +43,12 @@ EXPOSE 8090
 
 # High-concurrency production command
 # Using Gunicorn as manager and UvicornWorker for ASGI (FastAPI) compatibility
-CMD ["gunicorn", "app.main:app",
-     "-b", "0.0.0.0:8090",
-     "-w", "2",
-     "-k", "uvicorn.workers.UvicornWorker",
-     "--worker-connections", "1000",
-     "--timeout", "600",
-     "--log-level", "info",
-     "--access-logfile", "-",
+CMD ["gunicorn", "app.main:app", \
+     "-b", "0.0.0.0:8090", \
+     "-w", "2", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "--worker-connections", "1000", \
+     "--timeout", "600", \
+     "--log-level", "info", \
+     "--access-logfile", "-", \
      "--error-logfile", "-"]
