@@ -49,9 +49,8 @@ CMD ["gunicorn", "app.main:app", \
      "-k", "uvicorn.workers.UvicornWorker", \
      "--worker-connections", "1000", \
      "--timeout", "600", \
-     "--log-level", "info", \
+     "--log-level", "debug", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "--capture-output",\
      "--access-logformat","%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s %(D)s"]
-     ]
