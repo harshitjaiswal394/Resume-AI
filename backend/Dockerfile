@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install curl dnsutils -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -45,13 +45,10 @@ EXPOSE 8090
 # Using Gunicorn as manager and UvicornWorker for ASGI (FastAPI) compatibility
 CMD ["gunicorn", "app.main:app", \
      "-b", "0.0.0.0:8090", \
-     "-w", "1", \
+     "-w", "2", \
      "-k", "uvicorn.workers.UvicornWorker", \
      "--worker-connections", "1000", \
      "--timeout", "600", \
-     "--log-level", "debug", \
+     "--log-level", "info", \
      "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--capture-output",\
-     "--enable-stdio-inheritance", \
-     "--access-logformat","%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s %(D)s"]
+     "--error-logfile", "-" ]
