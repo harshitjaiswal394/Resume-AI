@@ -50,5 +50,4 @@ CMD ["gunicorn", "app.main:app", \
      "--worker-connections", "1000", \
      "--timeout", "600", \
      "--log-level", "info", \
-     "--access-logfile", "-", \
      "--error-logfile", "-" ]
