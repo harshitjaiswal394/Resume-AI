@@ -26,8 +26,11 @@ from app.api.builder import router as builder_router
 from app.api.cover_letters import router as cover_letters_router
 from app.services.knowledge_base_seeder import job_seeder
 from apscheduler.schedulers.background import BackgroundScheduler
+from app.tracing import instrument_app
 
 app = FastAPI(title="ResuMatch AI API")
+instrument_app(app)
+
 
 # Setup Background Scheduler
 scheduler = BackgroundScheduler()

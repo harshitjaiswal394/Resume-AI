@@ -10,6 +10,13 @@ logger = logging.getLogger("resumatch-api.db")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
+
+try:
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+    SQLAlchemyInstrumentor().instrument(engine=engine)
+except ImportError:
+    pass
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():

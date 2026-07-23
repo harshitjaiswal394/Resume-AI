@@ -39,3 +39,25 @@ spec:
     backendRefs:
     - name: frontend-service
       port: 3000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: jaeger-route
+  namespace: resumatch-ai
+spec:
+  parentRefs:
+  - name: resumatch-gateway
+    sectionName: https
+  hostnames:
+  - jaeger.jaiswal.shop
+  - jaeger.resumatches.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: jaeger-service
+      port: 16686
+

@@ -64,6 +64,16 @@ spec:
             configMapKeyRef:
               name: resumatch-config
               key: GCP_PROJECT_ID
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: OTEL_EXPORTER_OTLP_ENDPOINT
+
 
         # ── Secret values (sensitive) ─────────────────────────────────────────
         - name: DATABASE_URL

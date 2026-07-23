@@ -37,6 +37,8 @@ spec:
   - "grafana.resumatches.com"
   - "resumatches.com"
   - "prometheus.resumatches.com"
+  - "jaeger.resumatches.com"
+  - "jaeger.jaiswal.shop"
   rules:
   - filters:
     - type: RequestRedirect
