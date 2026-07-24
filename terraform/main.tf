@@ -43,7 +43,7 @@ resource "google_compute_network" "vpc" {
 
 # 2.2 Subnet for Serverless VPC Access
 resource "google_compute_subnetwork" "serverless_subnet" {
-  name          = "serverless-subnet"
+  name          = "serverless-subnet-resumatch"
   ip_cidr_range = "10.10.0.0/28"
   network       = google_compute_network.vpc.id
   region        = var.region
