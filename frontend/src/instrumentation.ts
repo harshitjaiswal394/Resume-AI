@@ -12,11 +12,12 @@ export async function register() {
         resource: new Resource({
           [SEMRESATTRS_SERVICE_NAME]: 'frontend',
         }),
-        spanProcessor: new SimpleSpanProcessor(
+        // Cast to `any` to avoid type incompatibilities across OpenTelemetry package versions.
+        spanProcessor: (new SimpleSpanProcessor(
           new OTLPTraceExporter({
             url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://jaeger-service.resumatch-ai.svc.cluster.local:4318/v1/traces',
           })
-        ),
+        ) as unknown) as any,
         instrumentations: [getNodeAutoInstrumentations()],
       });
       sdk.start();

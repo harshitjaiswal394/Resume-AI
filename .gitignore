@@ -79,6 +79,7 @@
 /backend/MANIFEST
 
 # Virtual environments
+/backend/.venv/
 /backend/venv/
 /backend/env/
 /backend/ENV/
