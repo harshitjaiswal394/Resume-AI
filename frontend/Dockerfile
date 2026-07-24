@@ -7,8 +7,8 @@ WORKDIR /app
 RUN corepack enable
 
 # Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci --include=optional
+COPY package.json ./
+RUN npm install --include=optional
 
 # Copy application source
 COPY . .
