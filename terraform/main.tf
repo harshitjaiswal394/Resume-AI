@@ -146,11 +146,11 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
       env {
         name  = "NEXT_PUBLIC_BACKEND_API_URL"
-        value = "https://resumatches.com"
+        value = "https://jaiswal.shop"
       }
       env {
         name  = "BACKEND_API_URL"
-        value = "https://resumatches.com"
+        value = "https://jaiswal.shop"
       }
     }
     vpc_access {
@@ -214,7 +214,7 @@ resource "google_compute_url_map" "url_map" {
   default_service = google_compute_backend_service.frontend_service.id
 
   host_rule {
-    hosts        = ["resumatches.com", "www.resumatches.com"]
+    hosts        = ["jaiswal.shop", "www.jaiswal.shop"]
     path_matcher = "allpaths"
   }
 
@@ -232,7 +232,7 @@ resource "google_compute_url_map" "url_map" {
 resource "google_compute_managed_ssl_certificate" "cert" {
   name = "resumatch-cert-v3"
   managed {
-    domains = ["resumatches.com", "www.resumatches.com"]
+    domains = ["jaiswal.shop", "www.jaiswal.shop"]
   }
 
   lifecycle {
@@ -260,7 +260,7 @@ resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
 
 # 8. DNS Configuration (Referencing existing Zone)
 data "google_dns_managed_zone" "primary" {
-  name = "resumatches-com"
+  name = "jaiswal-shop"
 }
 
 resource "google_dns_record_set" "root" {
