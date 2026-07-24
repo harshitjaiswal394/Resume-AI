@@ -8,9 +8,7 @@ RUN corepack enable
 
 # Install dependencies
 COPY package.json package-lock.json* ./
-RUN npm ci
-
-RUN npm install lightningcss-linux-x64-gnu --no-save
+RUN npm ci --include=optional
 
 # Copy application source
 COPY . .
