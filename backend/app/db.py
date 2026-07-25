@@ -1,8 +1,10 @@
 import os
 import logging
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 
 load_dotenv()
 
@@ -16,6 +18,24 @@ try:
     SQLAlchemyInstrumentor().instrument(engine=engine)
 except ImportError:
     pass
+
+@event.listens_for(engine, "handle_error")
+def mark_db_span_error(exception_context):
+    span = trace.get_current_span()
+    if span is None:
+        return
+
+    original_exception = exception_context.original_exception
+    if original_exception is None:
+        return
+
+    span.record_exception(original_exception)
+    span.set_status(Status(StatusCode.ERROR, str(original_exception)))
+    span.set_attribute("error", True)
+    span.set_attribute("error.type", original_exception.__class__.__name__)
+    span.set_attribute("error.message", str(original_exception))
+    if exception_context.statement:
+        span.set_attribute("db.statement", exception_context.statement)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -32,21 +52,21 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
     Filters available: domain, work_mode, location, experience_level, days_old
     """
     filters = filters or {}
-    
+
     with engine.connect() as conn:
         embedding_str = f"[{','.join(map(str, embedding))}]"
-        
+
         # Base query parts
         base_query = """
-            SELECT id, title, company, location, description, skills, salary_range, 
+            SELECT id, title, company, location, description, skills, salary_range,
                    domain, source, work_mode, experience_level, education, apply_url, posted_at,
                    1 - (embedding <=> CAST(:embedding AS vector)) as similarity
             FROM job_postings
             WHERE 1=1
         """
-        
+
         params = {"embedding": embedding_str, "limit": limit}
-        
+
         # Dynamic SQL construction with support for Multi-Select (Lists)
         def add_filter(column, key, val):
             nonlocal base_query
@@ -74,7 +94,7 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
         add_filter("work_mode", "work_mode", filters.get("work_mode"))
         add_filter("experience_level", "exp", filters.get("experience_level"))
         add_filter("location", "loc", filters.get("location"))
-            
+
         if filters.get("days_old"):
             base_query += " AND posted_at >= NOW() - INTERVAL '1 day' * :days "
             params["days"] = int(filters["days_old"])
@@ -83,22 +103,23 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
 
         # Finalize ordering and limit
         final_query = base_query + " ORDER BY similarity DESC LIMIT :limit"
-        
+
         result = conn.execute(text(final_query), params)
-        
+
         results = []
         for row in result:
             job_dict = {}
             for key, value in row._asdict().items():
-                if hasattr(value, 'hex'): 
+                if hasattr(value, 'hex'):
                     job_dict[key] = str(value)
                 elif hasattr(value, 'isoformat'): # Handle datetimes
                     job_dict[key] = value.isoformat()
                 else:
                     job_dict[key] = value
             results.append(job_dict)
-            
+
         return results
+
 
 import json
 def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
@@ -110,7 +131,7 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
     analysis = data.get("analysis", {})
     matches = data.get("matches", [])
     raw_text = data.get("raw_text", "")
-    
+
     # 0. Validate UUID status to prevent Postgres crash on "guest" string
     import uuid
     try:
@@ -124,7 +145,7 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
         # 1. Update Resume Record
         conn.execute(
             text("""
-                UPDATE resumes 
+                UPDATE resumes
                 SET status = 'complete',
                     parsed_data = :parsed,
                     target_role = :target_role,
@@ -165,20 +186,20 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                 "user_id": user_id
             }
         )
-        
+
         # 2. Sync Job Matches (Delete old, Insert new)
         if matches:
             conn.execute(
                 text("DELETE FROM job_matches WHERE resume_id = :id"),
                 {"id": resume_id}
             )
-            
+
             for m in matches:
                 conn.execute(
                     text("""
                         INSERT INTO job_matches (
-                            resume_id, user_id, job_title, company, location, 
-                            match_score, matching_skills, missing_skills, 
+                            resume_id, user_id, job_title, company, location,
+                            match_score, matching_skills, missing_skills,
                             ai_reasoning, apply_links, created_at
                         ) VALUES (
                             :rid, :uid, :title, :company, :loc,
@@ -199,7 +220,7 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                         "links": json.dumps(m.get("apply_links") or {})
                     }
                 )
-        
+
         # 3. Create Audit Log
         conn.execute(
             text("""
@@ -212,7 +233,5 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                 "meta": json.dumps({"score": analysis.get("score")})
             }
         )
-        
+
     return True
-
-

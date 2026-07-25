@@ -8,8 +8,10 @@ load_dotenv("../.env") # checks root .env
 
 import logging
 import asyncio
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 
 # Configure deep logging
 logging.basicConfig(
@@ -35,14 +37,34 @@ instrument_app(app)
 # Setup Background Scheduler
 scheduler = BackgroundScheduler()
 
+@app.middleware("http")
+async def mark_failed_requests(request: Request, call_next):
+    span = trace.get_current_span()
+    try:
+        response = await call_next(request)
+        if response.status_code >= 400:
+            span.set_status(Status(StatusCode.ERROR, f"HTTP {response.status_code}"))
+            span.set_attribute("error", True)
+            span.set_attribute("error.type", "http_error")
+            span.set_attribute("error.message", f"HTTP {response.status_code}")
+            span.set_attribute("http.status_code", response.status_code)
+        return response
+    except Exception as exc:
+        span.record_exception(exc)
+        span.set_status(Status(StatusCode.ERROR, str(exc)))
+        span.set_attribute("error", True)
+        span.set_attribute("error.type", exc.__class__.__name__)
+        span.set_attribute("error.message", str(exc))
+        raise
+
 @app.on_event("startup")
 async def startup_event():
     # Start Scheduler
     if not scheduler.running:
         scheduler.start()
         logger.info("Background scheduler started.")
-        
-    # Automatic seeding disabled as requested. 
+
+    # Automatic seeding disabled as requested.
     # Use 'python scripts/seed_kb.py' to run it manually.
     logger.info("Backend started. Automatic Knowledge Base seeding is DISABLED.")
 

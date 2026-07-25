@@ -10,6 +10,7 @@ type BrowserTracePayload = {
   statusCode: number;
   startTime: number;
   endTime: number;
+  errorMessage?: string;
 };
 
 declare global {
@@ -29,7 +30,7 @@ function buildTraceparent(traceId: string, spanId: string) {
 }
 
 function isTraceableRequest(url: URL) {
-  if (url.pathname === "/_telemetry/browser-span") {
+  if (url.pathname === "/telemetry/browser-span") {
     return false;
   }
 
@@ -41,11 +42,11 @@ async function reportBrowserSpan(payload: BrowserTracePayload) {
 
   if (navigator.sendBeacon) {
     const blob = new Blob([body], { type: "application/json" });
-    navigator.sendBeacon("/_telemetry/browser-span", blob);
+    navigator.sendBeacon("/telemetry/browser-span", blob);
     return;
   }
 
-  await fetch("/_telemetry/browser-span", {
+  await fetch("/telemetry/browser-span", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
@@ -90,11 +91,13 @@ export function installBrowserTracing() {
         statusCode: response.status,
         startTime,
         endTime,
+        errorMessage: response.ok ? undefined : `${response.status} ${response.statusText}`.trim(),
       });
 
       return response;
     } catch (error) {
       const endTime = Date.now();
+      const message = error instanceof Error ? error.message : "Network request failed";
 
       void reportBrowserSpan({
         traceId,
@@ -104,6 +107,7 @@ export function installBrowserTracing() {
         statusCode: 0,
         startTime,
         endTime,
+        errorMessage: message,
       });
 
       throw error;

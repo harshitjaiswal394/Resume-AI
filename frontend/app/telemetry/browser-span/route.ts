@@ -9,6 +9,7 @@ type BrowserSpanRequest = {
   statusCode: number;
   startTime: number;
   endTime: number;
+  errorMessage?: string;
 };
 
 function isValidHex(value: string, expectedLength: number) {
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
           "span.origin": "browser-mirror",
           "http.request.method": body.method,
           "http.response.status_code": body.statusCode,
+          "http.url": body.url,
           "url.full": body.url,
         },
       },
@@ -48,7 +50,10 @@ export async function POST(request: NextRequest) {
     );
 
     if (body.statusCode >= 400 || body.statusCode === 0) {
-      span.setStatus({ code: SpanStatusCode.ERROR });
+      span.setStatus({ code: SpanStatusCode.ERROR, message: body.errorMessage });
+      span.setAttribute("error", true)
+      span.setAttribute("error.message", body.errorMessage ?? "Frontend request failed")
+      span.setAttribute("error.type", body.statusCode === 0 ? "network_error" : "http_error")
     }
 
     span.end(body.endTime);
