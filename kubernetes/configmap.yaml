@@ -10,11 +10,11 @@ data:
 
   # API URLs
   # NEXT_PUBLIC_BACKEND_API_URL is used by the browser-facing frontend.
-  NEXT_PUBLIC_BACKEND_API_URL: "https://resumatches.com"
+  NEXT_PUBLIC_BACKEND_API_URL: "https://jaiswal.shop"
 
   # BACKEND_API_URL is used for server-side requests from the Next.js server runtime.
   BACKEND_API_URL: "http://backend-service.resumatch-ai.svc.cluster.local:8090"
-  NEXT_PUBLIC_APP_URL: "https://resumatches.com"
+  NEXT_PUBLIC_APP_URL: "https://jaiswal.shop"
 
   # NIM Model Configuration (non-sensitive)
   NIM_MODEL_OCR: "nvidia/nemotron-ocr-v2"
@@ -29,4 +29,5 @@ data:
   FIREBASE_PROJECT_ID: "resumatch-ai-c5938"
 
   # OpenTelemetry Configuration
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://$(NODE_IP):4318/v1/traces"
+  # Use the in-cluster OpenTelemetry Collector service; do not rely on NODE_IP expansion in ConfigMaps
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.resumatch-ai.svc.cluster.local:4318/v1/traces"

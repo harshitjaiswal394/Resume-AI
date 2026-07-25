@@ -16,25 +16,26 @@ def instrument_app(app):
         from opentelemetry.sdk.resources import Resource, SERVICE_NAME
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-        
+
         service_name = os.getenv("OTEL_SERVICE_NAME", "backend")
         endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger-service.resumatch-ai.svc.cluster.local:4318/v1/traces")
-        
+        excluded_urls = os.getenv("OTEL_PYTHON_EXCLUDED_URLS", "/health")
+
         logger.info(f"Initializing OpenTelemetry Tracer for service '{service_name}' sending to '{endpoint}'")
-        
+
         resource = Resource(attributes={
             SERVICE_NAME: service_name
         })
-        
+
         provider = TracerProvider(resource=resource)
         processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
         provider.add_span_processor(processor)
         trace.set_tracer_provider(provider)
-        
+
         # Instrument FastAPI Application
-        FastAPIInstrumentor.instrument_app(app)
+        FastAPIInstrumentor.instrument_app(app, excluded_urls=excluded_urls)
         logger.info("OpenTelemetry FastAPI instrumentation applied successfully.")
-        
+
         # Instrument Outgoing HTTP Clients
         try:
             from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
@@ -56,6 +57,6 @@ def instrument_app(app):
             logger.info("OpenTelemetry URLLib3 client instrumentation applied.")
         except Exception as e:
             logger.warning(f"Could not instrument URLLib3 client: {e}")
-            
+
     except Exception as e:
         logger.error(f"OpenTelemetry initialization failed: {e}. Running app WITHOUT distributed tracing.")

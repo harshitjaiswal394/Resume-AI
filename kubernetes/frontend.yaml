@@ -21,7 +21,7 @@ spec:
         fsGroup: 10001
       containers:
       - name: frontend
-        image: us-east1-docker.pkg.dev/project-fd5c6032-c8d6-497d-9c2/resumatches-official/frontend:latest
+        image: us-east1-docker.pkg.dev/resumeai-503317/resumatches-official/frontend:latest
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false

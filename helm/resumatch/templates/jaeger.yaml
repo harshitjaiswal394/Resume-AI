@@ -1,23 +1,26 @@
+{{- if .Values.jaeger.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: jaeger-data
-  namespace: resumatch-ai
+  namespace: {{ .Values.global.namespace }}
   labels:
     app: jaeger
 spec:
   accessModes:
-  - ReadWriteOnce
-  storageClassName: standard-rwo
+{{- range .Values.jaeger.persistence.accessModes }}
+  - {{ . }}
+{{- end }}
+  storageClassName: {{ .Values.jaeger.persistence.storageClassName | quote }}
   resources:
     requests:
-      storage: 10Gi
+      storage: {{ .Values.jaeger.persistence.size }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jaeger
-  namespace: resumatch-ai
+  namespace: {{ .Values.global.namespace }}
   labels:
     app: jaeger
 spec:
@@ -37,7 +40,8 @@ spec:
         fsGroup: 10001
       containers:
       - name: jaeger
-        image: jaegertracing/all-in-one:1.57
+        image: "{{ .Values.jaeger.image.repository }}:{{ .Values.jaeger.image.tag }}"
+        imagePullPolicy: {{ .Values.jaeger.image.pullPolicy }}
         env:
         - name: COLLECTOR_OTLP_ENABLED
           value: "true"
@@ -60,12 +64,7 @@ spec:
         - name: jaeger-data
           mountPath: /badger
         resources:
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-          requests:
-            cpu: "100m"
-            memory: "256Mi"
+{{ toYaml .Values.jaeger.resources | indent 10 }}
       volumes:
       - name: jaeger-data
         persistentVolumeClaim:
@@ -75,7 +74,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jaeger-service
-  namespace: resumatch-ai
+  namespace: {{ .Values.global.namespace }}
 spec:
   ports:
   - name: query-http
@@ -92,3 +91,4 @@ spec:
     protocol: TCP
   selector:
     app: jaeger
+{{- end }}
