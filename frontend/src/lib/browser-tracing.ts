@@ -29,7 +29,7 @@ function buildTraceparent(traceId: string, spanId: string) {
 }
 
 function isTraceableRequest(url: URL) {
-  if (url.pathname === "/api/telemetry/browser-span") {
+  if (url.pathname === "/_telemetry/browser-span") {
     return false;
   }
 
@@ -41,11 +41,11 @@ async function reportBrowserSpan(payload: BrowserTracePayload) {
 
   if (navigator.sendBeacon) {
     const blob = new Blob([body], { type: "application/json" });
-    navigator.sendBeacon("/api/telemetry/browser-span", blob);
+    navigator.sendBeacon("/_telemetry/browser-span", blob);
     return;
   }
 
-  await fetch("/api/telemetry/browser-span", {
+  await fetch("/_telemetry/browser-span", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
