@@ -218,6 +218,8 @@ Example:
 helm install loki grafana/loki \
     -n monitoring \
     -f values.yaml
+
+    helm upgrade loki grafana/loki -n monitoring -f values.yaml
 ```
 
 ### Why?
@@ -238,6 +240,11 @@ Deploys:
 ```bash
 helm install promtail grafana/promtail \
     -n monitoring
+
+helm upgrade --install promtail grafana/promtail \
+-n monitoring \
+--set config.clients[0].url=http://loki-gateway/loki/api/v1/push \
+--set config.clients[0].tenant_id=1
 ```
 
 ### Why?
@@ -246,11 +253,27 @@ Promtail runs as a DaemonSet and collects container logs from every node.
 
 ---
 
-# 7. Install Grafana
+# 7. Install Prometheus + Grafana
 
 ```bash
-helm install grafana grafana/grafana \
-    -n monitoring
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring
+
+helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+-n monitoring
+
+helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+-n monitoring -f persistent.yaml --reuse-values
+
+kubectl get secret prometheus-grafana \
+-n monitoring \
+-o jsonpath="{.data.admin-password}" | base64 --decode
+
+kubectl edit secret prometheus-grafana -n monitoring
+
 ```
 
 ### Why?
@@ -1073,7 +1096,7 @@ Then upgrade:
 ```bash
 helm upgrade loki grafana/loki \
   -n monitoring \
-  -f values.yaml
+  -f loki-values.yml
 ```
 
 ---
