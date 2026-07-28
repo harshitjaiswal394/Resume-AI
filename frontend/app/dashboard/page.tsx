@@ -319,8 +319,12 @@ export default function Dashboard() {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/msword'
     ];
-    if (!allowedTypes.includes(file.type) && !file.name.endsWith('.pdf') && !file.name.endsWith('.docx')) {
-      toast.error('Please upload a PDF or DOCX file');
+    const isAllowedType = allowedTypes.includes(file.type) ||
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.name.toLowerCase().endsWith('.docx');
+
+    if (!isAllowedType) {
+      toast.error('Unsupported file type. Please upload a PDF or DOCX resume.');
       return;
     }
 
@@ -457,7 +461,11 @@ export default function Dashboard() {
       }
 
     } catch (err: any) {
-      toast.error(err.message || 'Analysis failed');
+      const message = err?.message || 'Analysis failed';
+      const friendlyMessage = message.includes('Unsupported') || message.includes('PDF or DOCX')
+        ? 'Unsupported file type. Please upload a PDF or DOCX resume.'
+        : message;
+      toast.error(friendlyMessage);
       setIsAnalyzing(false);
     }
   };

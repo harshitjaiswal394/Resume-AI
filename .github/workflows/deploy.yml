@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
   push:
-    branches: [ "dev-feat" , "dev", "dev-domain", "dev-major", "dev-major-fix" ]
+    branches: [ "feature/opentelemetry-tracing-frontend" ]
   workflow_dispatch:
 
 env:
@@ -54,7 +54,7 @@ jobs:
             -target=google_artifact_registry_repository.repo \
             -target=google_compute_network.vpc \
             -var="project_id=${{ env.PROJECT_ID }}" \
-            -var="domain_name=resumatches.com" \
+            -var="domain_name=jaiswal.shop" \
             -var="database_url=${{ secrets.DATABASE_URL }}" \
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
@@ -79,44 +79,44 @@ jobs:
           docker build \
             --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
-            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://resumatches.com" \
+            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://jaiswal.shop" \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ./frontend
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:latest
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend --all-tags
+    
+  # deploy:
+  #   name: "2. Deploy"
+  #   needs: build-and-prep
+  #   runs-on: ubuntu-latest
+  #   environment: dev
+  #   steps:
+  #     - name: Checkout Code
+  #       uses: actions/checkout@v4
 
-  deploy:
-    name: "2. Deploy"
-    needs: build-and-prep
-    runs-on: ubuntu-latest
-    environment: dev
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+  #     - name: Google Auth
+  #       uses: google-github-actions/auth@v2
+  #       with:
+  #         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  #         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
 
-      - name: Google Auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+  #     - name: Setup Terraform
+  #       uses: hashicorp/setup-terraform@v3
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+  #     - name: Terraform Init
+  #       run: terraform init
+  #       working-directory: ./terraform
 
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ./terraform
-
-      - name: Final Terraform Apply
-        run: |
-          terraform apply -auto-approve \
-            -var="project_id=${{ env.PROJECT_ID }}" \
-            -var="domain_name=resumatches.com" \
-            -var="database_url=${{ secrets.DATABASE_URL }}" \
-            -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
-            -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
-            -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
-            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
-            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
-            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -var="image_tag=${{ github.sha }}"
-        working-directory: ./terraform
+  #     - name: Final Terraform Apply
+  #       run: |
+  #         terraform apply -auto-approve \
+  #           -var="project_id=${{ env.PROJECT_ID }}" \
+  #           -var="domain_name=resumatches.com" \
+  #           -var="database_url=${{ secrets.DATABASE_URL }}" \
+  #           -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
+  #           -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
+  #           -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
+  #           -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+  #           -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
+  #           -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+  #           -var="image_tag=${{ github.sha }}"
+  #       working-directory: ./terraform
