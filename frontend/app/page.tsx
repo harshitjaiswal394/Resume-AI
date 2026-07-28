@@ -124,7 +124,7 @@ export default function LandingPage() {
   };
 
   const processFile = async (file: File) => {
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
     const isAllowedType = allowedTypes.includes(file.type) || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.docx');
 
     if (!isAllowedType) return toast.error('Unsupported file type. Please upload a PDF or DOCX resume.');
