@@ -185,6 +185,33 @@ export default function Dashboard() {
     return 'Almost there — finalizing your results...';
   };
 
+  const formatLastAnalyzed = (timestamp?: string | null) => {
+    if (!timestamp) return 'Last analyzed: --';
+
+    const analyzedAt = new Date(timestamp);
+    if (Number.isNaN(analyzedAt.getTime())) return 'Last analyzed: --';
+
+    const now = new Date();
+    const analyzedDate = new Date(analyzedAt.getFullYear(), analyzedAt.getMonth(), analyzedAt.getDate());
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffDays = Math.round((today.getTime() - analyzedDate.getTime()) / 86400000);
+    const timeLabel = new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(analyzedAt);
+
+    if (diffDays === 0) return `Last analyzed: Today, ${timeLabel}`;
+    if (diffDays === 1) return `Last analyzed: Yesterday, ${timeLabel}`;
+
+    const dateLabel = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: analyzedAt.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+    }).format(analyzedAt);
+
+    return `Last analyzed: ${dateLabel}, ${timeLabel}`;
+  };
+
   const updateStepStatus = (id: string, status: 'pending' | 'loading' | 'done') => {
     setAnalysisSteps(prev => prev.map(step => step.id === id ? { ...step, status } : step));
   };
@@ -316,8 +343,7 @@ export default function Dashboard() {
   const processFile = async (file: File) => {
     const allowedTypes = [
       'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
     const isAllowedType = allowedTypes.includes(file.type) ||
       file.name.toLowerCase().endsWith('.pdf') ||
@@ -451,6 +477,8 @@ export default function Dashboard() {
                   if (currentIndex < stepsSet.length - 1) {
                     updateStepStatus(stepsSet[currentIndex + 1], 'loading');
                   }
+                } else if (event.error) {
+                  throw new Error(event.error);
                 }
               } catch (e) {
                 console.warn('Incomplete frame or parsing error:', e);
@@ -533,7 +561,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
               <span className="text-slate-600 truncate max-w-[200px]">{selectedResume?.file_name || 'Loading...'}</span>
               <span className="h-1 w-1 rounded-full bg-slate-300" />
-              <span>Last analyzed: Today, 6:41 PM</span>
+              <span>{formatLastAnalyzed(selectedResume?.updated_at || selectedResume?.created_at)}</span>
               <Badge className="bg-amber-50 text-amber-600 border-amber-100 ml-2">Free Plan</Badge>
             </div>
           </div>
