@@ -124,9 +124,9 @@ export default function LandingPage() {
 
   const processFile = async (file: File) => {
     const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
-    const isAllowedType = allowedTypes.includes(file.type) || file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.doc');
+    const isAllowedType = allowedTypes.includes(file.type) || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.docx');
 
-    if (!isAllowedType) return toast.error('Please upload a PDF or DOCX file');
+    if (!isAllowedType) return toast.error('Unsupported file type. Please upload a PDF or DOCX resume.');
     if (file.size > 5 * 1024 * 1024) return toast.error('File size exceeds 5MB limit');
 
     if (user) {
@@ -208,7 +208,11 @@ export default function LandingPage() {
 
     } catch (error: any) {
       console.error('Analysis failed', error);
-      toast.error('Failed to process resume. Please try again.');
+      const message = error?.message || 'Failed to process resume. Please try again.';
+      const friendlyMessage = message.includes('Unsupported') || message.includes('PDF or DOCX')
+        ? 'Unsupported file type. Please upload a PDF or DOCX resume.'
+        : message;
+      toast.error(friendlyMessage);
       setIsAnalyzing(false);
     }
   };

@@ -96,12 +96,11 @@ export default function OnboardingFlow() {
       'application/msword'
     ];
     const isAllowedType = allowedTypes.includes(file.type) ||
-      file.name.endsWith('.pdf') ||
-      file.name.endsWith('.docx') ||
-      file.name.endsWith('.doc');
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.name.toLowerCase().endsWith('.docx');
 
     if (!isAllowedType) {
-      toast.error('Please upload a PDF or DOCX file');
+      toast.error('Unsupported file type. Please upload a PDF or DOCX resume.');
       return;
     }
 
@@ -248,7 +247,11 @@ export default function OnboardingFlow() {
 
     } catch (error: any) {
       console.error('Analysis failed', error);
-      toast.error('Failed to process resume. Please try again.');
+      const message = error?.message || 'Failed to process resume. Please try again.';
+      const friendlyMessage = message.includes('Unsupported') || message.includes('PDF or DOCX')
+        ? 'Unsupported file type. Please upload a PDF or DOCX resume.'
+        : message;
+      toast.error(friendlyMessage);
       setCurrentStep('upload');
     }
   };

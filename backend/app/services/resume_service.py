@@ -17,7 +17,7 @@ class ResumeService:
             elif filename.endswith('.docx'):
                 return await asyncio.to_thread(ResumeService._extract_from_docx, file_content)
             else:
-                raise ValueError("Unsupported file format. Please upload PDF or DOCX.")
+                raise ValueError("Unsupported file format. Please upload a PDF or DOCX resume.")
         except Exception as e:
             logging.error(f"Text extraction failed for {filename}: {str(e)}")
             raise
