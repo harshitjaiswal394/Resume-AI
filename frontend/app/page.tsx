@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
 
 export default function LandingPage() {
+  const GUEST_ONBOARDING_STATE_KEY = 'guestOnboardingState';
   const router = useRouter();
   const { user, profile } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -152,24 +153,28 @@ export default function LandingPage() {
       const reader = response.body.getReader();
       const decoder = new (window.TextDecoder || TextDecoder)();
       let done = false;
+      let buffer = '';
+      let receivedFinalEvent = false;
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const messages = chunk.split('\n\n');
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() || '';
 
-          for (const message of messages) {
-            if (message.startsWith('data: ')) {
+          for (const frame of frames) {
+            if (frame.startsWith('data: ')) {
               try {
-                const event = JSON.parse(message.replace('data: ', ''));
+                const event = JSON.parse(frame.replace('data: ', ''));
 
                 if (event.type === 'ping') {
                   continue; // Keep connection alive
                 }
 
                 if (event.step === 'final') {
+                  receivedFinalEvent = true;
                   setFullAnalysisData(event.data);
                   setActiveResumeId('guest');
                   
@@ -177,7 +182,14 @@ export default function LandingPage() {
                   toast.success('Analysis complete!');
                   setTimeout(() => {
                     setIsAnalyzing(false);
-                    setIsPersonalizing(true);
+                    sessionStorage.setItem(GUEST_ONBOARDING_STATE_KEY, JSON.stringify({
+                      analysisData: event.data,
+                      activeResumeId: 'guest',
+                      fileName: file.name,
+                      fileSize: file.size,
+                      fileType: file.type,
+                    }));
+                    router.push('/onboarding');
                   }, 800);
                 } else if (event.step) {
                   updateStepStatus(event.step, event.status);
@@ -187,7 +199,7 @@ export default function LandingPage() {
                   throw new Error(event.error);
                 }
               } catch (e) {
-                console.warn('Parsing SSE chunk failed', e);
+                console.warn('Parsing SSE frame failed', e);
               }
             }
           }
@@ -195,13 +207,13 @@ export default function LandingPage() {
       }
 
       // Safety Valve: If stream ended but we have data and haven't transitioned yet
-      if (fullAnalysisData && isAnalyzing) {
+      if (receivedFinalEvent && isAnalyzing) {
         setUploadProgress(100);
         setTimeout(() => {
           setIsAnalyzing(false);
-          setIsPersonalizing(true);
+          router.push('/onboarding');
         }, 800);
-      } else if (!fullAnalysisData && isAnalyzing) {
+      } else if (!receivedFinalEvent && isAnalyzing) {
          // Something went wrong, stream ended without data
          throw new Error('Analysis stream ended prematurely');
       }

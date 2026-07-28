@@ -32,6 +32,7 @@ import { generateJobLinks } from '@/lib/job-portals';
 type Step = 'upload' | 'analyzing' | 'personalize';
 
 export default function OnboardingFlow() {
+  const GUEST_ONBOARDING_STATE_KEY = 'guestOnboardingState';
   const { user, profile } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +60,27 @@ export default function OnboardingFlow() {
   const [activeResumeId, setActiveResumeId] = useState('guest');
   const [isTailoring, setIsTailoring] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedState = sessionStorage.getItem(GUEST_ONBOARDING_STATE_KEY);
+    if (!storedState) return;
+
+    try {
+      const guestState = JSON.parse(storedState);
+      if (guestState?.analysisData) {
+        setFullAnalysisData(guestState.analysisData);
+        setActiveResumeId(guestState.activeResumeId || 'guest');
+        setFileName(guestState.fileName || '');
+        setCurrentStep('personalize');
+        setUploadProgress(100);
+      }
+    } catch (error) {
+      console.warn('Failed to restore guest onboarding state', error);
+      sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+    }
+  }, []);
 
   const updateStepStatus = (id: string, status: 'pending' | 'loading' | 'done') => {
     setAnalysisSteps(prev => prev.map(step => step.id === id ? { ...step, status } : step));
@@ -92,8 +114,7 @@ export default function OnboardingFlow() {
   const processFile = async (file: File) => {
     const allowedTypes = [
       'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
     const isAllowedType = allowedTypes.includes(file.type) ||
       file.name.toLowerCase().endsWith('.pdf') ||
@@ -191,18 +212,20 @@ export default function OnboardingFlow() {
       const reader = response.body.getReader();
       const decoder = new (window.TextDecoder || TextDecoder)();
       let done = false;
+      let buffer = '';
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const messages = chunk.split('\n\n');
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() || '';
 
-          for (const message of messages) {
-            if (message.startsWith('data: ')) {
+          for (const frame of frames) {
+            if (frame.startsWith('data: ')) {
               try {
-                const event = JSON.parse(message.replace('data: ', ''));
+                const event = JSON.parse(frame.replace('data: ', ''));
 
                 if (event.type === 'ping') {
                   continue; // Keep connection alive
@@ -238,7 +261,7 @@ export default function OnboardingFlow() {
                   throw new Error(event.error);
                 }
               } catch (e) {
-                console.warn('Parsing SSE chunk failed', e);
+                console.warn('Parsing SSE frame failed', e);
               }
             }
           }
@@ -275,26 +298,35 @@ export default function OnboardingFlow() {
       let resumeId = activeResumeId;
 
       // If this was a guest analysis, we need to save it to the DB now for the new user
-      if (resumeId === 'guest' && fileRef.current) {
+      if (resumeId === 'guest') {
         console.log('Saving guest analysis to new user record...');
         const file = fileRef.current;
-        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+        const storedState = typeof window !== 'undefined'
+          ? sessionStorage.getItem(GUEST_ONBOARDING_STATE_KEY)
+          : null;
+        const guestState = storedState ? JSON.parse(storedState) : null;
+        const resumeFileName = file?.name || guestState?.fileName || 'guest_resume.docx';
+        const resumeFileType = resumeFileName.endsWith('.pdf') ? 'pdf' : 'docx';
+        const resumeFileSize = file?.size || guestState?.fileSize || 0;
+        let publicUrl = '';
 
-        // 1. Upload to storage
-        const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
-        if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
-
-        const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
+        // 1. Upload to storage if the original file is still available in memory
+        if (file) {
+          const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+          const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
+          if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
+          ({ data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath));
+        }
 
         // 2. Insert resume record
         const { data: resumeData, error: resumeError } = await supabase
           .from('resumes')
           .insert({
             user_id: user.id,
-            file_name: file.name,
+            file_name: resumeFileName,
             file_url: publicUrl,
-            file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
-            file_size_bytes: file.size,
+            file_type: resumeFileType,
+            file_size_bytes: resumeFileSize,
             status: 'parsing',
           })
           .select()
@@ -306,6 +338,7 @@ export default function OnboardingFlow() {
 
         // 3. Persist the analysis data received earlier as a guest
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
+        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
       }
 
       if (resumeId !== 'guest') {
