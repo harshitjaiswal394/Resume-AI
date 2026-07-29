@@ -106,7 +106,7 @@ jobs:
   #       run: terraform init
   #       working-directory: ./terraform
 
-  #     - name: Final Terraform Apply
+  ##    - name: Final Terraform Apply
   #       run: |
   #         terraform apply -auto-approve \
   #           -var="project_id=${{ env.PROJECT_ID }}" \
