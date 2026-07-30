@@ -7,8 +7,12 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup
+from bs4 import MarkupResemblesLocatorWarning
+import warnings
 
 logger = logging.getLogger("resumatch-api.scraper")
+
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
 
 class ScraperService:
@@ -106,7 +110,9 @@ class ScraperService:
             return normalized
 
         if fragment.startswith("/job/"):
-            logger.info(f"Detected client-side job fragment route: {fragment}")
+            job_id = fragment.split("/job/", 1)[1].strip("/")
+            query.setdefault("job", [job_id])
+            logger.info(f"Detected client-side job fragment route: {fragment} -> job={job_id}")
 
         cleaned_query = urlencode(query, doseq=True)
         normalized = urlunparse((parsed.scheme or "https", parsed.netloc, parsed.path, parsed.params, cleaned_query, ""))
@@ -123,7 +129,6 @@ class ScraperService:
                 result["status_code"] = response.status_code
                 result["content"] = text
                 result["accepted"] = response.status_code == 200 and self._looks_like_valid_job_text(text)
-
                 if result["accepted"]:
                     logger.info("Jina fetch successful.")
                 else:
@@ -167,7 +172,7 @@ class ScraperService:
         if body_text:
             parts.append(body_text)
         combined = self._clean_text("\n\n".join(part for part in parts if part))
-        if self._is_probably_block_page(combined, url):
+        if self._is_probably_block_page(combined, url) and len(combined) < 250:
             logger.warning("Structured extraction resolved to a blocked/login page.")
             return ""
         return combined
@@ -179,7 +184,7 @@ class ScraperService:
         main = soup.find("main") or soup.find("article") or soup.body or soup
         text = main.get_text(separator=" ")
         clean_text = self._clean_text(text)
-        if self._is_probably_block_page(clean_text, ""):
+        if self._is_probably_block_page(clean_text, "") and len(clean_text) < 250:
             logger.warning("Scraped text looks like a blocked/login page.")
             return ""
         return clean_text
@@ -213,13 +218,13 @@ class ScraperService:
                 item_type = str(item.get("@type", "")).lower()
                 if "jobposting" not in item_type:
                     continue
-                title = item.get("title") or ""
-                description = self._html_to_text(item.get("description") or "")
-                qualifications = self._html_to_text(item.get("qualifications") or "")
-                responsibilities = self._html_to_text(item.get("responsibilities") or "")
-                skills = self._html_to_text(item.get("skills") or "")
+                title = self._value_to_text(item.get("title") or "")
+                description = self._value_to_text(item.get("description") or "")
+                qualifications = self._value_to_text(item.get("qualifications") or "")
+                responsibilities = self._value_to_text(item.get("responsibilities") or "")
+                skills = self._value_to_text(item.get("skills") or "")
                 hiring_org = item.get("hiringOrganization") or {}
-                company = hiring_org.get("name") if isinstance(hiring_org, dict) else ""
+                company = self._value_to_text(hiring_org.get("name") if isinstance(hiring_org, dict) else "")
                 location = self._extract_location(item.get("jobLocation"))
                 content = self._clean_text("\n".join([title, company, location, description, responsibilities, qualifications, skills]))
                 if content:
@@ -229,11 +234,14 @@ class ScraperService:
     def _extract_job_json_from_scripts(self, soup: BeautifulSoup) -> str:
         interesting_keys = {"description", "jobdescription", "posteddescription", "qualifications", "responsibilities", "requirements", "title", "jobtitle", "company", "location"}
         matches: list[str] = []
+        regex_parts: list[str] = []
+        pattern = re.compile(r'"(description|jobDescription|postedDescription|qualifications|responsibilities|requirements)"\s*:\s*"((?:\\.|[^"\\]){120,})"', re.IGNORECASE)
+
         for script in soup.find_all("script"):
             raw = (script.string or script.get_text() or "").strip()
             if len(raw) < 50:
                 continue
-            if not any(token in raw.lower() for token in ("job", "description", "workday", "greenhouse", "lever")):
+            if not any(token in raw.lower() for token in ("job", "description", "workday", "greenhouse", "lever", "recruitment")):
                 continue
             snippets = re.findall(r"\{.*?\}", raw, flags=re.DOTALL)
             for snippet in snippets[:100]:
@@ -250,12 +258,22 @@ class ScraperService:
                     candidate_parts = []
                     for key in interesting_keys:
                         value = node.get(key) or node.get(key.title())
-                        if isinstance(value, str):
-                            candidate_parts.append(self._html_to_text(value))
+                        text_value = self._value_to_text(value)
+                        if text_value:
+                            candidate_parts.append(text_value)
                     combined = self._clean_text(" ".join(candidate_parts))
                     if len(combined) >= 150:
                         matches.append(combined)
-        return "\n\n".join(matches[:5])
+            for match in pattern.finditer(raw):
+                value = match.group(2)
+                try:
+                    decoded = json.loads(f'"{value}"')
+                except Exception:
+                    decoded = value.encode("utf-8").decode("unicode_escape", errors="ignore")
+                cleaned = self._value_to_text(decoded)
+                if len(cleaned) >= 150:
+                    regex_parts.append(cleaned)
+        return "\n\n".join((matches + regex_parts)[:8])
 
     def _iter_json_nodes(self, payload: Any) -> Iterable[Any]:
         stack = [payload]
@@ -274,13 +292,30 @@ class ScraperService:
                 return self._clean_text(" ".join(str(address.get(part, "")) for part in ("addressLocality", "addressRegion", "addressCountry")))
         if isinstance(payload, list):
             return " ".join(self._extract_location(item) for item in payload if item)
-        return ""
+        return self._value_to_text(payload)
 
     def _get_meta_content(self, soup: BeautifulSoup, name: str, attr: str = "name") -> str:
         tag = soup.find("meta", attrs={attr: name})
         if not tag:
             return ""
         return self._clean_text(tag.get("content", ""))
+
+    def _value_to_text(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return self._html_to_text(value)
+        if isinstance(value, (int, float, bool)):
+            return str(value)
+        if isinstance(value, list):
+            return self._clean_text(" ".join(self._value_to_text(item) for item in value if item is not None))
+        if isinstance(value, dict):
+            priority_keys = ("text", "name", "title", "value", "description", "label")
+            collected = [self._value_to_text(value.get(key)) for key in priority_keys if key in value]
+            if any(collected):
+                return self._clean_text(" ".join(part for part in collected if part))
+            return self._clean_text(" ".join(self._value_to_text(item) for item in value.values() if item is not None))
+        return self._html_to_text(str(value))
 
     def _html_to_text(self, value: str) -> str:
         if not value:
@@ -296,10 +331,11 @@ class ScraperService:
 
     def _is_probably_block_page(self, text: str, url: str) -> bool:
         lowered = text.lower()
-        block_markers = ["sign in", "log in", "login", "join linkedin", "captcha", "access denied", "forbidden", "security verification", "enable javascript", "press and hold", "are you a robot", "cloudflare"]
-        if any(marker in lowered for marker in block_markers):
+        if any(marker in lowered for marker in ("captcha", "access denied", "forbidden", "security verification", "are you a robot", "cloudflare")):
             return True
-        if "linkedin.com" in url.lower() and "linkedin" in lowered and "sign in" in lowered:
+        if "linkedin.com" in url.lower() and (("sign in" in lowered) or ("join linkedin" in lowered)):
+            return True
+        if ("sign in" in lowered or "log in" in lowered or "login" in lowered) and len(lowered) < 250:
             return True
         return False
 
@@ -309,7 +345,7 @@ class ScraperService:
         cleaned = self._clean_text(text)
         if len(cleaned) < 180:
             return False
-        if self._is_probably_block_page(cleaned, ""):
+        if self._is_probably_block_page(cleaned, "") and len(cleaned) < 250:
             return False
         job_markers = ["responsibilities", "requirements", "qualifications", "job description", "about the role", "what you will do", "skills", "experience"]
         return sum(1 for marker in job_markers if marker in cleaned.lower()) >= 1
