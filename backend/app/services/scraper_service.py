@@ -103,7 +103,8 @@ class ScraperService:
         query = parse_qs(parsed.query, keep_blank_values=True)
         hostname = (parsed.hostname or "").lower()
 
-        if "linkedin.com" in hostname and query.get("currentJobId"):
+        is_linkedin_host = hostname == "linkedin.com" or hostname.endswith(".linkedin.com")
+        if is_linkedin_host and query.get("currentJobId"):
             job_id = query["currentJobId"][0]
             normalized = f"{parsed.scheme or 'https'}://www.linkedin.com/jobs/view/{job_id}/"
             logger.info(f"Normalized LinkedIn collection URL to public job URL: {normalized}")
