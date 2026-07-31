@@ -334,7 +334,9 @@ class ScraperService:
         lowered = text.lower()
         if any(marker in lowered for marker in ("captcha", "access denied", "forbidden", "security verification", "are you a robot", "cloudflare")):
             return True
-        if "linkedin.com" in url.lower() and (("sign in" in lowered) or ("join linkedin" in lowered)):
+        host = (urlparse(url).hostname or "").lower()
+        is_linkedin_host = host == "linkedin.com" or host.endswith(".linkedin.com")
+        if is_linkedin_host and (("sign in" in lowered) or ("join linkedin" in lowered)):
             return True
         if ("sign in" in lowered or "log in" in lowered or "login" in lowered) and len(lowered) < 250:
             return True
