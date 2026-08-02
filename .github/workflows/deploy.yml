@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
   push:
-    branches: [ "feature/opentelemetry-tracing-frontend" ]
+    branches: [ "feature/enterprise-chatbot-substrate" ]
   workflow_dispatch:
 
 env:

@@ -154,3 +154,40 @@ export const resumesRelations = relations(resumes, ({ one, many }) => ({
   embeddings: many(resumeEmbeddings),
   matches: many(jobMatches),
 }));
+
+// ── CHAT SCHEMAS ──────────────────────────────
+export const messageRoleEnum = pgEnum('message_role', ['user', 'agent', 'system', 'tool']);
+
+export const conversations = pgTable('conversations', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  userIdx: index('conversations_user_idx').on(t.userId),
+}));
+
+export const messages = pgTable('messages', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: messageRoleEnum('role').notNull(),
+  content: text('content').notNull(),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  conversationIdx: index('messages_conversation_idx').on(t.conversationId),
+  userIdx: index('messages_user_idx').on(t.userId),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  user: one(users, { fields: [conversations.userId], references: [users.id] }),
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
+  user: one(users, { fields: [messages.userId], references: [users.id] }),
+}));
+

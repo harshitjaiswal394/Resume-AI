@@ -12,7 +12,8 @@ import {
   Zap,
   Crown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -66,6 +67,14 @@ export function PremiumSidebar({
           <NavItem isCollapsed={effectiveCollapsed} icon={<FileText />} label="My Resume" active={activeTab === 'resume'} onClick={() => setActiveTab('resume')} />
           <NavItem isCollapsed={effectiveCollapsed} icon={<Briefcase />} label="Job Matches" active={activeTab === 'jobs'} onClick={() => setActiveTab('jobs')} count={jobCount} />
           <NavItem isCollapsed={effectiveCollapsed} icon={<Sparkles />} label="AI Suggestions" active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} count={suggestionCount} />
+          <Link href="/chat" className={`
+            relative flex items-center w-full rounded-2xl transition-all duration-200
+            ${effectiveCollapsed ? 'justify-center py-3' : 'justify-start gap-3 px-4 py-3'}
+            text-slate-500 hover:bg-slate-50 hover:text-slate-900
+          `} title={effectiveCollapsed ? 'AI Chat' : undefined}>
+            <MessageSquare className="h-[22px] w-[22px] shrink-0" />
+            {!effectiveCollapsed && <span className="text-[16px] whitespace-nowrap">AI Chat</span>}
+          </Link>
           <NavItem isCollapsed={effectiveCollapsed} icon={<Settings />} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>
 
