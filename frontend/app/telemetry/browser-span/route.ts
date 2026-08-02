@@ -1,6 +1,8 @@
 import { context, trace, SpanKind, SpanStatusCode } from "@opentelemetry/api";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 type BrowserSpanRequest = {
   traceId: string;
   spanId: string;
@@ -63,3 +65,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 }
+
