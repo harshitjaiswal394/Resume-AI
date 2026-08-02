@@ -18,7 +18,11 @@ export async function register() {
             url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://jaeger-service.resumatch-ai.svc.cluster.local:4318/v1/traces',
           })
         ) as unknown) as any,
-        instrumentations: [getNodeAutoInstrumentations()],
+        instrumentations: [getNodeAutoInstrumentations({
+          '@opentelemetry/instrumentation-fs': {
+            enabled: false,
+          },
+        })],
       });
       sdk.start();
       console.log('OpenTelemetry tracing initialized successfully for Next.js frontend');

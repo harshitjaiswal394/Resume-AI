@@ -75,9 +75,23 @@ def shutdown_event():
         logger.info("Background scheduler shut down.")
 
 # Configure CORS
+cors_allow_origins = os.getenv(
+    "CORS_ALLOW_ORIGINS",
+    ",".join([
+        "http://localhost:3000",
+        "http://localhost:8090",
+        "http://127.0.0.1:3000",
+        "https://jaiswal.shop",
+        "https://www.jaiswal.shop",
+        "https://resumatches.com",
+        "https://www.resumatches.com",
+    ])
+)
+allow_origins = [origin.strip() for origin in cors_allow_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
