@@ -103,7 +103,8 @@ class ScraperService:
         query = parse_qs(parsed.query, keep_blank_values=True)
         hostname = (parsed.hostname or "").lower()
 
-        if "linkedin.com" in hostname and query.get("currentJobId"):
+        is_linkedin_host = hostname == "linkedin.com" or hostname.endswith(".linkedin.com")
+        if is_linkedin_host and query.get("currentJobId"):
             job_id = query["currentJobId"][0]
             normalized = f"{parsed.scheme or 'https'}://www.linkedin.com/jobs/view/{job_id}/"
             logger.info(f"Normalized LinkedIn collection URL to public job URL: {normalized}")
@@ -333,7 +334,9 @@ class ScraperService:
         lowered = text.lower()
         if any(marker in lowered for marker in ("captcha", "access denied", "forbidden", "security verification", "are you a robot", "cloudflare")):
             return True
-        if "linkedin.com" in url.lower() and (("sign in" in lowered) or ("join linkedin" in lowered)):
+        host = (urlparse(url).hostname or "").lower()
+        is_linkedin_host = host == "linkedin.com" or host.endswith(".linkedin.com")
+        if is_linkedin_host and (("sign in" in lowered) or ("join linkedin" in lowered)):
             return True
         if ("sign in" in lowered or "log in" in lowered or "login" in lowered) and len(lowered) < 250:
             return True
