@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   test-backend:
-    name: "0. Backend Tests"
+    name: "Backend Tests"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -41,7 +41,7 @@ jobs:
         run: python -m pytest tests -q
 
   build-and-prep:
-    name: "1. Build & Prep"
+    name: "Build & Prep"
     needs: test-backend
     runs-on: ubuntu-latest
     environment: dev

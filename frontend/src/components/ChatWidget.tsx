@@ -151,7 +151,7 @@ export function ChatWidget() {
 
   if (isChatPage) return null;
 
-  const anchoredClass = pos ? "" : "bottom-6 right-6";
+  const anchoredClass = pos ? "" : "bottom-4 right-4 sm:bottom-6 sm:right-6";
   const posStyle = pos ? { left: pos.x, top: pos.y } : undefined;
 
   return (
@@ -175,14 +175,14 @@ export function ChatWidget() {
             aria-label="Open AI chat assistant"
             title="Drag to move · Click to open"
           >
-            <span className="pointer-events-none hidden md:block rounded-full border border-white/10 bg-slate-950/85 px-3.5 py-2 text-sm font-medium text-slate-100 shadow-xl shadow-black/30 backdrop-blur-xl opacity-0 translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+            <span className="pointer-events-none hidden lg:block rounded-full border border-white/10 bg-slate-950/85 px-3.5 py-2 text-sm font-medium text-slate-100 shadow-xl shadow-black/30 backdrop-blur-xl opacity-0 translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
               Chat with your AI assistant
             </span>
-            <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 text-white shadow-2xl shadow-indigo-900/50 ring-1 ring-white/20 transition-transform duration-300 group-hover:scale-105 cursor-grab active:cursor-grabbing">
+            <span className="relative flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 text-white shadow-2xl shadow-indigo-900/50 ring-1 ring-white/20 transition-transform duration-300 group-hover:scale-105 cursor-grab active:cursor-grabbing">
               <span className="absolute inset-0 rounded-full bg-indigo-500/40 animate-ping" style={{ animationDuration: "2.2s" }} />
-              <MessageCircle className="relative h-7 w-7" />
-              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-[#050816]">
-                <Sparkles className="h-3 w-3 text-white" />
+              <MessageCircle className="relative h-6 w-6 sm:h-7 sm:w-7" />
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-[#050816]">
+                <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
               </span>
             </span>
           </motion.button>
@@ -197,7 +197,7 @@ export function ChatWidget() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 24 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className={`fixed z-[90] flex h-[82vh] max-h-[760px] w-[min(480px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#050816] shadow-2xl shadow-black/60 ${anchoredClass}`}
+            className={`fixed z-[90] flex h-[calc(100dvh-1rem)] max-h-none w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#050816] shadow-2xl shadow-black/60 sm:h-[82vh] sm:max-h-[760px] sm:w-[min(480px,calc(100vw-2rem))] ${anchoredClass}`}
             style={posStyle}
             id="chat-widget-panel"
           >

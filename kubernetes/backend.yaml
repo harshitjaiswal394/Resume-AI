@@ -19,9 +19,10 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         fsGroup: 10001
+      serviceAccountName: backend
       containers:
       - name: backend
-        image: us-east1-docker.pkg.dev/project-fd5c6032-c8d6-497d-9c2/resumatches-official/backend:latest
+        image: us-east1-docker.pkg.dev/resumeai-503317/resumatches-official/backend:latest
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
@@ -33,10 +34,10 @@ spec:
         resources:
           limits:
             cpu: "500m"
-            memory: "512Mi"
+            memory: "1024Mi"
           requests:
             cpu: "25m"
-            memory: "192Mi"
+            memory: "256Mi"
         env:
         # ── ConfigMap values (non-sensitive) ──────────────────────────────────
         - name: SUPABASE_URL
@@ -114,92 +115,6 @@ spec:
             configMapKeyRef:
               name: resumatch-config
               key: OTEL_EXPORTER_OTLP_ENDPOINT
-        - name: OTEL_SERVICE_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: OTEL_SERVICE_NAME
-        # AI Security Core (Phase 1) — non-secret policy knobs
-        - name: AI_SECURITY_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_SECURITY_ENABLED
-        - name: AI_INJECTION_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_INJECTION_ENABLED
-        - name: AI_INJECTION_BLOCK_THRESHOLD
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_INJECTION_BLOCK_THRESHOLD
-        - name: AI_INJECTION_WARN_THRESHOLD
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_INJECTION_WARN_THRESHOLD
-        - name: AI_PII_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_PII_ENABLED
-        - name: AI_PII_MASK_BEFORE_PROVIDER
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_PII_MASK_BEFORE_PROVIDER
-        - name: AI_PII_BLOCK_MODE
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_PII_BLOCK_MODE
-        - name: AI_TOOL_PERMISSIONS_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_TOOL_PERMISSIONS_ENABLED
-        - name: AI_RATE_LIMIT_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_RATE_LIMIT_ENABLED
-        - name: AI_AUDIT_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_AUDIT_ENABLED
-        - name: AI_AUDIT_PROMPT_CAPTURE
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_AUDIT_PROMPT_CAPTURE
-        - name: AI_AUDIT_DB_BACKEND
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_AUDIT_DB_BACKEND
-        - name: AI_PROMPT_VERSIONING_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_PROMPT_VERSIONING_ENABLED
-        - name: AI_OUTPUT_VALIDATION_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_OUTPUT_VALIDATION_ENABLED
-        - name: AI_OUTPUT_MAX_LENGTH
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_OUTPUT_MAX_LENGTH
-        - name: AI_MESSAGE_MAX_LENGTH
-          valueFrom:
-            configMapKeyRef:
-              name: resumatch-config
-              key: AI_MESSAGE_MAX_LENGTH
 
 
         # ── Secret values (sensitive) ─────────────────────────────────────────

@@ -1240,18 +1240,20 @@ export default function ChatPage() {
             <button
               type="button"
               onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+              className="lg:hidden shrink-0 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
             >
               <Menu className="h-4 w-4" />
-              <span>Chats</span>
+              <span className="hidden sm:inline">Chats</span>
             </button>
 
-            <Link href="/" className="lg:hidden flex items-center gap-2">
-              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-sm font-bold text-[var(--text-primary)]">ResuMatch</span>
-            </Link>
+            {!embedded && (
+              <Link href="/" className="lg:hidden flex items-center gap-2">
+                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+                  <Sparkles className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-sm font-bold text-[var(--text-primary)]">ResuMatch</span>
+              </Link>
+            )}
 
             {activeConversation && (
               <div className="hidden lg:flex items-center gap-2 text-sm text-slate-200/80">
@@ -1261,7 +1263,7 @@ export default function ChatPage() {
             )}
           </div>
 
-<div className="flex items-center gap-2">
+<div className="flex items-center gap-1.5 sm:gap-2">
               <AgentDropdown
                 selectedAgent={selectedAgent}
                 onSelect={setSelectedAgent}
@@ -1286,19 +1288,19 @@ export default function ChatPage() {
               </div>
             )}
             {profile && (
-              <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+              <div className="hidden sm:flex shrink-0 items-center gap-2 text-sm text-[var(--text-muted)]">
                 {profile.plan !== "free" && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-xs font-semibold border border-amber-200 dark:border-amber-700/50">
                     <Crown className="h-3 w-3" /> Pro
                   </span>
                 )}
-                <span className="hidden sm:inline">{profile.fullName || profile.email}</span>
+                <span className="hidden lg:inline max-w-[140px] truncate">{profile.fullName || profile.email}</span>
               </div>
             )}
             <button
               id="chat-header-new-btn"
               onClick={handleNewChat}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-100 border border-white/15 bg-white/5 hover:bg-white/10 hover:border-fuchsia-400/40 rounded-2xl transition-all backdrop-blur-xl active:scale-[0.97]"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-semibold text-slate-100 border border-white/15 bg-white/5 hover:bg-white/10 hover:border-fuchsia-400/40 rounded-2xl transition-all backdrop-blur-xl active:scale-[0.97]"
             >
               <SquarePen className="h-3.5 w-3.5" /> New
             </button>
