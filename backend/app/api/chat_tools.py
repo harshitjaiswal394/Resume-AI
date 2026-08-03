@@ -2,8 +2,12 @@ import json
 import logging
 import asyncio
 import time
+from typing import Dict, List, Optional
+
 from sqlalchemy import text
+
 from app.db import engine, execute_vector_search
+from app.services.ai_gateway import AgentTool
 from app.services.nvidia_service import nvidia_service
 
 logger = logging.getLogger("resumatch-api.chat_tools")
@@ -35,20 +39,30 @@ def _span(name: str):
     return _NullSpan()
 
 
-def build_agent_tools(user_id: str):
-    """
-    Factory to inject user context into tool closures.
-    Each tool is a typed async function exposed to Gemini's function-calling interface.
-    """
+SEARCH_JOBS_PARAMETERS = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "Natural language description of the job (e.g. 'Software Engineer python').",
+        },
+        "location": {
+            "type": "string",
+            "description": "Optional location filter (e.g. 'Remote', 'London', 'Bangalore').",
+        },
+        "experience_level": {
+            "type": "string",
+            "enum": ["Entry Level", "Mid Level", "Senior"],
+            "description": "Optional experience level filter.",
+        },
+    },
+    "required": ["query"],
+}
 
+
+def _build_search_jobs(user_id: str):
     async def search_jobs(query: str, location: str = None, experience_level: str = None) -> str:
-        """
-        Searches the job database for positions matching the user's query.
-        Args:
-            query: Natural language description of the job (e.g. 'Software Engineer python').
-            location: Optional location filter (e.g. 'Remote', 'London').
-            experience_level: Optional experience level ('Entry Level', 'Mid Level', 'Senior').
-        """
+        """Searches the job database for positions matching the user's query."""
         start = time.monotonic()
         logger.info(
             "TOOL_CALL_START | tool=search_jobs user=%s query=%r location=%s exp=%s",
@@ -105,11 +119,12 @@ def build_agent_tools(user_id: str):
                     span.set_status(Status(StatusCode.ERROR, str(e)))
                 return json.dumps({"status": "error", "message": str(e)})
 
+    return search_jobs
+
+
+def _build_fetch_user_resume(user_id: str):
     async def fetch_user_resume() -> str:
-        """
-        Fetches the user's latest parsed resume data (skills, experience, education).
-        Use this to personalize job recommendations or answer questions about their background.
-        """
+        """Fetches the user's latest parsed resume data (skills, experience, education)."""
         start = time.monotonic()
         logger.info("TOOL_CALL_START | tool=fetch_user_resume user=%s", user_id)
         with _span("chat_tool.fetch_user_resume") as span:
@@ -199,4 +214,37 @@ def build_agent_tools(user_id: str):
                     span.set_status(Status(StatusCode.ERROR, str(e)))
                 return json.dumps({"status": "error", "message": str(e)})
 
-    return [search_jobs, fetch_user_resume]
+    return fetch_user_resume
+
+
+def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = None) -> List[AgentTool]:
+    """
+    Factory that injects user context into typed tool closures.
+
+    The returned tools are filterable by the agent's `tool_names` so each agent
+    only exposes the capabilities it is allowed to invoke.
+    """
+    tools: Dict[str, AgentTool] = {
+        "search_jobs": AgentTool(
+            name="search_jobs",
+            description=(
+                "Searches the job database for positions matching the user's query, "
+                "optionally filtered by location and experience level."
+            ),
+            parameters=SEARCH_JOBS_PARAMETERS,
+            function=_build_search_jobs(user_id),
+        ),
+        "fetch_user_resume": AgentTool(
+            name="fetch_user_resume",
+            description=(
+                "Fetches the user's latest parsed resume data (skills, experience, education). "
+                "Use this to personalize job recommendations or answer questions about their background."
+            ),
+            parameters={"type": "object", "properties": {}},
+            function=_build_fetch_user_resume(user_id),
+        ),
+    }
+
+    if allowed_tool_names:
+        return [tools[name] for name in allowed_tool_names if name in tools]
+    return list(tools.values())

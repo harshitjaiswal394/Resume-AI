@@ -8,6 +8,7 @@ class ChatMessageRequest(BaseModel):
     message: str = Field(..., description="The user's message content", min_length=1)
     selected_resume_id: Optional[str] = Field(None, description="Optional resume ID to use for this chat request")
     client_request_id: Optional[str] = Field(None, description="Optional client-generated request id for telemetry correlation")
+    agent: Optional[str] = Field(None, description="Optional agent mode to route the request to a specialized workflow")
 
 class ConversationCreateRequest(BaseModel):
     title: Optional[str] = Field(None, description="Optional title for the conversation")

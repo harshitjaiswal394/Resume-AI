@@ -27,6 +27,7 @@ from app.api.resumes_crud import router as resumes_crud_router
 from app.api.builder import router as builder_router
 from app.api.cover_letters import router as cover_letters_router
 from app.api.chat_routes import chat_router
+from app.api.agent_routes import router as agent_router
 from app.services.knowledge_base_seeder import job_seeder
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.tracing import instrument_app
@@ -104,6 +105,43 @@ app.include_router(resumes_crud_router, prefix="/api/resumes", tags=["builder"])
 app.include_router(builder_router, prefix="/api/builder", tags=["builder"])
 app.include_router(cover_letters_router, prefix="/api/cover-letter", tags=["cover-letter"])
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
+app.include_router(agent_router, prefix="/api/agents", tags=["agents"])
+
+from app.security.metrics import metrics_enabled
+from fastapi.responses import PlainTextResponse
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus metrics. Returns a placeholder when the client is absent."""
+    if not metrics_enabled():
+        return PlainTextResponse("# prometheus_client not installed; metrics disabled\n", media_type="text/plain")
+    from prometheus_client import generate_latest
+    return PlainTextResponse(generate_latest(), media_type="text/plain")
+
+
+@app.get("/api/security/status")
+async def security_status():
+    """Liveness of the AI security core (kill-switch aware)."""
+    from app.security import get_config
+
+    cfg = get_config()
+    return {
+        "enabled": cfg.enabled,
+        "engines": {
+            "prompt_injection": cfg.injection_enabled,
+            "pii_masking": cfg.pii_enabled,
+            "tool_permissions": cfg.tool_permissions_enabled,
+            "rate_limit": cfg.rate_limit_enabled,
+            "audit": cfg.audit_enabled,
+            "output_validation": cfg.output_validation_enabled,
+        },
+        "policy": {
+            "injection_block_threshold": cfg.injection_block_threshold,
+            "injection_warn_threshold": cfg.injection_warn_threshold,
+            "pii_block_mode": cfg.pii_block_mode,
+        },
+    }
 
 @app.get("/health")
 async def health_check():

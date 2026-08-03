@@ -29,7 +29,12 @@ import {
   SquarePen,
   ChevronDown,
   Menu,
-  X
+  X,
+  Brain,
+  GraduationCap,
+  Target,
+  BriefcaseBusiness,
+  HelpCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -62,6 +67,8 @@ interface ChatMessage {
   created_at: string;
   streaming?: boolean;
   toolEvent?: string; // e.g. "search_jobs", "fetch_user_resume"
+  agentLabel?: string;
+  providerLabel?: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -87,6 +94,14 @@ const SUGGESTED_PROMPTS = [
   { icon: <Briefcase className="h-4 w-4" />, label: "Write a cover letter for a product manager", color: "from-teal-500/10 to-emerald-500/10 border-teal-500/20 text-teal-700 dark:text-teal-300" },
 ];
 
+const AGENT_OPTIONS = [
+  { value: "planner", label: "Planner", icon: Brain, description: "Orchestrates next steps, identifies goals, and creates action plans based on your resume and context", color: "from-indigo-500 to-violet-600" },
+  { value: "resume", label: "Resume", icon: FileText, description: "Optimizes resume content, bullet clarity, quantified impact, and tailoring to target roles", color: "from-purple-500 to-pink-600" },
+  { value: "ats", label: "ATS", icon: Target, description: "Analyzes ATS compatibility, keyword alignment, section structure, and formatting risks", color: "from-sky-500 to-cyan-600" },
+  { value: "career", label: "Career", icon: BriefcaseBusiness, description: "Plans skill growth, role transitions, and roadmap over 30/60/90 days based on your background", color: "from-emerald-500 to-teal-600" },
+  { value: "interview", label: "Interview", icon: GraduationCap, description: "Builds STAR stories, likely questions, and practice drills for technical/behavioral interviews", color: "from-amber-500 to-orange-600" },
+];
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Tool indicator badge
 // ──────────────────────────────────────────────────────────────────────────────
@@ -106,6 +121,85 @@ function ToolBadge({ name }: { name: string }) {
       {t.label}
       <Loader2 className="h-3 w-3 animate-spin ml-0.5" />
     </motion.div>
+  );
+}
+
+function AgentDropdown({
+  selectedAgent,
+  onSelect,
+  options,
+  disabled = false,
+}: {
+  selectedAgent: string;
+  onSelect: (value: string) => void;
+  options: typeof AGENT_OPTIONS;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === selectedAgent);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        disabled={disabled}
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${open
+          ? "border-fuchsia-400/70 bg-fuchsia-500/20 text-white"
+          : "border-slate-600/60 bg-slate-900 text-slate-100 hover:border-fuchsia-400/50 hover:bg-slate-800"
+        }`}
+      >
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${selected?.color ?? "from-indigo-500 to-violet-600"} text-white`}>
+          {(() => { const Icon = selected?.icon; return Icon ? <Icon className="h-3.5 w-3.5" /> : <Brain className="h-3.5 w-3.5" />; })()}
+        </span>
+        <span className="hidden sm:block font-medium">{selected?.label ?? "Agent"}</span>
+        <ChevronDown className={`h-4 w-4 text-slate-300 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          className="absolute z-[70] right-0 top-full mt-2 w-80 rounded-xl border border-slate-700 bg-slate-950 text-slate-100 shadow-2xl shadow-black/50 overflow-hidden"
+        >
+          <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+            Select Agent
+          </div>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => {
+                onSelect(option.value);
+                setOpen(false);
+              }}
+              disabled={disabled}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-slate-800/80 ${selectedAgent === option.value ? "bg-slate-800" : ""}`}
+            >
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${option.color} text-white`}>
+                <option.icon className="h-4 w-4" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <span className="block truncate font-medium text-white">{option.label}</span>
+                <span className="block truncate text-[11px] text-slate-400">{option.description}</span>
+              </div>
+              {selectedAgent === option.value && <CheckCircle2 className="h-4 w-4 shrink-0 text-fuchsia-400" />}
+            </button>
+          ))}
+        </motion.div>
+      )}
+    </div>
   );
 }
 
@@ -280,6 +374,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
     : msg.role === "tool"
       ? { icon: <Search className="h-3.5 w-3.5 text-slate-100" />, label: "Tool", badge: "bg-slate-800/80 text-slate-100 border-slate-700/80" }
       : { icon: <Bot className="h-3.5 w-3.5 text-white" />, label: "ResuMatch", badge: "bg-slate-800/80 text-slate-100 border-white/10" };
+  const agentLabel = msg.agentLabel ? msg.agentLabel.toUpperCase() : null;
+  const providerLabel = msg.providerLabel ? msg.providerLabel.toUpperCase() : null;
 
   return (
     <motion.div
@@ -307,6 +403,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.26em] ${roleMeta.badge}`}>
           {roleMeta.icon}
           <span>{roleMeta.label}</span>
+          {agentLabel && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{agentLabel}</span>}
+          {providerLabel && <span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[10px]">{providerLabel}</span>}
         </div>
 
         {msg.toolEvent && <ToolBadge name={msg.toolEvent} />}
@@ -507,11 +605,15 @@ export default function ChatPage() {
   const [isSidebarOpen, setIsSidebarOpen]       = useState(false);
   const [error, setError]                       = useState<string | null>(null);
   const [stopReason, setStopReason]             = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent]       = useState("planner");
+  const [agentOptions, setAgentOptions]         = useState(AGENT_OPTIONS);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const abortRef       = useRef<AbortController | null>(null);
   const readerRef      = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   // ── Auth guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -526,6 +628,21 @@ export default function ChatPage() {
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  const handleMessageScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollToBottom(distanceFromBottom > 200);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", handleMessageScroll, { passive: true });
+    handleMessageScroll();
+    return () => el.removeEventListener("scroll", handleMessageScroll);
+  }, [handleMessageScroll, isLoadingHistory, messages.length]);
 
   useEffect(scrollToBottom, [messages, scrollToBottom]);
 
@@ -542,6 +659,7 @@ export default function ChatPage() {
         headers: { "Authorization": `Bearer ${session.access_token}` },
       });
       if (res.status === 401) {
+        log.warn("Fetch conversations unauthorized (401); clearing list");
         setConversations([]);
         return;
       }
@@ -560,15 +678,17 @@ export default function ChatPage() {
 
   const fetchResumes = useCallback(async () => {
     if (!user) return;
+    log.info("Fetching resume options");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) { log.warn("No session found when fetching resumes"); return; }
       const res = await fetch(`${backendUrl}/api/chat/resumes`, {
         headers: { "Authorization": `Bearer ${session.access_token}` },
       });
-      if (res.status === 401) return;
+      if (res.status === 401) { log.warn("Fetch resumes unauthorized (401)"); return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: ResumeOption[] = await res.json();
+      log.info(`Fetched ${data.length} resume option(s)`);
       setResumeOptions(data);
       if (!selectedResumeId && data.length > 0) setSelectedResumeId(data[0].id);
     } catch (e) {
@@ -577,6 +697,36 @@ export default function ChatPage() {
   }, [user, backendUrl, selectedResumeId]);
 
   useEffect(() => { fetchResumes(); }, [fetchResumes]);
+
+  useEffect(() => {
+    const loadAgentOptions = async () => {
+      log.info("Fetching agent options");
+      try {
+        const res = await fetch(`${backendUrl}/api/agents/agents`);
+        if (!res.ok) { log.warn(`Fetch agent options HTTP ${res.status}`); return; }
+        const data = await res.json();
+        const options = (data.agents || []).map((agent: any) => {
+          const staticOption = AGENT_OPTIONS.find((o) => o.value === agent.name);
+          return {
+            value: agent.name,
+            label: agent.name.charAt(0).toUpperCase() + agent.name.slice(1),
+            description: agent.description,
+            icon: staticOption?.icon ?? HelpCircle,
+            color: staticOption?.color ?? "from-indigo-500 to-violet-600",
+          };
+        });
+        if (options.length > 0) {
+          setAgentOptions(options);
+          log.info(`Loaded ${options.length} agent option(s)`);
+        } else {
+          log.warn("No agent options returned; falling back to defaults");
+        }
+      } catch (e) {
+        log.warn("Unable to load agent options", e);
+      }
+    };
+    loadAgentOptions();
+  }, [backendUrl]);
 
   // ── Load message history ─────────────────────────────────────────────────────
   const loadHistory = useCallback(async (conversationId: string) => {
@@ -634,6 +784,7 @@ export default function ChatPage() {
   }, [backendUrl]);
 
   const handleNewChat = useCallback(async () => {
+    log.info("Starting new chat");
     abortRef.current?.abort();
     setStopReason(null);
     const conv = await createConversation();
@@ -643,6 +794,9 @@ export default function ChatPage() {
       setMessages([]);
       setError(null);
       textareaRef.current?.focus();
+      log.info("New chat ready", { conversationId: conv.id });
+    } else {
+      log.warn("New chat could not be created");
     }
   }, [createConversation]);
 
@@ -662,6 +816,7 @@ export default function ChatPage() {
 
   // ── Streaming send ────────────────────────────────────────────────────────────
   const stopGeneration = useCallback(() => {
+    log.info("Stop requested; aborting stream");
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => undefined);
     readerRef.current = null;
@@ -672,8 +827,9 @@ export default function ChatPage() {
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text) { log.debug("sendMessage ignored: empty input"); return; }
     if (isStreaming) {
+      log.warn("sendMessage called while streaming; stopping stream instead");
       stopGeneration();
       return;
     }
@@ -731,7 +887,7 @@ export default function ChatPage() {
           "Authorization": `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ conversation_id: conv.id, message: text, selected_resume_id: selectedResumeId, client_request_id: clientRequestId }),
+        body: JSON.stringify({ conversation_id: conv.id, message: text, selected_resume_id: selectedResumeId, client_request_id: clientRequestId, agent: selectedAgent }),
         signal: abortRef.current.signal,
       });
 
@@ -791,18 +947,25 @@ export default function ChatPage() {
                 : m
               ));
             }
+            if (parsed.tool_result) {
+              log.info("Tool result received", parsed.tool_result);
+              setMessages(prev => prev.map(m => m.id === tempAgentId
+                ? { ...m, toolEvent: undefined }
+                : m
+              ));
+            }
             if (parsed.processed_content) {
               // Use backend-processed content once the final response arrives.
               fullContent = parsed.processed_content;
               setMessages(prev => prev.map(m => m.id === tempAgentId
-                ? { ...m, content: fullContent, toolEvent: undefined }
+                ? { ...m, content: fullContent, toolEvent: undefined, agentLabel: parsed.agent, providerLabel: parsed.provider }
                 : m
               ));
             } else if (parsed.content) {
               fullContent += parsed.content;
               chunkCount++;
               setMessages(prev => prev.map(m => m.id === tempAgentId
-                ? { ...m, content: fullContent, toolEvent: undefined }
+                ? { ...m, content: fullContent, toolEvent: undefined, agentLabel: parsed.agent, providerLabel: parsed.provider }
                 : m
               ));
             }
@@ -1039,8 +1202,14 @@ export default function ChatPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {resumeOptions.length > 0 && (
+<div className="flex items-center gap-2">
+              <AgentDropdown
+                selectedAgent={selectedAgent}
+                onSelect={setSelectedAgent}
+                options={agentOptions}
+                disabled={isStreaming}
+              />
+              {resumeOptions.length > 0 && (
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-xs text-slate-100 shadow-lg shadow-black/10 backdrop-blur-xl">
                 <FileText className="h-3.5 w-3.5 text-indigo-500" />
                 <select
@@ -1070,7 +1239,7 @@ export default function ChatPage() {
             <button
               id="chat-header-new-btn"
               onClick={handleNewChat}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors border border-indigo-200 dark:border-indigo-700/50"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-100 border border-white/15 bg-white/5 hover:bg-white/10 hover:border-fuchsia-400/40 rounded-2xl transition-all backdrop-blur-xl active:scale-[0.97]"
             >
               <SquarePen className="h-3.5 w-3.5" /> New
             </button>
@@ -1078,7 +1247,7 @@ export default function ChatPage() {
         </header>
 
         {/* Message area */}
-        <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.02),transparent_32%)]">
+        <div ref={scrollContainerRef} onScroll={handleMessageScroll} className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.02),transparent_32%)]">
           {isLoadingHistory ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-6 w-6 animate-spin text-fuchsia-400" />
@@ -1174,6 +1343,24 @@ export default function ChatPage() {
             </div>
           )}
         </div>
+
+        {/* ── Jump to bottom (floating) ─────────────────────────────────────── */}
+        <AnimatePresence>
+          {showScrollToBottom && !isEmpty && (
+            <motion.button
+              id="chat-scroll-to-bottom-btn"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              onClick={scrollToBottom}
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/15 bg-slate-900/80 text-slate-100 text-xs font-semibold shadow-2xl shadow-black/40 backdrop-blur-xl hover:bg-slate-800 hover:border-fuchsia-400/40 active:scale-95 transition-all"
+              aria-label="Scroll to bottom"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+              Jump to latest
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         {/* ── Input bar ────────────────────────────────────────────────────────── */}
         <div className="shrink-0 border-t border-white/10 bg-black/35 backdrop-blur-2xl px-3 lg:px-6 py-4">

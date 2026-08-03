@@ -6,6 +6,9 @@
 **/.env.*
 !**/.env.example
 
+# GCP CLI credentials (contains credentials.db / access_tokens.db)
+.gcloud/
+
 # OS / Misc
 **/.DS_Store
 **/.DS_Store?

@@ -9,3 +9,20 @@ data:
   NEXT_PUBLIC_BACKEND_API_URL: "https://{{ .Values.global.domain }}"
   NEXT_PUBLIC_APP_URL: "https://{{ .Values.global.domain }}"
   BACKEND_API_URL: "http://backend-service.{{ .Values.global.namespace }}.svc.cluster.local:{{ .Values.backend.service.port }}"
+  # AI Security Core (Phase 1) — non-secret policy knobs
+  AI_SECURITY_ENABLED: {{ .Values.backend.security.AI_SECURITY_ENABLED | quote }}
+  AI_INJECTION_ENABLED: {{ .Values.backend.security.AI_INJECTION_ENABLED | quote }}
+  AI_INJECTION_BLOCK_THRESHOLD: {{ .Values.backend.security.AI_INJECTION_BLOCK_THRESHOLD | quote }}
+  AI_INJECTION_WARN_THRESHOLD: {{ .Values.backend.security.AI_INJECTION_WARN_THRESHOLD | quote }}
+  AI_PII_ENABLED: {{ .Values.backend.security.AI_PII_ENABLED | quote }}
+  AI_PII_MASK_BEFORE_PROVIDER: {{ .Values.backend.security.AI_PII_MASK_BEFORE_PROVIDER | quote }}
+  AI_PII_BLOCK_MODE: {{ .Values.backend.security.AI_PII_BLOCK_MODE | quote }}
+  AI_TOOL_PERMISSIONS_ENABLED: {{ .Values.backend.security.AI_TOOL_PERMISSIONS_ENABLED | quote }}
+  AI_RATE_LIMIT_ENABLED: {{ .Values.backend.security.AI_RATE_LIMIT_ENABLED | quote }}
+  AI_AUDIT_ENABLED: {{ .Values.backend.security.AI_AUDIT_ENABLED | quote }}
+  AI_AUDIT_PROMPT_CAPTURE: {{ .Values.backend.security.AI_AUDIT_PROMPT_CAPTURE | quote }}
+  AI_AUDIT_DB_BACKEND: {{ .Values.backend.security.AI_AUDIT_DB_BACKEND | quote }}
+  AI_PROMPT_VERSIONING_ENABLED: {{ .Values.backend.security.AI_PROMPT_VERSIONING_ENABLED | quote }}
+  AI_OUTPUT_VALIDATION_ENABLED: {{ .Values.backend.security.AI_OUTPUT_VALIDATION_ENABLED | quote }}
+  AI_OUTPUT_MAX_LENGTH: {{ .Values.backend.security.AI_OUTPUT_MAX_LENGTH | quote }}
+  AI_MESSAGE_MAX_LENGTH: {{ .Values.backend.security.AI_MESSAGE_MAX_LENGTH | quote }}
