@@ -35,6 +35,7 @@ import { AuthModal } from '@/components/common/AuthModal';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { LoadingScreen } from '@/components/ui/loading';
 import { completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
 
 export default function LandingPage() {
@@ -533,36 +534,10 @@ export default function LandingPage() {
               animate={{ scale: 1, y: 0 }}
               className="max-w-5xl w-full bg-white rounded-[40px] shadow-2xl shadow-indigo-200/50 overflow-hidden"
             >
-              <div className="flex flex-col lg:flex-row">
-                <div className="lg:w-1/2 bg-indigo-50/30 p-12 flex flex-col items-center justify-center border-r border-slate-50 relative overflow-hidden">
-                  {/* Animated Scanning Effect */}
-                  <div className="relative w-48 h-48">
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.3, 1],
-                        opacity: [0.3, 0.1, 0.3]
-                      }}
-                      transition={{ duration: 4, repeat: Infinity }}
-                      className="absolute inset-0 bg-indigo-500/10 rounded-full blur-3xl"
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="relative z-10 w-full h-full rounded-[3rem] bg-white border border-white/80 shadow-[0_25px_60px_rgba(79,70,229,0.12)] flex items-center justify-center"
-                    >
-                      <div className="relative">
-                        <FileText className="h-24 w-24 text-indigo-600" />
-                        <motion.div
-                          animate={{ 
-                            top: ["0%", "100%", "0%"]
-                          }}
-                          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                          className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent blur-[1px]"
-                        />
-                      </div>
-                    </motion.div>
+                <div className="flex flex-col lg:flex-row">
+                  <div className="lg:w-1/2 bg-indigo-50/30 p-12 flex flex-col items-center justify-center border-r border-slate-50 relative overflow-hidden">
+                    <LoadingScreen compact label="Analyzing…" sublabel={`Our AI is mapping ${fileName} against live jobs`} />
                   </div>
-                </div>
                 <div className="lg:w-1/2 p-12 space-y-10 flex flex-col justify-center">
                   <div className="space-y-3">
                     <h2 className="text-[36px] font-black text-[#0f172a] tracking-tight leading-none">Analyzing...</h2>

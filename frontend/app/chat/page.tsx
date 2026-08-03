@@ -42,6 +42,7 @@ import {
   ThumbsDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { LoadingScreen, ThinkingIndicator } from "@/components/ui/loading";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -481,9 +482,7 @@ function MessageBubble({
           <div className="relative">
             {msg.content
               ? <MarkdownMessage content={msg.content} />
-              : <span className="flex items-center gap-2 text-white italic text-sm">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking?
-                </span>
+              : <ThinkingIndicator dark />
             }
           </div>
         </div>
@@ -1353,9 +1352,7 @@ export default function ChatPage() {
   // ──────────────────────────────────────────────────────────────────────────────
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base)]">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-      </div>
+      <LoadingScreen dark label="Preparing your assistant…" sublabel="Loading your profile, resumes & conversations" />
     );
   }
 
@@ -1493,9 +1490,7 @@ export default function ChatPage() {
         {/* Message area */}
         <div ref={scrollContainerRef} onScroll={handleMessageScroll} className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.02),transparent_32%)]">
           {isLoadingHistory ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-6 w-6 animate-spin text-fuchsia-400" />
-            </div>
+            <LoadingScreen dark compact label="Loading conversation…" />
           ) : isEmpty ? (
             /* Welcome / empty state */
             <div className="flex flex-col items-center justify-center h-full px-4 py-16 text-center">

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { LoadingScreen } from '@/components/ui/loading';
 import { 
   Sparkles, 
   FileText, 
@@ -374,20 +375,20 @@ export default function SmartCoverLetter() {
                       />
                     </motion.div>
                   ) : (
-                    <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center space-y-6 py-20">
-                      <div className={`w-28 h-28 rounded-[2.5rem] bg-indigo-50 flex items-center justify-center text-indigo-200 shadow-inner ${isGenerating ? 'animate-bounce' : 'animate-pulse'}`}>
-                        <Sparkles className={`h-12 w-12 ${isGenerating ? 'text-indigo-600 animate-pulse' : 'text-indigo-300'}`} />
-                      </div>
-                      <div className="space-y-3">
-                        <p className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">
-                          {isGenerating ? 'Intelligence Working...' : 'Intelligence Standby'}
-                        </p>
-                        <p className="text-base text-slate-400 font-bold max-w-sm leading-relaxed">
-                          {isGenerating 
-                            ? 'Our Llama 3.1 & Nemotron engines are co-creating your strategy. This usually takes 10-15 seconds.' 
-                            : 'Select a base resume to unlock your professional AI strategy.'}
-                        </p>
-                      </div>
+                    <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center py-20">
+                      {isGenerating ? (
+                        <LoadingScreen compact label="Intelligence working…" sublabel="Our Llama 3.1 & Nemotron engines are co-creating your strategy. This usually takes 10-15 seconds." />
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="mx-auto w-28 h-28 rounded-[2.5rem] bg-indigo-50 flex items-center justify-center text-indigo-200 shadow-inner animate-pulse">
+                            <Sparkles className="h-12 w-12 text-indigo-300" />
+                          </div>
+                          <p className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Intelligence Standby</p>
+                          <p className="text-base text-slate-400 font-bold max-w-sm leading-relaxed">
+                            Select a base resume to unlock your professional AI strategy.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </AnimatePresence>
