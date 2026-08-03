@@ -1652,10 +1652,6 @@ export default function ChatPage() {
                 }
               </button>
             </div>
-
-            <p className="text-center text-[11px] text-slate-400 mt-2">
-              Press <kbd className="px-1 py-0.5 bg-[var(--bg-muted)] rounded text-[10px] font-mono">Enter</kbd> to send · <kbd className="px-1 py-0.5 bg-[var(--bg-muted)] rounded text-[10px] font-mono">Shift+Enter</kbd> for new line
-            </p>
           </div>
         </div>
       </main>

@@ -217,3 +217,241 @@ Import trace for requested module:
  POST /telemetry/browser-span 200 in 206ms
  POST /telemetry/browser-span 200 in 119ms
  POST /telemetry/browser-span 200 in 187ms
+ POST /telemetry/browser-span 200 in 1999ms
+ POST /telemetry/browser-span 200 in 1774ms
+ POST /telemetry/browser-span 200 in 90ms
+ POST /telemetry/browser-span 200 in 86ms
+ POST /telemetry/browser-span 200 in 132ms
+ POST /telemetry/browser-span 200 in 52ms
+ POST /telemetry/browser-span 200 in 52ms
+ POST /telemetry/browser-span 200 in 53ms
+ POST /telemetry/browser-span 200 in 134ms
+ POST /telemetry/browser-span 200 in 547ms
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ GET / 200 in 15984ms
+ GET / 200 in 414ms
+ GET /chat?embedded=1 200 in 7077ms
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ POST /telemetry/browser-span 200 in 2544ms
+ POST /telemetry/browser-span 200 in 2542ms
+ POST /telemetry/browser-span 200 in 3803ms
+ POST /telemetry/browser-span 200 in 46ms
+ POST /telemetry/browser-span 200 in 35ms
+ POST /telemetry/browser-span 200 in 36ms
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ POST /telemetry/browser-span 200 in 813ms
+ GET /chat?embedded=1 200 in 608ms
+ GET / 200 in 1052ms
+ GET /chat?embedded=1 200 in 1886ms
+ POST /telemetry/browser-span 200 in 49ms
+ POST /telemetry/browser-span 200 in 56ms
+ POST /telemetry/browser-span 200 in 65ms
+ POST /telemetry/browser-span 200 in 68ms
+ POST /telemetry/browser-span 200 in 38ms
+ POST /telemetry/browser-span 200 in 59ms
+ POST /telemetry/browser-span 200 in 50ms
+ POST /telemetry/browser-span 200 in 33ms
+ POST /telemetry/browser-span 200 in 48ms
+ POST /telemetry/browser-span 200 in 41ms
+ POST /telemetry/browser-span 200 in 43ms
+ POST /telemetry/browser-span 200 in 76ms
+ POST /telemetry/browser-span 200 in 49ms
+ POST /telemetry/browser-span 200 in 55ms
+ POST /telemetry/browser-span 200 in 36ms
+ POST /telemetry/browser-span 200 in 37ms
+ POST /telemetry/browser-span 200 in 40ms
+ POST /telemetry/browser-span 200 in 36ms
+ POST /telemetry/browser-span 200 in 33ms
+ POST /telemetry/browser-span 200 in 36ms
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ GET / 200 in 1030ms
+ GET /chat?embedded=1 200 in 1023ms
+ GET /chat?embedded=1 200 in 2180ms
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ ⚠ ./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/sdk-node/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/@opentelemetry/sdk-node/build/src/index.js
+ POST /telemetry/browser-span 200 in 2339ms
+ POST /telemetry/browser-span 200 in 55ms
+ POST /telemetry/browser-span 200 in 57ms
+ POST /telemetry/browser-span 200 in 76ms
+ POST /telemetry/browser-span 200 in 49ms
+ POST /telemetry/browser-span 200 in 75ms
+ POST /telemetry/browser-span 200 in 40ms
+ POST /telemetry/browser-span 200 in 32ms
+ POST /telemetry/browser-span 200 in 33ms
+ POST /telemetry/browser-span 200 in 32ms
+ POST /telemetry/browser-span 200 in 31ms
+ POST /telemetry/browser-span 200 in 34ms
+ POST /telemetry/browser-span 200 in 35ms
+ POST /telemetry/browser-span 200 in 35ms
+ POST /telemetry/browser-span 200 in 43ms
+ POST /telemetry/browser-span 200 in 75ms
+ POST /telemetry/browser-span 200 in 37ms
+ POST /telemetry/browser-span 200 in 35ms
+ POST /telemetry/browser-span 200 in 35ms
+ POST /telemetry/browser-span 200 in 32ms
+ POST /telemetry/browser-span 200 in 37ms
+ POST /telemetry/browser-span 200 in 34ms

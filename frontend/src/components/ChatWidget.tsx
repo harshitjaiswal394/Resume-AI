@@ -142,7 +142,10 @@ export function ChatWidget() {
     const interactive = t.closest("button, a, input, textarea, select, iframe");
     if (interactive && interactive !== e.currentTarget) return;
     const el = e.currentTarget as HTMLElement;
-    const rect = el.getBoundingClientRect();
+    const rect =
+      kind === "panel"
+        ? (document.getElementById("chat-widget-panel")?.getBoundingClientRect() ?? el.getBoundingClientRect())
+        : el.getBoundingClientRect();
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -164,7 +167,12 @@ export function ChatWidget() {
     if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     d.moved = true;
     movedRef.current = true;
-    const rect = el.getBoundingClientRect();
+    // For the panel, clamp against the panel's own size (not the drag handle's),
+    // so grabbing a small corner handle keeps the whole widget on-screen.
+    const rect =
+      d.kind === "panel"
+        ? (document.getElementById("chat-widget-panel")?.getBoundingClientRect() ?? el.getBoundingClientRect())
+        : el.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const x = clamp(d.origLeft + dx, 8, vw - rect.width - 8);
@@ -353,7 +361,7 @@ export function ChatWidget() {
                   <div className="text-sm font-semibold text-white">AI Assistant</div>
                   <div className="flex items-center gap-1.5 text-xs text-emerald-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    ResuMatch AI
+                    Online
                   </div>
                 </div>
               </div>
@@ -407,7 +415,7 @@ export function ChatWidget() {
               allow="microphone"
             />
 
-            {/* ── Resize handles (all 8 edges/corners, like a desktop window) ── */}
+            {/* ── Edge resize handles + corner drag handles ───────────────────── */}
             <div
               data-resize-dir="n"
               onPointerDown={handleResizeDown}
@@ -441,38 +449,34 @@ export function ChatWidget() {
               title="Drag to resize"
             />
             <div
-              data-resize-dir="nw"
-              onPointerDown={handleResizeDown}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeUp}
-              className="absolute left-0 top-0 z-20 h-5 w-5 cursor-nw-resize touch-none"
-              title="Drag to resize"
-            />
-            <div
-              data-resize-dir="ne"
-              onPointerDown={handleResizeDown}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeUp}
-              className="absolute right-0 top-0 z-20 h-5 w-5 cursor-ne-resize touch-none"
-              title="Drag to resize"
-            />
-            <div
               data-resize-dir="sw"
-              onPointerDown={handleResizeDown}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeUp}
-              className="absolute bottom-0 left-0 z-20 h-5 w-5 cursor-sw-resize touch-none"
-              title="Drag to resize"
-            />
+              onPointerDown={(e) => handlePointerDown(e, "panel")}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              className="group absolute bottom-0 left-0 z-30 flex h-6 w-6 cursor-grab items-center justify-center rounded-bl-xl touch-none active:cursor-grabbing"
+              title="Drag to move"
+            >
+              <span className="pointer-events-none grid h-3.5 w-3.5 grid-cols-2 gap-0.5 opacity-60 transition group-hover:opacity-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+              </span>
+            </div>
             <div
               data-resize-dir="se"
-              onPointerDown={handleResizeDown}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeUp}
-              className="absolute bottom-0 right-0 z-20 flex h-5 w-5 items-end justify-end p-1 cursor-se-resize touch-none"
-              title="Drag to resize"
+              onPointerDown={(e) => handlePointerDown(e, "panel")}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              className="group absolute bottom-0 right-0 z-30 flex h-6 w-6 cursor-grab items-center justify-center rounded-br-xl touch-none active:cursor-grabbing"
+              title="Drag to move"
             >
-              <div className="h-2.5 w-2.5 rounded-bl-md border-b-2 border-r-2 border-slate-400/70" />
+              <span className="pointer-events-none grid h-3.5 w-3.5 grid-cols-2 gap-0.5 opacity-60 transition group-hover:opacity-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+              </span>
             </div>
           </motion.div>
         )}
