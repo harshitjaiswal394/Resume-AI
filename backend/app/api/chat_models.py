@@ -32,3 +32,26 @@ class MessageResponse(BaseModel):
 class ConversationUpdateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
 
+class MessageFeedbackRequest(BaseModel):
+    message_id: str = Field(..., description="The ID of the message being rated")
+    feedback: str = Field(..., description="'like' or 'dislike'")
+
+class FeedbackPreference(BaseModel):
+    value: str = Field(..., description="The preference dimension value, e.g. agent name or feature label")
+    likes: int = Field(0)
+    dislikes: int = Field(0)
+    total: int = Field(0)
+    like_rate: float = Field(0.0, description="0..1 proportion of feedback that was positive")
+    samples: List[str] = Field(default_factory=list)
+
+class FeedbackPreferencesResponse(BaseModel):
+    overall_likes: int = Field(0)
+    overall_dislikes: int = Field(0)
+    overall_like_rate: float = Field(0.0)
+    by_agent: List[FeedbackPreference] = Field(default_factory=list)
+    by_provider: List[FeedbackPreference] = Field(default_factory=list)
+    by_structure: List[FeedbackPreference] = Field(default_factory=list)
+    by_length: List[FeedbackPreference] = Field(default_factory=list)
+    top_liked_patterns: List[str] = Field(default_factory=list)
+    top_disliked_patterns: List[str] = Field(default_factory=list)
+

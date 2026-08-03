@@ -38,6 +38,8 @@ import {
   Copy,
   Check,
   RotateCw,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -72,6 +74,7 @@ interface ChatMessage {
   toolEvent?: string; // e.g. "search_jobs", "fetch_user_resume"
   agentLabel?: string;
   providerLabel?: string;
+  feedback?: "like" | "dislike";
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -417,12 +420,14 @@ function MessageBubble({
   onCopy,
   onRegenerate,
   onEdit,
+  onFeedback,
 }: {
   msg: ChatMessage;
   isStreaming?: boolean;
   onCopy: (content: string) => void;
   onRegenerate: (msg: ChatMessage) => void;
   onEdit: (msg: ChatMessage) => void;
+  onFeedback: (msg: ChatMessage, feedback: "like" | "dislike") => void;
 }) {
   const isUser = msg.role === "user";
   const [copied, setCopied] = useState(false);
@@ -506,6 +511,59 @@ function MessageBubble({
               title="Edit prompt"
             >
               <SquarePen className="h-3 w-3" /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => onRegenerate(msg)}
+              disabled={!!isStreaming}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+              title="Regenerate response"
+            >
+              <RotateCw className="h-3 w-3" /> Regenerate
+            </button>
+          </div>
+        )}
+
+        {!isUser && msg.content && msg.role === "agent" && (
+          <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={async () => {
+                setCopied(true);
+                await onCopy(msg.content);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-white/10 hover:text-white"
+              title="Copy response"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onFeedback(msg, "like")}
+              disabled={!!isStreaming}
+              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
+                msg.feedback === "like"
+                  ? "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                  : "text-slate-400 hover:bg-white/10 hover:text-white"
+              }`}
+              title="Like response"
+            >
+              <ThumbsUp className="h-3 w-3" /> Like
+            </button>
+            <button
+              type="button"
+              onClick={() => onFeedback(msg, "dislike")}
+              disabled={!!isStreaming}
+              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition disabled:opacity-40 ${
+                msg.feedback === "dislike"
+                  ? "bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
+                  : "text-slate-400 hover:bg-white/10 hover:text-white"
+              }`}
+              title="Dislike response"
+            >
+              <ThumbsDown className="h-3 w-3" /> Dislike
             </button>
             <button
               type="button"
@@ -1029,10 +1087,12 @@ export default function ChatPage() {
               log.info("Stream complete signal received");
               playCompletionChime();
               setStopReason(null);
+              const dbMessageId = parsed.message_id as string | undefined;
               setMessages(prev =>
-                prev.map(m => m.id === tempAgentId
-                  ? { ...m, streaming: false, content: fullContent }
-                  : m
+                prev.map(m =>
+                  m.id === tempAgentId
+                    ? { ...m, streaming: false, content: fullContent, id: dbMessageId ?? m.id }
+                    : m
                 )
               );
               // Refresh conversation list to update timestamp
@@ -1144,6 +1204,46 @@ export default function ChatPage() {
     setError(null);
     textareaRef.current?.focus();
   }, [messages]);
+
+  // ── Per-response feedback (like / dislike) ──────────────────────────────────
+  const handleFeedback = useCallback(async (msg: ChatMessage, feedback: "like" | "dislike") => {
+    if (isStreaming || !msg.id) {
+      log.warn("Feedback ignored (streaming or missing message id)");
+      return;
+    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No auth session");
+      log.info(`Recording feedback on message ${msg.id}: ${feedback}`);
+
+      const togglingOff = msg.feedback === feedback;
+      const url = togglingOff
+        ? `${backendUrl}/api/chat/feedback/${msg.id}`
+        : `${backendUrl}/api/chat/feedback`;
+
+      const res = await fetch(url, {
+        method: togglingOff ? "DELETE" : "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: togglingOff ? undefined : JSON.stringify({ message_id: msg.id, feedback }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      setMessages(prev =>
+        prev.map(m => m.id === msg.id ? { ...m, feedback: togglingOff ? undefined : feedback } : m)
+      );
+      log.info(`Feedback ${togglingOff ? "removed" : "recorded"}: ${feedback}`);
+    } catch (e: any) {
+      log.error("Failed to record feedback", e);
+      setError(e.message || "Could not record your feedback. Please try again.");
+    }
+  }, [isStreaming, backendUrl]);
 
   // ── Auto-resize textarea ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -1452,6 +1552,7 @@ export default function ChatPage() {
                     onCopy={handleCopyMessage}
                     onRegenerate={handleRegenerate}
                     onEdit={handleEditUserMessage}
+                    onFeedback={handleFeedback}
                   />
                 ))}
               </AnimatePresence>
