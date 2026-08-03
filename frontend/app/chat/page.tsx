@@ -35,6 +35,9 @@ import {
   Target,
   BriefcaseBusiness,
   HelpCircle,
+  Copy,
+  Check,
+  RotateCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -408,8 +411,21 @@ function MarkdownMessage({ content }: { content: string }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  isStreaming,
+  onCopy,
+  onRegenerate,
+  onEdit,
+}: {
+  msg: ChatMessage;
+  isStreaming?: boolean;
+  onCopy: (content: string) => void;
+  onRegenerate: (msg: ChatMessage) => void;
+  onEdit: (msg: ChatMessage) => void;
+}) {
   const isUser = msg.role === "user";
+  const [copied, setCopied] = useState(false);
   const roleMeta = msg.role === "user"
     ? { icon: <User2 className="h-3.5 w-3.5 text-white" />, label: "You", badge: "bg-fuchsia-600/10 text-white border-white/10" }
     : msg.role === "tool"
@@ -466,6 +482,42 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             }
           </div>
         </div>
+
+        {isUser && msg.content && (
+          <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={async () => {
+                setCopied(true);
+                await onCopy(msg.content);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-white/10 hover:text-white"
+              title="Copy prompt"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdit(msg)}
+              disabled={!!isStreaming}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+              title="Edit prompt"
+            >
+              <SquarePen className="h-3 w-3" /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => onRegenerate(msg)}
+              disabled={!!isStreaming}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+              title="Regenerate response"
+            >
+              <RotateCw className="h-3 w-3" /> Regenerate
+            </button>
+          </div>
+        )}
 
         <span className={`text-[11px] px-1 ${isUser ? "text-slate-500/80" : "text-slate-400"}`}>
           {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -880,8 +932,8 @@ export default function ChatPage() {
     setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    const text = String(overrideText ?? input ?? "").trim();
     if (!text) { log.debug("sendMessage ignored: empty input"); return; }
     if (isStreaming) {
       log.warn("sendMessage called while streaming; stopping stream instead");
@@ -1061,6 +1113,37 @@ export default function ChatPage() {
       sendMessage();
     }
   };
+
+  // ── Per-user-message actions (copy / regenerate / edit) ─────────────────────
+  const handleCopyMessage = useCallback(async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      log.info("Copied user message to clipboard", { chars: content.length });
+    } catch (e: any) {
+      log.error("Failed to copy user message", e);
+    }
+  }, []);
+
+  const handleRegenerate = useCallback((userMsg: ChatMessage) => {
+    if (isStreaming) {
+      log.warn("Regenerate ignored while streaming");
+      return;
+    }
+    log.info(`Regenerating response for user message: ${userMsg.id}`);
+    const idx = messages.findIndex(m => m.id === userMsg.id);
+    setMessages(prev => (idx >= 0 ? prev.slice(0, idx) : prev));
+    setError(null);
+    sendMessage(userMsg.content);
+  }, [isStreaming, messages, sendMessage]);
+
+  const handleEditUserMessage = useCallback((userMsg: ChatMessage) => {
+    log.info(`Editing user message: ${userMsg.id}`);
+    const idx = messages.findIndex(m => m.id === userMsg.id);
+    setMessages(prev => (idx >= 0 ? prev.slice(0, idx) : prev));
+    setInput(userMsg.content);
+    setError(null);
+    textareaRef.current?.focus();
+  }, [messages]);
 
   // ── Auto-resize textarea ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -1362,7 +1445,14 @@ export default function ChatPage() {
             <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
               <AnimatePresence initial={false}>
                 {messages.map(msg => (
-                  <MessageBubble key={msg.id} msg={msg} />
+                  <MessageBubble
+                    key={msg.id}
+                    msg={msg}
+                    isStreaming={isStreaming}
+                    onCopy={handleCopyMessage}
+                    onRegenerate={handleRegenerate}
+                    onEdit={handleEditUserMessage}
+                  />
                 ))}
               </AnimatePresence>
 
@@ -1448,7 +1538,7 @@ export default function ChatPage() {
 
               <button
                 id="chat-send-btn"
-                onClick={isStreaming ? stopGeneration : sendMessage}
+                onClick={isStreaming ? stopGeneration : () => sendMessage()}
                 disabled={!input.trim() && !isStreaming}
                 className={`
                   shrink-0 h-11 min-w-11 px-4 rounded-2xl flex items-center justify-center gap-1.5 transition-all text-xs font-semibold
