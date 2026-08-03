@@ -3544,3 +3544,173 @@ Traceback (most recent call last):
   File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\adapters.py", line 729, in send
     raise ConnectionError(e, request=request)
 requests.exceptions.ConnectionError: HTTPConnectionPool(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Max retries exceeded with url: /v1/traces (Caused by NameResolutionError("HTTPConnection(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Failed to resolve 'jaeger-service.resumatch-ai.svc.cluster.local' ([Errno 11001] getaddrinfo failed)"))
+2026-08-03 21:36:39,588 - httpx - INFO - [_client.py:1740] - HTTP Request: GET https://fukxrsqmulucvfvowcou.supabase.co/auth/v1/user "HTTP/1.1 200 OK"
+2026-08-03 21:36:39,749 - httpx - INFO - [_client.py:1740] - HTTP Request: GET https://fukxrsqmulucvfvowcou.supabase.co/auth/v1/user "HTTP/1.1 200 OK"
+2026-08-03 21:36:44,509 - opentelemetry.sdk.trace.export - ERROR - [__init__.py:369] - Exception while exporting Span batch.
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\socket.py", line 963, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 500, in request
+    self.endheaders()
+  File "C:\Python312\Lib\http\client.py", line 1314, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Python312\Lib\http\client.py", line 1074, in _send_output
+    self.send(msg)
+  File "C:\Python312\Lib\http\client.py", line 1018, in send
+    self.connect()
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 331, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPConnection(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Failed to resolve 'jaeger-service.resumatch-ai.svc.cluster.local' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\adapters.py", line 696, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\instrumentation\urllib3\__init__.py", line 226, in instrumented_urlopen
+    return wrapped(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connectionpool.py", line 842, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\util\retry.py", line 543, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Max retries exceeded with url: /v1/traces (Caused by NameResolutionError("HTTPConnection(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Failed to resolve 'jaeger-service.resumatch-ai.svc.cluster.local' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\sdk\trace\export\__init__.py", line 367, in _export_batch
+    self.span_exporter.export(self.spans_list[:idx])  # type: ignore
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 169, in export
+    return self._export_serialized_spans(serialized_data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 139, in _export_serialized_spans
+    resp = self._export(serialized_data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 114, in _export
+    return self._session.post(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\sessions.py", line 712, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\sessions.py", line 651, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\instrumentation\requests\__init__.py", line 152, in instrumented_send
+    return wrapped_send(self, request, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\sessions.py", line 784, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\adapters.py", line 729, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPConnectionPool(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Max retries exceeded with url: /v1/traces (Caused by NameResolutionError("HTTPConnection(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Failed to resolve 'jaeger-service.resumatch-ai.svc.cluster.local' ([Errno 11001] getaddrinfo failed)"))
+2026-08-03 21:37:28,728 - httpx - INFO - [_client.py:1740] - HTTP Request: GET https://fukxrsqmulucvfvowcou.supabase.co/auth/v1/user "HTTP/1.1 200 OK"
+2026-08-03 21:37:28,864 - httpx - INFO - [_client.py:1740] - HTTP Request: GET https://fukxrsqmulucvfvowcou.supabase.co/auth/v1/user "HTTP/1.1 200 OK"
+2026-08-03 21:37:29,607 - opentelemetry.sdk.trace.export - ERROR - [__init__.py:369] - Exception while exporting Span batch.
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\socket.py", line 963, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 500, in request
+    self.endheaders()
+  File "C:\Python312\Lib\http\client.py", line 1314, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Python312\Lib\http\client.py", line 1074, in _send_output
+    self.send(msg)
+  File "C:\Python312\Lib\http\client.py", line 1018, in send
+    self.connect()
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 331, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPConnection(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Failed to resolve 'jaeger-service.resumatch-ai.svc.cluster.local' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\adapters.py", line 696, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\instrumentation\urllib3\__init__.py", line 226, in instrumented_urlopen
+    return wrapped(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\connectionpool.py", line 842, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\urllib3\util\retry.py", line 543, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Max retries exceeded with url: /v1/traces (Caused by NameResolutionError("HTTPConnection(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Failed to resolve 'jaeger-service.resumatch-ai.svc.cluster.local' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\sdk\trace\export\__init__.py", line 367, in _export_batch
+    self.span_exporter.export(self.spans_list[:idx])  # type: ignore
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 169, in export
+    return self._export_serialized_spans(serialized_data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 139, in _export_serialized_spans
+    resp = self._export(serialized_data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\exporter\otlp\proto\http\trace_exporter\__init__.py", line 114, in _export
+    return self._session.post(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\sessions.py", line 712, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\sessions.py", line 651, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\opentelemetry\instrumentation\requests\__init__.py", line 152, in instrumented_send
+    return wrapped_send(self, request, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\sessions.py", line 784, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\Downloads\Resume-AI-1\backend\.venv\Lib\site-packages\requests\adapters.py", line 729, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPConnectionPool(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Max retries exceeded with url: /v1/traces (Caused by NameResolutionError("HTTPConnection(host='jaeger-service.resumatch-ai.svc.cluster.local', port=4318): Failed to resolve 'jaeger-service.resumatch-ai.svc.cluster.local' ([Errno 11001] getaddrinfo failed)"))

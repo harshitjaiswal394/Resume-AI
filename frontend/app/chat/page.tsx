@@ -85,6 +85,47 @@ const log = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Completion chime (Web Audio – no asset needed)
+// ──────────────────────────────────────────────────────────────────────────────
+let _audioCtx: AudioContext | null = null;
+
+function ensureAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!_audioCtx) {
+    try {
+      _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    } catch {
+      _audioCtx = null;
+    }
+  }
+  if (_audioCtx && _audioCtx.state === "suspended") {
+    _audioCtx.resume().catch(() => undefined);
+  }
+  return _audioCtx;
+}
+
+function playCompletionChime() {
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const start = now + i * 0.12;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.6);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.65);
+  });
+  log.debug("Completion chime played");
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Suggested prompts
 // ──────────────────────────────────────────────────────────────────────────────
 const SUGGESTED_PROMPTS = [
@@ -446,6 +487,7 @@ function ChatSidebar({
   onDelete,
   onRename,
   mobile = false,
+  embedded = false,
 }: {
   conversations: Conversation[];
   activeId: string | null;
@@ -455,6 +497,7 @@ function ChatSidebar({
   onDelete: (id: string) => void;
   onRename: (id: string, newTitle: string) => void;
   mobile?: boolean;
+  embedded?: boolean;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -569,18 +612,20 @@ function ChatSidebar({
       </div>
 
       {/* Nav links + logout */}
-      <div className="p-4 border-t border-white/10 space-y-1 bg-white/[0.02]">
-        <Link href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition-all">
-          <LayoutDashboard className="h-4 w-4" /> Dashboard
-        </Link>
-        <button
-          id="chat-logout-btn"
-          onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-rose-300 hover:bg-white/5 rounded-xl transition-all"
-        >
-          <LogOut className="h-4 w-4" /> Sign Out
-        </button>
-      </div>
+      {!embedded && (
+        <div className="p-4 border-t border-white/10 space-y-1 bg-white/[0.02]">
+          <Link href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition-all">
+            <LayoutDashboard className="h-4 w-4" /> Dashboard
+          </Link>
+          <button
+            id="chat-logout-btn"
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-rose-300 hover:bg-white/5 rounded-xl transition-all"
+          >
+            <LogOut className="h-4 w-4" /> Sign Out
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
@@ -607,6 +652,7 @@ export default function ChatPage() {
   const [stopReason, setStopReason]             = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent]       = useState("planner");
   const [agentOptions, setAgentOptions]         = useState(AGENT_OPTIONS);
+  const [embedded, setEmbedded]                 = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
@@ -614,6 +660,15 @@ export default function ChatPage() {
   const abortRef       = useRef<AbortController | null>(null);
   const readerRef      = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+
+  // ── Detect embedded (floating widget) mode ─────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const isEmbedded = params.get("embedded") === "1";
+    log.info(`Chat rendered in ${isEmbedded ? "embedded (widget)" : "full-page"} mode`);
+    setEmbedded(isEmbedded);
+  }, []);
 
   // ── Auth guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -873,6 +928,7 @@ export default function ChatPage() {
     let fullContent = "";
     let chunkCount = 0;
     setIsStreaming(true);
+    ensureAudioContext(); // unlock audio on this user gesture so the completion chime can play
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -919,6 +975,7 @@ export default function ChatPage() {
 
             if (parsed.done) {
               log.info("Stream complete signal received");
+              playCompletionChime();
               setStopReason(null);
               setMessages(prev =>
                 prev.map(m => m.id === tempAgentId
@@ -1132,6 +1189,7 @@ export default function ChatPage() {
         onLogout={handleLogout}
         onDelete={handleDeleteConversation}
         onRename={handleRenameConversation}
+        embedded={embedded}
       />
 
       {isSidebarOpen && (
@@ -1161,6 +1219,7 @@ export default function ChatPage() {
                 onLogout={handleLogout}
                 onDelete={handleDeleteConversation}
                 onRename={handleRenameConversation}
+                embedded={embedded}
               />
             </div>
           </div>

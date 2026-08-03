@@ -6,6 +6,7 @@ import { AuthProvider } from "./AuthProvider";
 import { Toaster } from "./ui/sonner";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
+import { ChatWidget } from "./ChatWidget";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -26,6 +27,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-grow">{children}</main>
         {showFooter && <Footer />}
         <Toaster />
+        <ChatWidget />
       </div>
     </AuthProvider>
   );
