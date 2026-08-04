@@ -9,21 +9,17 @@ from opentelemetry.trace import Status, StatusCode
 load_dotenv()
 
 logger = logging.getLogger("resumatch-api.db")
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL)
-
-# CI / pytest fallback
 if not DATABASE_URL:
-    logger.warning(
-        "DATABASE_URL not configured. Using SQLite test database."
-    )
+    logger.warning("DATABASE_URL not found. Using SQLite test database.")
     DATABASE_URL = "sqlite:///./test.db"
 
-ENGINE_KWARGS = {}
+engine_kwargs = {}
 
 if DATABASE_URL.startswith("sqlite"):
-    ENGINE_KWARGS["connect_args"] = {
+    engine_kwargs["connect_args"] = {
         "check_same_thread": False
     }
 
@@ -31,7 +27,7 @@ engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     future=True,
-    **ENGINE_KWARGS,
+    **engine_kwargs,
 )
 
 SessionLocal = sessionmaker(
