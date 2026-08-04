@@ -686,6 +686,11 @@ def _friendly_stream_error(exc: Exception) -> str:
     if "429" in text or "quota" in lowered or "rate limit" in lowered:
         return "The AI provider returned a rate-limit/quota error. Please wait a moment and try again."
     if "all providers failed" in lowered:
+        if "google-genai" in lowered or "vertex" in lowered and "unavailable" in lowered:
+            return (
+                "Vertex AI is unavailable (google-genai not installed). "
+                "Install google-genai or set NVIDIA_API_KEY_REASONING as fallback."
+            )
         return "All AI providers are currently unavailable. Please try again later."
     if not text:
         return "AI service is currently unavailable. Please try again later."
@@ -784,7 +789,7 @@ def _build_resume_context_text(resume_context: Optional[dict]) -> Optional[str]:
             "education": summary.get("education", [])[:3],
             "projects": summary.get("projects", [])[:3],
             "certifications": summary.get("certifications", [])[:3],
-            "rawTextPreview": (resume_context.get("rawText") or "")[:4500],
+            "rawTextPreview": (resume_context.get("rawText") or "")[:12000],
         },
         ensure_ascii=False,
     )
@@ -810,14 +815,29 @@ async def stream_gemini_response(
     user_message: str,
     selected_resume_id: Optional[str] = None,
     client_request_id: Optional[str] = None,
-    agent: Optional[str] = None,
 ):
     stream_start = time.monotonic()
     ctx = _tracer.start_as_current_span("chat.stream", kind=trace.SpanKind.SERVER) if _OTEL_ENABLED and _tracer else None
 
     try:
         with (ctx if ctx else _NullContext()):
-            agent_def = agent_registry.get_or_default(agent)
+            # ── Auto-route: orchestrator picks the right agent ─────────────
+            agent_def = agent_registry.get_or_default(None)
+            try:
+                from app.agents.orchestrator import orchestrator
+                if orchestrator:
+                    routing = await orchestrator.route(
+                        user_message=user_message,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                    )
+                    agent_def = agent_registry.get_or_default(routing["agent_name"])
+                    logger.info(
+                        "INTENT_ROUTED | user=%s intent=%s agent=%s confidence=%.2f",
+                        user_id, routing["intent"], routing["agent_name"], routing["confidence"],
+                    )
+            except Exception as e:
+                logger.warning("INTENT_CLASSIFICATION_SKIPPED | error=%s", e)
 
             # ── Security gate 1: prompt injection / jailbreak detection ──────
             sanitized_message = sanitize_prompt(user_message)
@@ -895,15 +915,11 @@ async def stream_gemini_response(
                     {"cid": conversation_id},
                 ).fetchall()
 
-            needs_resume = (
-                _looks_like_resume_request(user_message)
-                or bool(selected_resume_id)
-                or agent_def.name in {"resume", "ats", "career", "interview"}
-            )
-            resume_context = _get_latest_resume_context(user_id, selected_resume_id) if needs_resume else None
+            # Always try to load resume context — agents perform better with it
+            resume_context = _get_latest_resume_context(user_id, selected_resume_id)
             resume_context_text = _build_resume_context_text(resume_context)
 
-            if needs_resume and agent_def.name in {"resume", "ats", "interview"} and not resume_context_text:
+            if agent_def.name in {"resume", "ats", "interview"} and not resume_context_text:
                 yield f"data: {json.dumps({'error': 'I could not find a saved resume for this account yet. Upload one first or select an existing resume.'})}\n\n"
                 return
 
@@ -1115,7 +1131,6 @@ async def chat_stream(request: ChatMessageRequest, user_id: str = Depends(get_cu
             request.message,
             request.selected_resume_id,
             request.client_request_id,
-            request.agent,
         ),
         media_type="text/event-stream",
     )

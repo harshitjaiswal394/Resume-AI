@@ -217,6 +217,308 @@ def _build_fetch_user_resume(user_id: str):
     return fetch_user_resume
 
 
+# ── New Agent Tool Builders ──────────────────────────────────────────────────
+
+def _build_analyze_jd(user_id: str):
+    async def analyze_jd(jd_text: str) -> str:
+        """Analyzes a job description and extracts structured data."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=analyze_jd user=%s", user_id)
+        with _span("chat_tool.analyze_jd") as span:
+            span.set_attribute("tool.name", "analyze_jd")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                from app.agents.jd_intel import jd_intel_agent
+                if not jd_intel_agent:
+                    return json.dumps({"status": "error", "message": "JD Intel agent not available"})
+
+                result = await jd_intel_agent.ingest(jd_text, "text", user_id)
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=analyze_jd user=%s latency_ms=%.1f", user_id, latency)
+                return json.dumps(result)
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=analyze_jd user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return analyze_jd
+
+
+def _build_compare_resume_jd(user_id: str):
+    async def compare_resume_jd(jd_text: str) -> str:
+        """Compares resume against JD for skill gaps."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=compare_resume_jd user=%s", user_id)
+        with _span("chat_tool.compare_resume_jd") as span:
+            span.set_attribute("tool.name", "compare_resume_jd")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                from app.agents.jd_intel import jd_intel_agent
+                from app.db import engine
+                from sqlalchemy import text
+
+                # Get resume data
+                with engine.connect() as conn:
+                    row = conn.execute(
+                        text("SELECT parsed_data FROM resumes WHERE user_id = :uid ORDER BY updated_at DESC LIMIT 1"),
+                        {"uid": user_id},
+                    ).fetchone()
+
+                if not row or not row.parsed_data:
+                    return json.dumps({"status": "error", "message": "No resume found"})
+
+                resume_data = row.parsed_data if isinstance(row.parsed_data, dict) else json.loads(row.parsed_data)
+
+                # Parse JD
+                if not jd_intel_agent:
+                    return json.dumps({"status": "error", "message": "JD Intel agent not available"})
+
+                jd_result = await jd_intel_agent.ingest(jd_text, "text", user_id)
+                if jd_result["status"] == "error":
+                    return json.dumps(jd_result)
+
+                # Compare
+                comparison = await jd_intel_agent.compare_resume_jd(resume_data, jd_result.get("data", {}))
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=compare_resume_jd user=%s match=%.1f latency_ms=%.1f", user_id, comparison.get("match_score", 0), latency)
+                return json.dumps({"status": "success", **comparison})
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=compare_resume_jd user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return compare_resume_jd
+
+
+def _build_tailor_resume(user_id: str):
+    async def tailor_resume(jd_text: str) -> str:
+        """Tailors resume against a specific JD."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=tailor_resume user=%s", user_id)
+        with _span("chat_tool.tailor_resume") as span:
+            span.set_attribute("tool.name", "tailor_resume")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                import hashlib
+                from app.agents.resume_intel import resume_intel_agent
+                from app.agents.resume_tailor import resume_tailor_agent
+                from app.agents.jd_intel import jd_intel_agent
+
+                if not resume_tailor_agent or not jd_intel_agent:
+                    return json.dumps({"status": "error", "message": "Agents not available"})
+
+                # Get resume
+                resume_result = await resume_intel_agent.get_resume_context(user_id)
+                if resume_result["status"] == "error":
+                    return json.dumps(resume_result)
+
+                # Parse JD
+                jd_result = await jd_intel_agent.ingest(jd_text, "text", user_id)
+                if jd_result["status"] == "error":
+                    return json.dumps(jd_result)
+
+                jd_hash = hashlib.sha256(jd_text.encode()).hexdigest()[:16]
+
+                # Tailor
+                result = await resume_tailor_agent.tailor(
+                    user_id=user_id,
+                    resume_id=resume_result.get("resume_id", ""),
+                    resume_data=resume_result.get("parsed_data", {}),
+                    jd_data=jd_result.get("data", {}),
+                    jd_hash=jd_hash,
+                )
+
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=tailor_resume user=%s cached=%s latency_ms=%.1f", user_id, result.get("cached", False), latency)
+                return json.dumps(result)
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=tailor_resume user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return tailor_resume
+
+
+def _build_analyze_ats(user_id: str):
+    async def analyze_ats(jd_text: str = None) -> str:
+        """Runs ATS compatibility analysis."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=analyze_ats user=%s", user_id)
+        with _span("chat_tool.analyze_ats") as span:
+            span.set_attribute("tool.name", "analyze_ats")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                from app.agents.resume_intel import resume_intel_agent
+                from app.agents.ats_intel import ats_intel_agent
+                from app.agents.jd_intel import jd_intel_agent
+
+                if not resume_intel_agent or not ats_intel_agent:
+                    return json.dumps({"status": "error", "message": "Agents not available"})
+
+                resume_result = await resume_intel_agent.get_resume_context(user_id)
+                if resume_result["status"] == "error":
+                    return json.dumps(resume_result)
+
+                jd_data = None
+                if jd_text and jd_intel_agent:
+                    jd_result = await jd_intel_agent.ingest(jd_text, "text")
+                    if jd_result["status"] == "success":
+                        jd_data = jd_result.get("data")
+
+                result = await ats_intel_agent.analyze(
+                    resume_data=resume_result.get("parsed_data", {}),
+                    jd_data=jd_data,
+                )
+
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=analyze_ats user=%s score=%.1f latency_ms=%.1f", user_id, result.get("ats_score", 0), latency)
+                return json.dumps(result)
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=analyze_ats user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return analyze_ats
+
+
+def _build_start_interview(user_id: str):
+    async def start_interview(interview_type: str = "mixed", num_questions: int = 5) -> str:
+        """Starts a mock interview session."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=start_interview user=%s type=%s", user_id, interview_type)
+        with _span("chat_tool.start_interview") as span:
+            span.set_attribute("tool.name", "start_interview")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                from app.agents.resume_intel import resume_intel_agent
+                from app.agents.interview import interview_agent
+
+                if not interview_agent:
+                    return json.dumps({"status": "error", "message": "Interview agent not available"})
+
+                resume_result = await resume_intel_agent.get_resume_context(user_id)
+                if resume_result["status"] == "error":
+                    return json.dumps(resume_result)
+
+                result = await interview_agent.start_interview(
+                    user_id=user_id,
+                    resume_data=resume_result.get("parsed_data", {}),
+                    interview_type=interview_type,
+                    num_questions=num_questions,
+                )
+
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=start_interview user=%s session=%s latency_ms=%.1f", user_id, result.get("session_id"), latency)
+                return json.dumps(result)
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=start_interview user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return start_interview
+
+
+def _build_answer_interview(user_id: str):
+    async def answer_interview(session_id: str, answer: str) -> str:
+        """Submits an answer to the current interview question."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=answer_interview user=%s session=%s", user_id, session_id)
+        with _span("chat_tool.answer_interview") as span:
+            span.set_attribute("tool.name", "answer_interview")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                from app.agents.interview import interview_agent
+
+                if not interview_agent:
+                    return json.dumps({"status": "error", "message": "Interview agent not available"})
+
+                result = await interview_agent.answer(session_id, answer)
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=answer_interview user=%s completed=%s latency_ms=%.1f", user_id, result.get("completed", False), latency)
+                return json.dumps(result)
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=answer_interview user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return answer_interview
+
+
+def _build_generate_roadmap(user_id: str):
+    async def generate_roadmap(target_role: str = None) -> str:
+        """Generates a personalized learning roadmap."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=generate_roadmap user=%s", user_id)
+        with _span("chat_tool.generate_roadmap") as span:
+            span.set_attribute("tool.name", "generate_roadmap")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                from app.agents.resume_intel import resume_intel_agent
+                from app.agents.learning_roadmap import learning_roadmap_agent
+
+                if not learning_roadmap_agent:
+                    return json.dumps({"status": "error", "message": "Learning Roadmap agent not available"})
+
+                resume_result = await resume_intel_agent.get_resume_context(user_id)
+                if resume_result["status"] == "error":
+                    return json.dumps(resume_result)
+
+                result = await learning_roadmap_agent.generate(
+                    user_id=user_id,
+                    resume_data=resume_result.get("parsed_data", {}),
+                )
+
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=generate_roadmap user=%s latency_ms=%.1f", user_id, latency)
+                return json.dumps(result)
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=generate_roadmap user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return generate_roadmap
+
+
+def _build_get_career_advice(user_id: str):
+    async def get_career_advice(focus_area: str = None) -> str:
+        """Gets personalized career coaching advice."""
+        start = time.monotonic()
+        logger.info("TOOL_CALL_START | tool=get_career_advice user=%s", user_id)
+        with _span("chat_tool.get_career_advice") as span:
+            span.set_attribute("tool.name", "get_career_advice")
+            span.set_attribute("tool.user_id", user_id)
+            try:
+                from app.agents.resume_intel import resume_intel_agent
+                from app.agents.career_coach import career_coach_agent
+                from app.agents.memory import memory_agent
+
+                if not career_coach_agent:
+                    return json.dumps({"status": "error", "message": "Career Coach agent not available"})
+
+                resume_result = await resume_intel_agent.get_resume_context(user_id)
+                resume_data = resume_result.get("parsed_data", {}) if resume_result["status"] == "success" else {}
+
+                career_context = None
+                if memory_agent:
+                    career_context = await memory_agent.get_career_context(user_id)
+
+                result = await career_coach_agent.advise(
+                    user_id=user_id,
+                    resume_data=resume_data,
+                    career_context=career_context,
+                )
+
+                latency = (time.monotonic() - start) * 1000
+                logger.info("TOOL_CALL_SUCCESS | tool=get_career_advice user=%s latency_ms=%.1f", user_id, latency)
+                return json.dumps(result)
+            except Exception as e:
+                latency = (time.monotonic() - start) * 1000
+                logger.error("TOOL_CALL_ERROR | tool=get_career_advice user=%s latency_ms=%.1f error=%s", user_id, latency, str(e))
+                span.record_exception(e)
+                return json.dumps({"status": "error", "message": str(e)})
+    return get_career_advice
+
+
 def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = None) -> List[AgentTool]:
     """
     Factory that injects user context into typed tool closures.
@@ -242,6 +544,154 @@ def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = No
             ),
             parameters={"type": "object", "properties": {}},
             function=_build_fetch_user_resume(user_id),
+        ),
+        # ── New Agent Tools ──────────────────────────────────────────────────
+        "analyze_jd": AgentTool(
+            name="analyze_jd",
+            description=(
+                "Analyzes a job description and extracts structured data: skills, stack, "
+                "responsibilities, experience level, salary, location."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "jd_text": {
+                        "type": "string",
+                        "description": "The job description text to analyze.",
+                    },
+                },
+                "required": ["jd_text"],
+            },
+            function=_build_analyze_jd(user_id),
+        ),
+        "compare_resume_jd": AgentTool(
+            name="compare_resume_jd",
+            description=(
+                "Compares the user's resume against a job description to identify "
+                "skill gaps, matched skills, and alignment score."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "jd_text": {
+                        "type": "string",
+                        "description": "The job description text to compare against.",
+                    },
+                },
+                "required": ["jd_text"],
+            },
+            function=_build_compare_resume_jd(user_id),
+        ),
+        "tailor_resume": AgentTool(
+            name="tailor_resume",
+            description=(
+                "Tailors the user's resume to better match a specific job description. "
+                "Returns tailored content with change reasons for each modification."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "jd_text": {
+                        "type": "string",
+                        "description": "The job description to tailor the resume for.",
+                    },
+                },
+                "required": ["jd_text"],
+            },
+            function=_build_tailor_resume(user_id),
+        ),
+        "analyze_ats": AgentTool(
+            name="analyze_ats",
+            description=(
+                "Runs ATS (Applicant Tracking System) compatibility analysis on the user's resume. "
+                "Returns score, issues, and recommendations."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "jd_text": {
+                        "type": "string",
+                        "description": "Optional job description for keyword analysis.",
+                    },
+                },
+            },
+            function=_build_analyze_ats(user_id),
+        ),
+        "start_interview": AgentTool(
+            name="start_interview",
+            description=(
+                "Starts a mock interview session. Returns the first question."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "interview_type": {
+                        "type": "string",
+                        "enum": ["technical", "behavioral", "mixed"],
+                        "description": "Type of interview to conduct.",
+                    },
+                    "num_questions": {
+                        "type": "integer",
+                        "description": "Number of questions to ask (default: 5).",
+                    },
+                },
+            },
+            function=_build_start_interview(user_id),
+        ),
+        "answer_interview": AgentTool(
+            name="answer_interview",
+            description=(
+                "Submits an answer to the current interview question."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The interview session ID.",
+                    },
+                    "answer": {
+                        "type": "string",
+                        "description": "The answer to the current question.",
+                    },
+                },
+                "required": ["session_id", "answer"],
+            },
+            function=_build_answer_interview(user_id),
+        ),
+        "generate_roadmap": AgentTool(
+            name="generate_roadmap",
+            description=(
+                "Generates a personalized learning roadmap based on skill gaps "
+                "and target role requirements."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "target_role": {
+                        "type": "string",
+                        "description": "The target role for the learning roadmap.",
+                    },
+                },
+            },
+            function=_build_generate_roadmap(user_id),
+        ),
+        "get_career_advice": AgentTool(
+            name="get_career_advice",
+            description=(
+                "Gets personalized career coaching advice based on resume, "
+                "career goals, and market conditions."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "focus_area": {
+                        "type": "string",
+                        "description": "Specific area to focus on (e.g., 'interview prep', 'skill gaps', 'career transition').",
+                    },
+                },
+            },
+            function=_build_get_career_advice(user_id),
         ),
     }
 

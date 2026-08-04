@@ -66,6 +66,52 @@ async def startup_event():
         scheduler.start()
         logger.info("Background scheduler started.")
 
+    # Initialize the 10-agent system
+    try:
+        from app.services.provider_adapters import build_default_provider_router
+        from app.services.ai_gateway import GatewayRouter
+        from app.agents.orchestrator import init_orchestrator
+        from app.agents.resume_intel import ResumeIntelAgent
+        from app.agents.jd_intel import JDIntelAgent
+        from app.agents.resume_tailor import ResumeTailorAgent
+        from app.agents.ats_intel import ATSIntelAgent
+        from app.agents.memory import MemoryAgent
+        from app.agents.reflection import ReflectionAgent
+        from app.agents.interview import InterviewAgent
+        from app.agents.learning_roadmap import LearningRoadmapAgent
+        from app.agents.career_coach import CareerCoachAgent
+
+        providers = build_default_provider_router()
+        router = GatewayRouter(providers)
+
+        # Initialize orchestrator
+        init_orchestrator(router)
+
+        # Initialize all agents (process-wide singletons)
+        import app.agents.resume_intel as ri_mod
+        import app.agents.jd_intel as ji_mod
+        import app.agents.resume_tailor as rt_mod
+        import app.agents.ats_intel as ai_mod
+        import app.agents.memory as mem_mod
+        import app.agents.reflection as ref_mod
+        import app.agents.interview as int_mod
+        import app.agents.learning_roadmap as lr_mod
+        import app.agents.career_coach as cc_mod
+
+        ri_mod.resume_intel_agent = ResumeIntelAgent(router)
+        ji_mod.jd_intel_agent = JDIntelAgent(router)
+        rt_mod.resume_tailor_agent = ResumeTailorAgent(router)
+        ai_mod.ats_intel_agent = ATSIntelAgent(router)
+        mem_mod.memory_agent = MemoryAgent(router)
+        ref_mod.reflection_agent = ReflectionAgent(router)
+        int_mod.interview_agent = InterviewAgent(router)
+        lr_mod.learning_roadmap_agent = LearningRoadmapAgent(router)
+        cc_mod.career_coach_agent = CareerCoachAgent(router)
+
+        logger.info("10-agent system initialized successfully (%d providers)", len(providers))
+    except Exception as e:
+        logger.error("Agent system init failed: %s", e, exc_info=True)
+
     # Automatic seeding disabled as requested.
     # Use 'python scripts/seed_kb.py' to run it manually.
     logger.info("Backend started. Automatic Knowledge Base seeding is DISABLED.")

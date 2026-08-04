@@ -20,7 +20,7 @@ class GatewayRequest:
     tools: List[ToolCallable] = field(default_factory=list)
     agent_tools: List["AgentTool"] = field(default_factory=list)
     temperature: float = 0.35
-    max_tokens: int = 1600
+    max_tokens: int = 8192
 
 
 @dataclass
@@ -113,6 +113,7 @@ class GatewayRouter:
         preferred = request.preferred_provider or self.default_provider or (self.providers[0].name if self.providers else None)
 
         last_error: Optional[Exception] = None
+        all_errors: List[str] = []
         for provider_name in self._attempt_order(preferred):
             provider = self._resolve(provider_name)
             if provider is None:
@@ -127,9 +128,11 @@ class GatewayRouter:
                 )
             except Exception as exc:  # pragma: no cover
                 last_error = exc
+                all_errors.append(f"{provider.name}: {exc}")
                 logger.warning("provider failed", extra={"provider": provider.name, "error": str(exc)})
 
-        raise RuntimeError(f"All providers failed: {last_error}")
+        detail = "; ".join(all_errors) if all_errors else str(last_error)
+        raise RuntimeError(f"All providers failed: {detail}")
 
     async def execute_agent(
         self,
@@ -145,6 +148,7 @@ class GatewayRouter:
         preferred = request.preferred_provider or self.default_provider or (self.providers[0].name if self.providers else None)
 
         last_error: Optional[Exception] = None
+        all_errors: List[str] = []
         for provider_name in self._attempt_order(preferred):
             provider = self._resolve(provider_name)
             if provider is None:
@@ -155,9 +159,11 @@ class GatewayRouter:
                 )
             except Exception as exc:  # pragma: no cover
                 last_error = exc
+                all_errors.append(f"{provider.name}: {exc}")
                 logger.warning("agent provider failed", extra={"provider": provider.name, "error": str(exc)})
 
-        raise RuntimeError(f"All providers failed: {last_error}")
+        detail = "; ".join(all_errors) if all_errors else str(last_error)
+        raise RuntimeError(f"All providers failed: {detail}")
 
     async def _run_agent_loop(
         self,

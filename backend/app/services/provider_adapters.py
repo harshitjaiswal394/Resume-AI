@@ -123,6 +123,15 @@ class VertexGeminiProvider(BaseProvider):
         self.project = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT_ID")
         self.location = os.getenv("GOOGLE_CLOUD_LOCATION") or os.getenv("GCP_LOCATION") or "global"
         self.use_vertex = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "true").lower() == "true"
+        self._available = self._check_available()
+
+    def _check_available(self) -> bool:
+        try:
+            from google import genai as _  # noqa: F401
+            return True
+        except ImportError:
+            logger.warning("google-genai not installed — VertexGeminiProvider disabled")
+            return False
 
     def _client(self):
         try:
@@ -132,6 +141,8 @@ class VertexGeminiProvider(BaseProvider):
         return google_genai.Client(vertexai=True, project=self.project, location=self.location)
 
     async def complete(self, request: GatewayRequest) -> str:
+        if not self._available:
+            raise RuntimeError("google-genai is not installed — Vertex Gemini unavailable")
         if not self.project:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is not configured for Vertex Gemini")
         if not self.use_vertex:
@@ -160,6 +171,8 @@ class VertexGeminiProvider(BaseProvider):
         on_tool_call=None,
         on_tool_result=None,
     ) -> AgentTurn:
+        if not self._available:
+            raise RuntimeError("google-genai is not installed — Vertex Gemini unavailable")
         if not self.project:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is not configured for Vertex Gemini")
         if not self.use_vertex:
