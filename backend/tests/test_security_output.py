@@ -15,7 +15,7 @@ def test_clean_output_is_valid():
 
 def test_secret_leak_in_output_is_rejected():
     validator = OutputValidator(SecurityConfig(output_validation_enabled=True))
-    result = validator.validate("My Gemini key is AIzaSyD0bNLj3dL7lr6eYQSyDfM0go2Ozwz4dbQ.")
+    result = validator.validate("My Gemini key is AIzaSy00000000000000000000000000000000.")
     assert result.valid is False
     assert any(f.severity == RiskLevel.HIGH for f in result.findings)
     assert result.truncated is not None
@@ -46,7 +46,7 @@ def test_schema_validation_required_keys():
 
 def test_validator_disabled_passes_through():
     validator = OutputValidator(SecurityConfig(output_validation_enabled=False))
-    result = validator.validate("AIzaSyD0bNLj3dL7lr6eYQSyDfM0go2Ozwz4dbQ")
+    result = validator.validate("AIzaSy00000000000000000000000000000000")
     assert result.valid is True
 
 

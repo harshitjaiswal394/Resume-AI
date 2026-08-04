@@ -290,7 +290,7 @@ def _build_compare_resume_jd(user_id: str):
     return compare_resume_jd
 
 
-def _build_tailor_resume(user_id: str):
+def _build_tailor_resume(user_id: str, selected_resume_id: Optional[str] = None):
     async def tailor_resume(jd_text: str) -> str:
         """Tailors resume against a specific JD."""
         start = time.monotonic()
@@ -307,8 +307,11 @@ def _build_tailor_resume(user_id: str):
                 if not resume_tailor_agent or not jd_intel_agent:
                     return json.dumps({"status": "error", "message": "Agents not available"})
 
-                # Get resume
-                resume_result = await resume_intel_agent.get_resume_context(user_id)
+                # Get resume (respect the resume the user selected in the UI)
+                resume_result = await resume_intel_agent.get_resume_context(user_id, selected_resume_id)
+                if resume_result["status"] == "error":
+                    # Fall back to the latest resume if the selected one no longer exists.
+                    resume_result = await resume_intel_agent.get_resume_context(user_id)
                 if resume_result["status"] == "error":
                     return json.dumps(resume_result)
 
@@ -519,7 +522,7 @@ def _build_get_career_advice(user_id: str):
     return get_career_advice
 
 
-def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = None) -> List[AgentTool]:
+def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = None, selected_resume_id: Optional[str] = None) -> List[AgentTool]:
     """
     Factory that injects user context into typed tool closures.
 
@@ -586,7 +589,8 @@ def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = No
             name="tailor_resume",
             description=(
                 "Tailors the user's resume to better match a specific job description. "
-                "Returns tailored content with change reasons for each modification."
+                "Generates a new downloadable tailored version (DOCX) with change reasons "
+                "for each modification. Pass the full job description text as jd_text."
             ),
             parameters={
                 "type": "object",
@@ -598,7 +602,7 @@ def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = No
                 },
                 "required": ["jd_text"],
             },
-            function=_build_tailor_resume(user_id),
+            function=_build_tailor_resume(user_id, selected_resume_id),
         ),
         "analyze_ats": AgentTool(
             name="analyze_ats",

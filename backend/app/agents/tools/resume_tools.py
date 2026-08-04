@@ -137,6 +137,7 @@ async def store_resume_version(
     diff_from_version: Optional[str] = None,
     jd_hash: Optional[str] = None,
     change_reasons: Optional[List[str]] = None,
+    diff_json: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Store a new resume version (additive — inserts into resume_versions table).
@@ -173,8 +174,8 @@ async def store_resume_version(
 
         conn.execute(
             text("""
-                INSERT INTO resume_versions (id, user_id, resume_id, version_number, parent_version_id, parsed_data, jd_hash, change_reasons, created_at)
-                VALUES (:id, :uid, :rid, :vn, :pvd, :pd, :jh, :cr, NOW())
+                INSERT INTO resume_versions (id, user_id, resume_id, version_number, parent_version_id, parsed_data, diff_json, jd_hash, change_reasons, created_at)
+                VALUES (:id, :uid, :rid, :vn, :pvd, :pd, :dj, :jh, :cr, NOW())
             """),
             {
                 "id": version_id,
@@ -183,6 +184,7 @@ async def store_resume_version(
                 "vn": version_number,
                 "pvd": diff_from_version,
                 "pd": json.dumps(parsed_data),
+                "dj": json.dumps(diff_json) if diff_json else None,
                 "jh": jd_hash,
                 "cr": json.dumps(change_reasons) if change_reasons else None,
             },
@@ -270,24 +272,176 @@ async def store_resume_embeddings(
 
 # ── Resume Cache Check ──────────────────────────────────────────────────────
 
-async def get_tailoring_cache(user_id: str, jd_hash: str) -> Optional[Dict[str, Any]]:
+async def get_tailoring_cache(user_id: str, jd_hash: str, resume_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Check if we already tailored this resume for this JD (cache hit)."""
+    select = """
+        SELECT id, resume_id, parsed_data, change_reasons, diff_json, created_at
+        FROM resume_versions
+        WHERE user_id = :uid AND jd_hash = :jh
+    """
+    params: Dict[str, Any] = {"uid": user_id, "jh": jd_hash}
+    if resume_id:
+        select += " AND resume_id = :rid"
+        params["rid"] = resume_id
+    select += " ORDER BY created_at DESC LIMIT 1"
+
     with engine.connect() as conn:
-        row = conn.execute(
-            text("""
-                SELECT id, parsed_data, change_reasons, created_at
-                FROM resume_versions
-                WHERE user_id = :uid AND jd_hash = :jh
-                ORDER BY created_at DESC LIMIT 1
-            """),
-            {"uid": user_id, "jh": jd_hash},
-        ).fetchone()
+        row = conn.execute(text(select), params).fetchone()
 
     if row:
         return {
             "version_id": str(row.id),
+            "resume_id": str(row.resume_id) if row.resume_id else None,
             "parsed_data": row.parsed_data,
             "change_reasons": row.change_reasons,
+            "diff_json": row.diff_json,
             "cached_at": row.created_at.isoformat() if row.created_at else None,
         }
     return None
+
+
+async def get_resume_version(version_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch a single tailored resume version."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT id, resume_id, version_number, parent_version_id, parsed_data,
+                       diff_json, jd_hash, change_reasons, created_at
+                FROM resume_versions
+                WHERE id = :vid AND user_id = :uid
+            """),
+            {"vid": version_id, "uid": user_id},
+        ).fetchone()
+
+    if not row:
+        return None
+    return {
+        "version_id": str(row.id),
+        "resume_id": str(row.resume_id),
+        "version_number": row.version_number,
+        "parent_version_id": row.parent_version_id,
+        "parsed_data": row.parsed_data,
+        "diff_json": row.diff_json,
+        "jd_hash": row.jd_hash,
+        "change_reasons": row.change_reasons,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+async def merge_source_sections_into_version(version: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    """
+    Deterministically re-merge non-tailored source sections (certifications,
+    achievements, languages, projects, links, email, phone, targetRole) into a
+    tailored version's parsed_data. Handles versions created before the
+    preservation fix or where the model dropped a section.
+    """
+    from app.agents.resume_tailor import ResumeTailorAgent
+
+    parsed = version.get("parsed_data")
+    if not isinstance(parsed, dict):
+        return version
+    source = None
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT parsed_data FROM resumes WHERE id = :rid AND user_id = :uid"),
+                {"rid": version["resume_id"], "uid": user_id},
+            ).fetchone()
+            if row and row.parsed_data:
+                source = row.parsed_data if isinstance(row.parsed_data, dict) else json.loads(row.parsed_data)
+            if not source:
+                # Source resume may have been deleted. Fall back to the resume
+                # that actually carries the source sections (richest profile),
+                # not merely the newest one, so orphaned versions still get
+                # email/phone/certifications etc. merged in.
+                best = None
+                best_score = -1
+                rows = conn.execute(
+                    text("""
+                        SELECT parsed_data FROM resumes
+                        WHERE user_id = :uid AND parsed_data IS NOT NULL
+                        ORDER BY updated_at DESC
+                    """),
+                    {"uid": user_id},
+                ).fetchall()
+                for cand in rows:
+                    pd = cand.parsed_data if isinstance(cand.parsed_data, dict) else json.loads(cand.parsed_data)
+                    if not isinstance(pd, dict):
+                        continue
+                    score = sum(1 for k in ResumeTailorAgent._PASSTHROUGH_KEYS if pd.get(k))
+                    if score > best_score:
+                        best_score = score
+                        best = pd
+                source = best
+    except Exception:
+        return version
+    if source:
+        try:
+            ResumeTailorAgent._preserve_source_sections(source, parsed)
+        except Exception:
+            return version
+    return version
+
+
+async def list_resume_versions(user_id: str, resume_id: str, fallback_all: bool = True) -> List[Dict[str, Any]]:
+    """List tailoring history for a resume, newest first.
+
+    If the resume itself has no versions but the user has other versions
+    (e.g. the source resume was deleted), fall back to the user's latest
+    versions so the Tailored toggle still resolves.
+    """
+    def build(row) -> Dict[str, Any]:
+        diff = row.diff_json or {}
+        return {
+            "version_id": str(row.id),
+            "resume_id": str(row.resume_id) if row.resume_id else None,
+            "version_number": row.version_number,
+            "parent_version_id": row.parent_version_id,
+            "jd_hash": row.jd_hash,
+            "change_reasons": row.change_reasons or [],
+            "diff_summary": _summarize_diff(diff),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id, resume_id, version_number, parent_version_id, diff_json, jd_hash,
+                       change_reasons, created_at
+                FROM resume_versions
+                WHERE user_id = :uid AND resume_id = :rid
+                ORDER BY created_at DESC
+            """),
+            {"uid": user_id, "rid": resume_id},
+        ).fetchall()
+
+    versions = [build(row) for row in rows]
+    if not versions and fallback_all:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, resume_id, version_number, parent_version_id, diff_json, jd_hash,
+                           change_reasons, created_at
+                    FROM resume_versions
+                    WHERE user_id = :uid
+                    ORDER BY created_at DESC LIMIT 5
+                """),
+                {"uid": user_id},
+            ).fetchall()
+        versions = [build(row) for row in rows]
+    return versions
+
+
+def _summarize_diff(diff: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract a lightweight summary of a stored diff for list views."""
+    if not diff:
+        return {}
+    bullets_changed = 0
+    for entry in diff.get("experience", []) or []:
+        bullets_changed += len(entry.get("bullet_changes", []) or [])
+    return {
+        "summary_changed": bool(diff.get("summary")),
+        "skills_added": len((diff.get("skills") or {}).get("added", []) or []),
+        "skills_removed": len((diff.get("skills") or {}).get("removed", []) or []),
+        "bullets_changed": bullets_changed,
+    }

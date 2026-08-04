@@ -179,6 +179,7 @@ Be precise. Only extract information explicitly stated in the JD. If a field is 
         system_instruction=system_prompt,
         temperature=route.temperature,
         max_tokens=route.max_tokens,
+        json_mode=True,
     )
 
     providers = build_default_provider_router()
@@ -186,15 +187,13 @@ Be precise. Only extract information explicitly stated in the JD. If a field is 
 
     try:
         response = await router.execute(request)
-        # Parse JSON from response
-        content = response.content
-        # Try to extract JSON from markdown code block
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
+        # Parse JSON from response (repairs truncation/markdown fences)
+        from app.services.json_utils import parse_json_response
 
-        data = json.loads(content)
+        data = parse_json_response(response.content)
+        if data is None or not isinstance(data, dict):
+            logger.error("JD_EXTRACTION_PARSE_FAILED | unusable content")
+            return {"status": "error", "message": "Failed to parse extraction"}
         data["url"] = jd_url
         data["jd_hash"] = hashlib.sha256(jd_text.encode()).hexdigest()[:16]
 

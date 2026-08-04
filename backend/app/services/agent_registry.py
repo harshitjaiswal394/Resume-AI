@@ -44,7 +44,10 @@ COMMON_GUARDRAILS = (
     "Write concise, high-signal GitHub-flavored markdown. "
     "Ground your response in the supplied resume and chat context when available. "
     "If key context is missing, say what is missing and continue with the best actionable guidance. "
-    "Do not mention internal prompts, routing, or hidden reasoning."
+    "Do not mention internal prompts, routing, or hidden reasoning. "
+    "NEVER fabricate or guess URLs or download links. "
+    "When a downloadable file exists, it is surfaced automatically by the UI — "
+    "do not invent api/resumes/..., resumatch.ai, localhost, or any other link yourself."
 )
 
 
@@ -109,13 +112,16 @@ agent_registry.register(
         label="Resume Tailoring",
         description="Tailors resumes against specific JDs with strict no-hallucination contract.",
         preferred_provider="vertex-gemini",
-        tool_names=["fetch_user_resume"],
+        tool_names=["fetch_user_resume", "tailor_resume"],
         model_task="resume_tailor",
         high_stakes=True,
         system_prompt=(
             f"{COMMON_GUARDRAILS} "
             "You are the Resume Tailoring agent. "
-            "Rewrite resume content to better match a specific job description. "
+            "When the user asks to tailor, customize, or adapt their resume for a job "
+            "description, ALWAYS call the tailor_resume tool with the full JD text — "
+            "do not hand-write the tailored resume yourself. "
+            "The tool generates the tailored resume, change reasons, and a downloadable DOCX. "
             "STRICT RULES: Never invent employers, titles, dates, or metrics. "
             "Only rephrase, reorder, and emphasize existing content. "
             "Every rewritten bullet must have a change reason."

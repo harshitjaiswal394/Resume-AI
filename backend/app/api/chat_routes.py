@@ -74,6 +74,37 @@ def enhance_assistant_response(content: str) -> str:
     if not content:
         return content
 
+    # Strip fabricated/foreign URLs. Only links to the app's own domains are kept.
+    def _host_of(env_var: str) -> str:
+        value = os.getenv(env_var, "")
+        return value.split("://")[-1].split("/")[0].lower() if value else ""
+
+    allowed_hosts = {
+        h for h in ("localhost", "127.0.0.1", _host_of("NEXT_PUBLIC_APP_URL"), _host_of("NEXT_PUBLIC_BACKEND_API_URL")) if h
+    }
+
+    def _strip_foreign_url(match: re.Match[str]) -> str:
+        host = match.group(2).lower() if match.group(2) else ""
+        if not host or host in allowed_hosts:
+            return match.group(0)
+        # Remove markdown link wrapper but keep the label text.
+        return match.group(1) or ""
+
+    content = re.sub(
+        r"\[([^\]]+)\]\(\s*(?:https?://|//)([^/\s\)]+)[^\)]*\)",
+        _strip_foreign_url,
+        content,
+    )
+    content = re.sub(
+        r"(?<![\w/])https?://(?:[^\s<>)\]]+)",
+        lambda m: (
+            m.group(0)
+            if m.group(0).split("://")[1].split("/")[0].split(":")[0].lower() in allowed_hosts
+            else ""
+        ),
+        content,
+    )
+
     section_prefixes = {
         "contact details": "[Contact]",
         "executive summary": "[Summary]",
@@ -935,7 +966,7 @@ async def stream_gemini_response(
 
             messages = _build_gateway_messages(history, masked_message)
             agent_tools = _enforce_tool_policy(
-                user_id, build_agent_tools(user_id, allowed_tool_names=agent_def.tool_names)
+                user_id, build_agent_tools(user_id, allowed_tool_names=agent_def.tool_names, selected_resume_id=selected_resume_id)
             )
             span = _get_span()
             if span:
@@ -949,14 +980,38 @@ async def stream_gemini_response(
                 yield f"data: {json.dumps({'tool_call': 'fetch_user_resume', 'agent': agent_def.name})}\n\n"
 
             event_queue: "asyncio.Queue" = asyncio.Queue()
+            tailor_data_meta: Optional[Dict[str, Any]] = None
 
             async def emit_tool_call(tc: ToolCall) -> None:
                 logger.info("AGENT_TOOL_START | tool=%s agent=%s", tc.name, agent_def.name)
                 await event_queue.put({"tool_call": tc.name, "agent": agent_def.name})
 
             async def emit_tool_result(tc: ToolCall, result: str) -> None:
+                nonlocal tailor_data_meta
                 logger.info("AGENT_TOOL_DONE | tool=%s agent=%s", tc.name, agent_def.name)
-                await event_queue.put({"tool_result": tc.name, "agent": agent_def.name})
+                event: Dict[str, Any] = {"tool_result": tc.name, "agent": agent_def.name}
+                if tc.name == "tailor_resume":
+                    try:
+                        payload = json.loads(result)
+                        if isinstance(payload, dict) and payload.get("version_id"):
+                            event["version_id"] = payload["version_id"]
+                            event["resume_id"] = payload.get("resume_id", "")
+                            event["diff"] = payload.get("diff_json")
+                            event["cached"] = payload.get("cached", False)
+                            event["match_score_after"] = payload.get("match_score_after")
+                            event["match_score_before"] = payload.get("match_score_before")
+                            tailor_data_meta = {
+                                "version_id": payload["version_id"],
+                                "resume_id": payload.get("resume_id", ""),
+                                "diff": payload.get("diff_json"),
+                                "cached": payload.get("cached", False),
+                                "match_score_before": payload.get("match_score_before"),
+                                "match_score_after": payload.get("match_score_after"),
+                                "tailor_status": payload.get("status", "success"),
+                            }
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                await event_queue.put(event)
 
             gateway_task = asyncio.ensure_future(
                 provider_router.execute_agent(
@@ -1049,6 +1104,11 @@ async def stream_gemini_response(
                                     "output_valid": validation.valid,
                                     "output_rules": [f.rule_id for f in validation.findings],
                                 },
+                                **(
+                                    {"tailor_data": tailor_data_meta}
+                                    if tailor_data_meta
+                                    else {}
+                                ),
                             }
                         ),
                     },

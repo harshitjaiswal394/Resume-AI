@@ -161,6 +161,8 @@ class VertexGeminiProvider(BaseProvider):
             temperature=request.temperature,
             max_output_tokens=request.max_tokens,
         )
+        if request.json_mode:
+            config.response_mime_type = "application/json"
         response = client.models.generate_content(model=self.model, contents=prompt, config=config)
         return response.text or ""
 

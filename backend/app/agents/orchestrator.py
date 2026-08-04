@@ -28,6 +28,9 @@ _RULES: List[Tuple[re.Pattern, str, str, int]] = [
     (re.compile(r"\b(tailor|customiz|customis|adapt|rewrite|adjust)\b.*\b(resume|cv)\b", re.I), "resume_tailoring", "resume_tailor", 10),
     (re.compile(r"\b(resume|cv)\b.*\b(tailor|customiz|customis|adapt|rewrite|adjust)\b", re.I), "resume_tailoring", "resume_tailor", 10),
     (re.compile(r"\bfor (this|that|the) (role|position|job|opening)\b", re.I), "resume_tailoring", "resume_tailor", 8),
+    (re.compile(r"\b(tailor(ed|ing)?|adapted|customized)\b.*\b(resume|cv|docx|file|version)\b", re.I), "resume_tailoring", "resume_tailor", 10),
+    (re.compile(r"\b(download|get|save|export|share|generate)\b.*\b(tailor(ed)?|version)\b.*\b(resume|cv|docx|file)\b", re.I), "resume_tailoring", "resume_tailor", 10),
+    (re.compile(r"\b(download|get|save|export)\b.*\b(resume|cv|docx)\b", re.I), "resume_tailoring", "resume_tailor", 7),
 
     # JD analysis
     (re.compile(r"\b(analy[sz]e?|review|breakdown|parse|read)\b.*\b(job description|jd)\b", re.I), "jd_analysis", "jd_intel", 10),

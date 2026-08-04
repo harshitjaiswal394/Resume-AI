@@ -106,8 +106,8 @@ Provider order after this config: `vertex-gemini` → `nvidia` fallback
 
 ## 6. Security notes
 
-- `frontend/.env.example` currently contains a **committed Gemini API key**
-  (`AIzaSyD0bNLj3dL7lr6eYQSyDfM0go2Ozwz4dbQ`). Rotate it and remove it from
-  the repo; Vertex ADC replaces the need for a key.
+- `frontend/.env.example` is for placeholders only — never commit real API
+  keys to it. Vertex ADC replaces the need for a key. Rotate any key that was
+  ever committed.
 - Keep `backend/.env` out of git (it already is).
 - Backend IAM should be scoped to `roles/aiplatform.user`, not broad owner.

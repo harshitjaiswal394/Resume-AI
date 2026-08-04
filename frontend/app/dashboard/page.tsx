@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -71,6 +71,11 @@ export default function Dashboard() {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
   const [resumes, setResumes] = useState<any[]>([]);
   const [selectedResume, setSelectedResume] = useState<any>(null);
+  const [resumeMode, setResumeMode] = useState<'default' | 'tailored'>('default');
+  const [tailoredParsed, setTailoredParsed] = useState<any>(null);
+  const [tailoredVersionNumber, setTailoredVersionNumber] = useState<number | null>(null);
+  const [tailoredAnalysis, setTailoredAnalysis] = useState<any>(null);
+  const [isLoadingTailored, setIsLoadingTailored] = useState(false);
   const [jobMatches, setJobMatches] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -254,6 +259,106 @@ export default function Dashboard() {
     };
     fetchMatches();
   }, [selectedResume]);
+
+  const loadTailored = useCallback(async (silent = false) => {
+    if (!selectedResume) return;
+    setIsLoadingTailored(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+      const listRes = await fetch(`${backendUrl}/api/agents/resume/${selectedResume.id}/versions`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!listRes.ok) throw new Error("No tailored versions");
+      const listJson = await listRes.json();
+      const versions: any[] = listJson.versions ?? [];
+      if (!versions.length) {
+        if (!silent) {
+          toast.error('No tailored version yet. Tailor your resume in Chat first.');
+        }
+        setResumeMode('default');
+        return;
+      }
+      const latest = versions[0];
+      const dataRes = await fetch(`${backendUrl}/api/agents/resume/version/${latest.version_id}/data`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!dataRes.ok) throw new Error("Version data fetch failed");
+      const dataJson = await dataRes.json();
+      setTailoredParsed(dataJson.parsed_data || null);
+      setTailoredVersionNumber(dataJson.version_number ?? null);
+      setResumeMode('tailored');
+
+      // Run ATS analysis on the tailored version data so the score widgets,
+      // keyword stats and skill gaps reflect the tailored resume, not the
+      // stale scores stored on the original resume row.
+      const analysisRes = await fetch(`${backendUrl}/api/agents/ats/analyze`, {
+        method: 'POST',
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ version_id: latest.version_id }),
+      });
+      if (analysisRes.ok) {
+        const analysisJson = await analysisRes.json();
+        setTailoredAnalysis(analysisJson);
+      } else {
+        setTailoredAnalysis(null);
+      }
+    } catch (e: any) {
+      console.error('[Dashboard] Tailored load failed', e);
+      if (!silent) {
+        toast.error(e.message || 'Could not load tailored version');
+      }
+      setResumeMode('default');
+    } finally {
+      setIsLoadingTailored(false);
+    }
+  }, [selectedResume, backendUrl]);
+
+  const switchResumeMode = (mode: 'default' | 'tailored') => {
+    if (mode === 'tailored') {
+      loadTailored();
+    } else {
+      setResumeMode('default');
+      setTailoredAnalysis(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedResume || resumeMode !== 'default') return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(localStorage.getItem('resumatch_tailored_pending') || 'null');
+    } catch { /* ignore */ }
+    if (!pending || !pending.resume_id || !pending.version_id) return;
+    if (pending.resume_id !== selectedResume.id) {
+      const match = resumes.find(r => r.id === pending.resume_id);
+      if (match) {
+        setSelectedResume(match);
+        return;
+      }
+    }
+    try {
+      localStorage.removeItem('resumatch_tailored_pending');
+    } catch { /* ignore */ }
+    loadTailored(true);
+  }, [selectedResume, resumeMode, loadTailored, resumes]);
+
+  const displayParsed = resumeMode === 'tailored' && tailoredParsed
+    ? tailoredParsed
+    : (selectedResume?.parsedData || selectedResume?.parsed_data || {});
+
+  // When viewing the tailored resume, the ATS score widgets should reflect the
+  // tailored version's analysis (fetched live from /ats/analyze), otherwise the
+  // dashboard shows the stale score stored on the resume row.
+  const activeAnalysis = resumeMode === 'tailored' && tailoredAnalysis
+    ? tailoredAnalysis
+    : (selectedResume?.score_breakdown || {});
+  const activeScore = resumeMode === 'tailored' && tailoredAnalysis
+    ? (tailoredAnalysis.score ?? tailoredAnalysis.ats_score ?? 0)
+    : (selectedResume?.resume_score || selectedResume?.score || 0);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -627,19 +732,19 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                 <div className="xl:col-span-2 overflow-hidden">
                   <ScoreAnalytics
-                    score={selectedResume?.resume_score || selectedResume?.score || 0}
-                    atsScore={selectedResume?.score_breakdown?.atsScore || 0}
-                    keywordScore={selectedResume?.score_breakdown?.keywordScore || 0}
-                    readabilityScore={selectedResume?.score_breakdown?.readabilityScore || 0}
-                    scoreBreakdown={selectedResume?.score_breakdown}
+                    score={activeScore}
+                    atsScore={activeAnalysis?.atsScore || 0}
+                    keywordScore={activeAnalysis?.keywordScore || 0}
+                    readabilityScore={activeAnalysis?.readabilityScore || 0}
+                    scoreBreakdown={activeAnalysis}
                   />
                 </div>
                 <div className="xl:col-span-1">
                   <StatsColumn
-                    keywordsFound={`${jobMatches[0]?.matching_skills?.length || 0} skills`}
+                    keywordsFound={`${(resumeMode === 'tailored' && tailoredParsed ? (tailoredParsed.skills || []).length : (jobMatches[0]?.matching_skills?.length || 0))} skills`}
                     resumeLength={selectedResume?.raw_text ? `${Math.max(1, Math.ceil(selectedResume.raw_text.length / 3000))} page(s)` : "1 page"}
                     skillGaps={jobMatches[0]?.missing_skills?.length || 0}
-                    weakBullets={selectedResume?.score_breakdown?.weaknesses?.length || 0}
+                    weakBullets={activeAnalysis?.weaknesses?.length || 0}
                   />
                 </div>
               </div>
@@ -665,7 +770,7 @@ export default function Dashboard() {
                   <Sparkles className="h-5 w-5 text-indigo-600" /> AI Improvement Suggestions
                 </h3>
                 <div className="space-y-6">
-                  {(selectedResume?.score_breakdown?.weaknesses || []).map((w: string, i: number) => (
+                  {(activeAnalysis?.weaknesses || []).map((w: string, i: number) => (
                     <div key={i} className="bg-rose-50/50 p-6 rounded-[24px] border border-rose-50 space-y-2">
                       <div className="flex items-center gap-2">
                          <Badge className="bg-rose-100 text-rose-600 border-none font-black text-[10px] uppercase tracking-tighter">High Priority</Badge>
@@ -676,7 +781,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                   ))}
-                  {(selectedResume?.score_breakdown?.recommendations || []).map((r: string, i: number) => (
+                  {(activeAnalysis?.recommendations || []).map((r: string, i: number) => (
                     <div key={`rec-${i}`} className="bg-indigo-50/50 p-6 rounded-[24px] border border-indigo-50 space-y-2">
                       <div className="flex items-center gap-2">
                          <Badge className="bg-indigo-100 text-indigo-600 border-none font-black text-[10px] uppercase tracking-tighter">Suggestion</Badge>
@@ -686,7 +791,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                   ))}
-                  {(!selectedResume?.score_breakdown?.weaknesses?.length && !selectedResume?.score_breakdown?.recommendations?.length) && (
+                  {(!activeAnalysis?.weaknesses?.length && !activeAnalysis?.recommendations?.length) && (
                     <p className="text-slate-500 font-medium">No suggestions found. Your resume looks good!</p>
                   )}
                 </div>
@@ -728,21 +833,49 @@ export default function Dashboard() {
                 </div>
 
                 <div className="max-w-3xl">
-                  <h3 className="text-3xl font-black text-slate-900 mb-2">Smart Resume Optimizer</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
+                    <h3 className="text-3xl font-black text-slate-900">Smart Resume Optimizer</h3>
+                    <div className="flex items-center bg-slate-100 rounded-xl p-1">
+                      <button
+                        type="button"
+                        onClick={() => switchResumeMode('default')}
+                        className={`h-8 rounded-lg px-3 text-xs font-bold transition-all whitespace-nowrap ${
+                          resumeMode === 'default'
+                            ? 'bg-white shadow-sm text-slate-900'
+                            : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        Default
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => switchResumeMode('tailored')}
+                        disabled={isLoadingTailored}
+                        className={`h-8 rounded-lg px-3 text-xs font-bold transition-all whitespace-nowrap disabled:opacity-50 ${
+                          resumeMode === 'tailored'
+                            ? 'bg-indigo-600 shadow-sm text-white'
+                            : 'text-slate-400 hover:text-indigo-600'
+                        }`}
+                      >
+                        {isLoadingTailored ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : null}
+                        Tailored{tailoredVersionNumber ? ` v${tailoredVersionNumber}` : ''}
+                      </button>
+                    </div>
+                  </div>
                   <p className="text-slate-500 font-medium mb-10">Select any achievement bullet below to enhance its impact using NVIDIA AI.</p>
                   <div className="space-y-12">
                     {/* 1. Profile Header & Links (Static) */}
                     <div className="bg-slate-50/50 p-8 rounded-[32px] border border-slate-100 flex flex-col md:flex-row justify-between gap-6">
                       <div className="space-y-3">
-                        <h4 className="text-2xl font-black text-slate-900">{selectedResume?.parsedData?.fullName || selectedResume?.parsed_data?.fullName || "Candidate Name"}</h4>
+                        <h4 className="text-2xl font-black text-slate-900">{displayParsed?.fullName || "Candidate Name"}</h4>
                         <div className="flex flex-wrap gap-4">
                           <div className="flex items-center gap-2 text-sm font-bold text-slate-500">
                             <Mail className="h-4 w-4 text-indigo-500" />
-                            {selectedResume?.parsedData?.email || selectedResume?.parsed_data?.email || "No email detected"}
+                            {displayParsed?.email || "No email detected"}
                           </div>
                           <div className="flex items-center gap-2 text-sm font-bold text-slate-500">
                             <Phone className="h-4 w-4 text-indigo-500" />
-                            {selectedResume?.parsedData?.phone || selectedResume?.parsed_data?.phone || "No phone detected"}
+                            {displayParsed?.phone || "No phone detected"}
                           </div>
                         </div>
                       </div>
@@ -750,10 +883,10 @@ export default function Dashboard() {
                       <div className="flex flex-wrap gap-3">
                         <div className="flex items-center gap-2 text-sm font-black text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100">
                            <LayoutDashboard className="h-4 w-4" />
-                           {selectedResume?.target_role || selectedResume?.parsedData?.targetRole || selectedResume?.parsed_data?.targetRole || "Target Role"}
+                           {displayParsed?.targetRole || displayParsed?.target_role || "Target Role"}
                         </div>
                         {['linkedin', 'github', 'portfolio'].map((type) => {
-                          const links = selectedResume?.parsedData?.links || selectedResume?.parsed_data?.links || {};
+                          const links = displayParsed?.links || {};
                           const url = links[type];
                           if (!url) return null;
 
@@ -774,13 +907,13 @@ export default function Dashboard() {
                     </div>
 
                     {/* 2. Professional Summary (Static - No Enhance for now per user request for static fields) */}
-                    {(selectedResume?.parsedData?.summary || selectedResume?.parsed_data?.summary) && (
+                    {displayParsed?.summary && (
                       <div className="space-y-4">
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                           <FileText className="h-3 w-3" /> Professional Summary
                         </h4>
                         <p className="text-slate-700 font-medium leading-relaxed bg-white border border-slate-100 p-6 rounded-2xl">
-                          {selectedResume?.parsedData?.summary || selectedResume?.parsed_data?.summary}
+                          {displayParsed?.summary}
                         </p>
                       </div>
                     )}
@@ -790,7 +923,7 @@ export default function Dashboard() {
                       <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                         <Briefcase className="h-3 w-3" /> Work Experience
                       </h4>
-                      {(selectedResume?.parsedData?.experience || selectedResume?.parsed_data?.experience || []).map((exp: any, expIdx: number) => (
+                      {(displayParsed?.experience || []).map((exp: any, expIdx: number) => (
                         <div key={expIdx} className="space-y-5">
                           <div>
                             <div className="flex items-center gap-3">
@@ -802,9 +935,14 @@ export default function Dashboard() {
                           </div>
 
                           <div className="space-y-3">
-                            {exp.description?.map((bullet: string, bulletIdx: number) => (
+                            {(
+                              (Array.isArray(exp?.bullets)
+                                ? exp.bullets.map((b: any) => typeof b === 'string' ? b : (b?.text || b?.original_bullet || ''))
+                                : exp.description) || []
+                            ).map((bullet: string, bulletIdx: number) => (
                               <div key={bulletIdx} className="group relative bg-white border border-slate-100 hover:shadow-xl hover:shadow-indigo-100/30 p-5 rounded-[20px] transition-all duration-300">
                                 <p className="text-slate-700 font-medium leading-relaxed pr-24 text-[15px]">{bullet}</p>
+                                {resumeMode === 'default' && (
                                 <Button
                                   size="sm"
                                   disabled={optimizingIndex === `${expIdx}-${bulletIdx}`}
@@ -817,6 +955,7 @@ export default function Dashboard() {
                                     <><Sparkles className="h-3 w-3 mr-1.5" /> Enhance</>
                                   )}
                                 </Button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -832,7 +971,7 @@ export default function Dashboard() {
                           <GraduationCap className="h-3 w-3" /> Education
                         </h4>
                         <div className="space-y-4">
-                          {(selectedResume?.parsedData?.education || selectedResume?.parsed_data?.education || []).map((edu: any, i: number) => (
+                          {(displayParsed?.education || []).map((edu: any, i: number) => (
                             <div key={i} className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
                               <h5 className="font-black text-slate-900 text-sm">{edu.degree}</h5>
                               <p className="text-xs font-bold text-slate-500 mb-1">{edu.institution}</p>
@@ -848,7 +987,7 @@ export default function Dashboard() {
                           <Award className="h-3 w-3" /> Certifications & Awards
                         </h4>
                         <div className="flex flex-wrap gap-2">
-                          {(selectedResume?.parsedData?.certifications || selectedResume?.parsed_data?.certifications || selectedResume?.certifications || []).map((cert: any, i: number) => (
+                          {(displayParsed?.certifications || []).map((cert: any, i: number) => (
                             <Badge key={i} className="bg-slate-50 text-slate-600 border border-slate-100 py-2 px-4 rounded-xl font-bold text-xs shadow-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
                               {typeof cert === 'string' ? cert : cert.name}
                             </Badge>
@@ -858,13 +997,13 @@ export default function Dashboard() {
                     </div>
 
                     {/* 5. Projects Section */}
-                    {(selectedResume?.parsedData?.projects || selectedResume?.parsed_data?.projects || selectedResume?.projects || []).length > 0 && (
+                    {(displayParsed?.projects || []).length > 0 && (
                       <div className="space-y-6">
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                           <LayoutDashboard className="h-3 w-3" /> Projects
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {(selectedResume?.parsedData?.projects || selectedResume?.parsed_data?.projects || selectedResume?.projects || []).map((proj: any, i: number) => (
+                          {(displayParsed?.projects || []).map((proj: any, i: number) => (
                             <div key={i} className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm space-y-2">
                               <div className="flex items-center justify-between">
                                 <h5 className="font-black text-slate-900 text-sm">{proj.title}</h5>
@@ -885,13 +1024,13 @@ export default function Dashboard() {
                     )}
 
                     {/* 6. Internships Section */}
-                    {(selectedResume?.parsedData?.internships || selectedResume?.parsed_data?.internships || selectedResume?.internships || []).length > 0 && (
+                    {(displayParsed?.internships || []).length > 0 && (
                       <div className="space-y-6">
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                           <Briefcase className="h-3 w-3" /> Internships
                         </h4>
                         <div className="space-y-4">
-                          {(selectedResume?.parsedData?.internships || selectedResume?.parsed_data?.internships || selectedResume?.internships || []).map((intern: any, i: number) => (
+                          {(displayParsed?.internships || []).map((intern: any, i: number) => (
                             <div key={i} className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm">
                               <div className="flex items-center justify-between mb-2">
                                 <h5 className="font-black text-slate-900 text-sm">{intern.role}</h5>
@@ -911,13 +1050,13 @@ export default function Dashboard() {
 
                     {/* 7. Languages & Achievements */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                      {(selectedResume?.parsedData?.languages || selectedResume?.parsed_data?.languages || selectedResume?.languages || []).length > 0 && (
+                      {(displayParsed?.languages || []).length > 0 && (
                         <div className="space-y-6">
                           <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <Mail className="h-3 w-3" /> Languages
                           </h4>
                           <div className="flex flex-wrap gap-2">
-                            {(selectedResume?.parsedData?.languages || selectedResume?.parsed_data?.languages || selectedResume?.languages || []).map((lang: any, i: number) => (
+                            {(displayParsed?.languages || []).map((lang: any, i: number) => (
                               <Badge key={i} className="bg-indigo-50 text-indigo-600 border border-indigo-100 py-2 px-4 rounded-xl font-bold text-xs">
                                 {lang.language} — <span className="opacity-60">{lang.proficiency}</span>
                               </Badge>
@@ -926,13 +1065,13 @@ export default function Dashboard() {
                         </div>
                       )}
                       
-                      {(selectedResume?.parsedData?.achievements || selectedResume?.parsed_data?.achievements || selectedResume?.achievements || []).length > 0 && (
+                      {(displayParsed?.achievements || []).length > 0 && (
                         <div className="space-y-6">
                           <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <Award className="h-3 w-3" /> Achievements
                           </h4>
                           <div className="space-y-3">
-                            {(selectedResume?.parsedData?.achievements || selectedResume?.parsed_data?.achievements || selectedResume?.achievements || []).map((ach: any, i: number) => (
+                            {(displayParsed?.achievements || []).map((ach: any, i: number) => (
                               <div key={i} className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                                 <h5 className="font-bold text-slate-900 text-xs mb-1">{ach.title}</h5>
                                 <p className="text-[10px] text-slate-500 font-medium">{ach.description}</p>

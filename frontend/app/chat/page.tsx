@@ -46,6 +46,11 @@ import {
   Map,
   Heart,
   FileSearch,
+  Download,
+  GitCompare,
+  ExternalLink,
+  History,
+  ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { LoadingScreen, ThinkingIndicator } from "@/components/ui/loading";
@@ -82,6 +87,44 @@ interface ChatMessage {
   agentLabel?: string;
   providerLabel?: string;
   feedback?: "like" | "dislike";
+  tailorData?: TailoredResumeData;
+}
+
+interface DiffSkill {
+  removed: string[];
+  added: string[];
+}
+
+interface DiffSummary {
+  removed?: string;
+  added?: string;
+}
+
+interface DiffBullet {
+  removed?: string | null;
+  added?: string | null;
+  reason?: string | null;
+}
+
+interface DiffEntry {
+  title: string;
+  company: string;
+  bullet_changes: DiffBullet[];
+}
+
+interface ResumeDiff {
+  summary?: DiffSummary | null;
+  skills?: DiffSkill;
+  experience?: DiffEntry[];
+}
+
+interface TailoredResumeData {
+  version_id: string;
+  resume_id: string;
+  diff?: ResumeDiff;
+  cached?: boolean;
+  match_score_before?: number;
+  match_score_after?: number;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -174,6 +217,295 @@ function ToolBadge({ name }: { name: string }) {
       {t.icon}
       {t.label}
       <Loader2 className="h-3 w-3 animate-spin ml-0.5" />
+    </motion.div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tailored Resume card — download DOCX, diff preview, version history
+// ──────────────────────────────────────────────────────────────────────────────
+interface VersionListItem {
+  version_id: string;
+  version_number: number;
+  created_at: string;
+  diff_summary: { summary_changed?: boolean; skills_added?: number; skills_removed?: number; bullets_changed?: number } | Record<string, never>;
+}
+
+function DiffLine({ prefix, text }: { prefix: "+" | "-"; text?: string | null }) {
+  if (!text) return null;
+  const added = prefix === "+";
+  return (
+    <div className={`flex gap-2 rounded-md px-2.5 py-1 font-mono text-[12px] leading-relaxed ${
+      added
+        ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+        : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
+    }`}>
+      <span className={added ? "text-emerald-400" : "text-rose-400"}>{prefix}</span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function TailoredResumeCard({ data }: { data: TailoredResumeData }) {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
+  const [showDiff, setShowDiff] = useState(false);
+  const [versions, setVersions] = useState<VersionListItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [actionMsg, setActionMsg] = useState("");
+
+  const diff = data.diff;
+  const scoreBefore = data.match_score_before;
+  const scoreAfter = data.match_score_after;
+  const scoreGain =
+    typeof scoreBefore === "number" && typeof scoreAfter === "number"
+      ? Math.round(scoreAfter - scoreBefore)
+      : null;
+
+  const downloadDocx = useCallback(async () => {
+    setDownloading(true);
+    setActionMsg("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${backendUrl}/api/agents/resume/version/${data.version_id}/download`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tailored-resume-v${new Date().toISOString().slice(0, 10)}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setActionMsg("Downloaded");
+    } catch (e: any) {
+      log.error("DOCX download failed", e);
+      setActionMsg("Download failed");
+    } finally {
+      setDownloading(false);
+    }
+  }, [backendUrl, data.version_id]);
+
+  const loadVersions = useCallback(async () => {
+    setLoadingVersions(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${backendUrl}/api/agents/resume/${data.resume_id}/versions`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load versions");
+      const json = await res.json();
+      setVersions(json.versions ?? []);
+    } catch (e: any) {
+      log.error("Version history load failed", e);
+    } finally {
+      setLoadingVersions(false);
+    }
+  }, [backendUrl, data.resume_id]);
+
+  const openInBuilder = useCallback(async () => {
+    setBuilding(true);
+    setActionMsg("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${backendUrl}/api/agents/resume/version/${data.version_id}/to-builder`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) throw new Error("Builder feed failed");
+      const json = await res.json();
+      if (json.resume_id) {
+        window.location.href = `/dashboard/builder/new?id=${json.resume_id}`;
+      } else {
+        setActionMsg("No resume created");
+      }
+    } catch (e: any) {
+      log.error("Builder feed failed", e);
+      setActionMsg("Failed to open in builder");
+    } finally {
+      setBuilding(false);
+    }
+  }, [backendUrl, data.version_id]);
+
+  const toggleHistory = useCallback(() => {
+    if (!showHistory && versions.length === 0) loadVersions();
+    setShowHistory(v => !v);
+  }, [showHistory, versions.length, loadVersions]);
+
+  const changedBullets = (diff?.experience ?? []).reduce((n, e) => n + (e.bullet_changes?.length ?? 0), 0);
+  const skillsAdded = diff?.skills?.added?.length ?? 0;
+  const skillsRemoved = diff?.skills?.removed?.length ?? 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full max-w-[520px] rounded-2xl border border-fuchsia-500/20 bg-gradient-to-br from-slate-900/95 to-slate-950/95 backdrop-blur-xl p-4 shadow-xl shadow-fuchsia-500/5"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-fuchsia-500/15 border border-fuchsia-500/30">
+            <FileText className="h-4 w-4 text-fuchsia-300" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-slate-100">Tailored Resume</div>
+            <div className="text-[11px] text-slate-400">
+              {data.cached ? "Cached result" : "Generated for this JD"}
+            </div>
+          </div>
+        </div>
+        {typeof scoreBefore === "number" && typeof scoreAfter === "number" && (
+          <div className="text-right">
+            <div className="text-[11px] text-slate-400">JD Match</div>
+            <div className="text-sm font-bold text-fuchsia-300">
+              {Math.round(scoreBefore)} → {Math.round(scoreAfter)}
+              {scoreGain !== null && (
+                <span className={`ml-1 text-[11px] ${scoreGain >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  {scoreGain >= 0 ? "+" : ""}{scoreGain}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Stats row */}
+      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+        {skillsAdded > 0 && <span className="rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-emerald-300">+{skillsAdded} skills</span>}
+        {skillsRemoved > 0 && <span className="rounded-full bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 text-rose-300">-{skillsRemoved} skills</span>}
+        {changedBullets > 0 && <span className="rounded-full bg-violet-500/10 border border-violet-500/25 px-2 py-0.5 text-violet-300">{changedBullets} bullets rewritten</span>}
+        {diff?.summary && <span className="rounded-full bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 text-amber-300">Summary updated</span>}
+        {data.cached && <span className="rounded-full bg-slate-500/10 border border-slate-500/25 px-2 py-0.5 text-slate-400">Cached</span>}
+      </div>
+
+      {/* Diff preview */}
+      {diff && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setShowDiff(v => !v)}
+            className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10"
+          >
+            <span className="flex items-center gap-1.5">
+              <GitCompare className="h-3.5 w-3.5 text-fuchsia-300" />
+              View changes (diff)
+            </span>
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showDiff ? "rotate-90" : ""}`} />
+          </button>
+          {showDiff && (
+            <div className="mt-2 space-y-3 rounded-xl border border-white/10 bg-black/30 p-3">
+              {diff.summary && (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Summary</div>
+                  <DiffLine prefix="-" text={diff.summary.removed} />
+                  <DiffLine prefix="+" text={diff.summary.added} />
+                </div>
+              )}
+              {diff.skills && (diff.skills.removed.length > 0 || diff.skills.added.length > 0) && (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Skills</div>
+                  {diff.skills.removed.map(s => <DiffLine key={`-${s}`} prefix="-" text={s} />)}
+                  {diff.skills.added.map(s => <DiffLine key={`+${s}`} prefix="+" text={s} />)}
+                </div>
+              )}
+              {(diff.experience ?? []).map((entry, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    {entry.title}{entry.company ? ` · ${entry.company}` : ""}
+                  </div>
+                  {entry.bullet_changes.map((b, j) => (
+                    <div key={j}>
+                      <DiffLine prefix="-" text={b.removed} />
+                      <DiffLine prefix="+" text={b.added} />
+                      {b.reason && (
+                        <div className="pl-3 text-[10px] italic text-slate-500">reason: {b.reason}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Version history */}
+      <div className="mt-2">
+        <button
+          type="button"
+          onClick={toggleHistory}
+          className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10"
+        >
+          <span className="flex items-center gap-1.5">
+            <History className="h-3.5 w-3.5 text-fuchsia-300" />
+            Version history
+          </span>
+          <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showHistory ? "rotate-90" : ""}`} />
+        </button>
+        {showHistory && (
+          <div className="mt-2 rounded-xl border border-white/10 bg-black/30 p-2">
+            {loadingVersions ? (
+              <div className="flex items-center gap-2 px-2 py-2 text-xs text-slate-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading versions…
+              </div>
+            ) : versions.length === 0 ? (
+              <div className="px-2 py-2 text-xs text-slate-400">No other versions yet.</div>
+            ) : (
+              versions.map(v => {
+                const d = v.diff_summary ?? {};
+                const bullets = (d as any).bullets_changed ?? 0;
+                return (
+                  <div key={v.version_id} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-semibold text-slate-200">v{v.version_number}</span>
+                      {v.version_id === data.version_id && (
+                        <span className="rounded-full bg-fuchsia-500/15 px-1.5 py-0.5 text-[10px] text-fuchsia-300">current</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(v.created_at).toLocaleDateString()}
+                        {bullets > 0 ? ` · ${bullets} edits` : ""}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={downloadDocx}
+          disabled={downloading}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-fuchsia-600 to-violet-600 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-fuchsia-500/25 transition hover:opacity-90 disabled:opacity-60"
+        >
+          {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          Download DOCX
+        </button>
+        <button
+          type="button"
+          onClick={openInBuilder}
+          disabled={building}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-60"
+        >
+          {building ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+          Open in Resume Builder
+        </button>
+      </div>
+      {actionMsg && <div className="mt-2 text-[11px] text-slate-400">{actionMsg}</div>}
     </motion.div>
   );
 }
@@ -413,6 +745,8 @@ function MessageBubble({
             }
           </div>
         </div>
+
+        {!isUser && msg.tailorData && <TailoredResumeCard data={msg.tailorData} />}
 
         {isUser && msg.content && (
           <div className="flex items-center gap-1 px-1" onClick={(e) => e.stopPropagation()}>
@@ -804,9 +1138,26 @@ export default function ChatPage() {
         return;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: ChatMessage[] = await res.json();
-      log.info(`Loaded ${data.length} message(s) for ${conversationId}`);
-      setMessages(data);
+      const raw: (ChatMessage & { metadata?: Record<string, any> })[] = await res.json();
+      const mapped = raw.map((m) => {
+        if (m.metadata?.tailor_data?.version_id) {
+          const td = m.metadata.tailor_data;
+          return {
+            ...m,
+            tailorData: {
+              version_id: td.version_id,
+              resume_id: td.resume_id ?? "",
+              diff: td.diff,
+              cached: td.cached,
+              match_score_before: td.match_score_before,
+              match_score_after: td.match_score_after,
+            },
+          };
+        }
+        return m;
+      });
+      log.info(`Loaded ${mapped.length} message(s) for ${conversationId}`);
+      setMessages(mapped);
     } catch (e: any) {
       log.error("Failed to load message history", e);
       setError("Could not load message history.");
@@ -1012,10 +1363,36 @@ export default function ChatPage() {
             }
             if (parsed.tool_result) {
               log.info("Tool result received", parsed.tool_result);
-              setMessages(prev => prev.map(m => m.id === tempAgentId
-                ? { ...m, toolEvent: undefined }
-                : m
-              ));
+              if (parsed.tool_result === "tailor_resume" && parsed.version_id) {
+                log.info("Tailored resume version captured", parsed.version_id);
+                const tailorData: TailoredResumeData = {
+                  version_id: parsed.version_id as string,
+                  resume_id: (parsed.resume_id as string) ?? "",
+                  diff: parsed.diff as ResumeDiff | undefined,
+                  cached: parsed.cached as boolean | undefined,
+                  match_score_before: parsed.match_score_before as number | undefined,
+                  match_score_after: parsed.match_score_after as number | undefined,
+                };
+                setMessages(prev => prev.map(m => m.id === tempAgentId
+                  ? { ...m, toolEvent: undefined, tailorData }
+                  : m
+                ));
+                // Signal the dashboard/builder to auto-open in Tailored mode.
+                if (tailorData.resume_id) {
+                  try {
+                    localStorage.setItem('resumatch_tailored_pending', JSON.stringify({
+                      resume_id: tailorData.resume_id,
+                      version_id: tailorData.version_id,
+                      ts: Date.now(),
+                    }));
+                  } catch { /* ignore quota errors */ }
+                }
+              } else {
+                setMessages(prev => prev.map(m => m.id === tempAgentId
+                  ? { ...m, toolEvent: undefined }
+                  : m
+                ));
+              }
             }
             if (parsed.processed_content) {
               // Use backend-processed content once the final response arrives.

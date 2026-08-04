@@ -21,6 +21,7 @@ class GatewayRequest:
     agent_tools: List["AgentTool"] = field(default_factory=list)
     temperature: float = 0.35
     max_tokens: int = 8192
+    json_mode: bool = False
 
 
 @dataclass

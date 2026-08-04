@@ -78,11 +78,26 @@ def _check_section_headers(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _check_contact_info(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Check for contact information."""
+    """Check for contact information (name, email, phone, links)."""
     has_name = bool(data.get("fullName"))
+    has_email = bool(data.get("email"))
+    has_phone = bool(data.get("phone") or data.get("phone_number"))
+    has_links = bool(
+        (data.get("links") and any(data["links"].values()))
+        or data.get("linkedin")
+        or data.get("github")
+    )
+    present = [p for p, ok in [
+        ("name", has_name),
+        ("email", has_email),
+        ("phone", has_phone),
+        ("links", has_links),
+    ] if ok]
+    passed = has_name and (has_email or has_phone)
+    message = f"Contact info found: {', '.join(present)}" if present else "No contact information detected"
     return {
-        "passed": has_name,
-        "message": "Name found" if has_name else "No name detected",
+        "passed": passed,
+        "message": message,
     }
 
 

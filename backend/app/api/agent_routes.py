@@ -12,7 +12,8 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger("resumatch-ai.api.agents")
@@ -45,7 +46,8 @@ class JDIngestRequest(BaseModel):
     source_type: str = "auto"
 
 class ATSAnalysisRequest(BaseModel):
-    resume_id: str
+    resume_id: Optional[str] = None
+    version_id: Optional[str] = None
     jd_text: Optional[str] = None
 
 class InterviewStartRequest(BaseModel):
@@ -69,12 +71,17 @@ class CoachRequest(BaseModel):
 
 # ── Helper: get user from JWT ───────────────────────────────────────────────
 
-async def _get_user_id(request: Request) -> str:
-    """Extract user_id from the request (reuses existing auth middleware)."""
-    user = getattr(request.state, "user", None)
-    if not user or not user.get("id"):
+async def _get_user_id(authorization: Optional[str] = Header(None)) -> str:
+    """Extract user_id from the Authorization header (reuses existing auth)."""
+    from app.services.auth_service import auth_service
+
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return user["id"]
+    token = authorization.replace("Bearer ", "")
+    result = await auth_service.get_user(token)
+    if not result.get("success"):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return result["user"]["id"]
 
 
 # ── Intent Classification ───────────────────────────────────────────────────
@@ -146,7 +153,143 @@ async def tailor_resume(req: ResumeTailorRequest, user_id: str = Depends(_get_us
     return result
 
 
-# ── JD Intelligence ─────────────────────────────────────────────────────────
+# ── Tailored Resume Versions / DOCX Download ────────────────────────────────
+
+@router.get("/resume/{resume_id}/versions")
+async def resume_versions(resume_id: str, user_id: str = Depends(_get_user_id)):
+    """List tailoring history for a resume (newest first)."""
+    from app.agents.tools.resume_tools import list_resume_versions
+    versions = await list_resume_versions(user_id, resume_id)
+    return {"success": True, "resume_id": resume_id, "versions": versions}
+
+
+@router.get("/resume/version/{version_id}/diff")
+async def resume_version_diff(version_id: str, user_id: str = Depends(_get_user_id)):
+    """Return the GitHub-style diff for a tailored version."""
+    from app.agents.tools.resume_tools import get_resume_version
+    version = await get_resume_version(version_id, user_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return {
+        "success": True,
+        "version_id": version["version_id"],
+        "version_number": version["version_number"],
+        "created_at": version["created_at"],
+        "diff": version["diff_json"] or {},
+        "change_reasons": version["change_reasons"] or [],
+    }
+
+
+@router.get("/resume/version/{version_id}/data")
+async def resume_version_data(version_id: str, user_id: str = Depends(_get_user_id)):
+    """Return the full tailored version data (parsed_data, diff, metadata)."""
+    from app.agents.tools.resume_tools import get_resume_version, merge_source_sections_into_version
+    version = await get_resume_version(version_id, user_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    await merge_source_sections_into_version(version, user_id)
+    return {
+        "success": True,
+        "version_id": version["version_id"],
+        "resume_id": version["resume_id"],
+        "version_number": version["version_number"],
+        "parent_version_id": version["parent_version_id"],
+        "created_at": version["created_at"],
+        "parsed_data": version["parsed_data"],
+        "diff": version["diff_json"] or {},
+        "change_reasons": version["change_reasons"] or [],
+    }
+
+
+@router.get("/resume/version/{version_id}/download")
+async def resume_version_download(version_id: str, user_id: str = Depends(_get_user_id)):
+    """Download the tailored resume as an ATS-friendly DOCX."""
+    from app.agents.tools.resume_tools import get_resume_version, merge_source_sections_into_version
+    from app.agents.tools.docx_generator import build_tailored_docx, safe_filename
+
+    version = await get_resume_version(version_id, user_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    await merge_source_sections_into_version(version, user_id)
+    parsed = version["parsed_data"]
+    if not parsed:
+        raise HTTPException(status_code=404, detail="Version has no tailored data")
+
+    try:
+        docx_bytes = build_tailored_docx(parsed)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    full_name = parsed.get("fullName") if isinstance(parsed, dict) else None
+    filename = safe_filename(full_name, version.get("version_number") or 0)
+
+    return StreamingResponse(
+        iter([docx_bytes]),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/resume/version/{version_id}/to-builder")
+async def resume_version_to_builder(version_id: str, user_id: str = Depends(_get_user_id)):
+    """Feed a tailored version into the resume builder as a new resume."""
+    from app.agents.tools.resume_tools import get_resume_version, merge_source_sections_into_version
+    from app.api.builder_models import ResumeCreateRequest, ExperienceItem, EducationItem
+    from app.api.resumes_crud import create_resume
+
+    version = await get_resume_version(version_id, user_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    await merge_source_sections_into_version(version, user_id)
+    parsed = version["parsed_data"]
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=404, detail="Version has no tailored data")
+
+    experience = []
+    for exp in parsed.get("experience", []) or []:
+        if not isinstance(exp, dict):
+            continue
+        experience.append(ExperienceItem(
+            title=exp.get("title") or "",
+            company=exp.get("company") or "",
+            location=exp.get("location") or "",
+            duration=exp.get("duration") or "",
+            description=[b.get("text") or b.get("original_bullet") or str(b)
+                         for b in (exp.get("bullets") or [])
+                         if isinstance(b, dict)],
+        ))
+
+    education = []
+    for edu in parsed.get("education", []) or []:
+        if isinstance(edu, str):
+            education.append(EducationItem(degree=edu, institution=""))
+        elif isinstance(edu, dict):
+            education.append(EducationItem(
+                degree=edu.get("degree") or edu.get("title") or "",
+                institution=edu.get("institution") or "",
+                year=edu.get("year") or "",
+            ))
+
+    version_number = version.get("version_number") or 1
+    payload = ResumeCreateRequest(
+        title=f"Tailored Resume v{version_number}",
+        target_role=parsed.get("target_role") or "Software Engineer",
+        summary=parsed.get("summary") or "",
+        skills=[str(s) for s in (parsed.get("skills") or [])],
+        experience=experience,
+        education=education,
+        user_id=user_id,
+        parsed_data=parsed,
+    )
+
+    created = await create_resume(payload, user_id=user_id)
+    return {
+        "success": True,
+        "resume_id": created.get("resume_id"),
+        "builder_url": f"/builder?id={created.get('resume_id')}",
+    }
 
 @router.post("/jd/ingest")
 async def ingest_jd(req: JDIngestRequest, user_id: str = Depends(_get_user_id)):
@@ -201,9 +344,25 @@ async def analyze_ats(req: ATSAnalysisRequest, user_id: str = Depends(_get_user_
     if not resume_intel_agent or not ats_intel_agent:
         raise HTTPException(status_code=503, detail="Agents not initialized")
 
-    resume_result = await resume_intel_agent.get_resume_context(user_id, req.resume_id)
-    if resume_result["status"] == "error":
-        raise HTTPException(status_code=404, detail="Resume not found")
+    resume_data = None
+    resume_id = req.resume_id
+    if req.version_id:
+        # Analyze a specific tailored version (merged with source sections).
+        from app.agents.tools.resume_tools import get_resume_version, merge_source_sections_into_version
+        version = await get_resume_version(req.version_id, user_id)
+        if not version:
+            raise HTTPException(status_code=404, detail="Version not found")
+        await merge_source_sections_into_version(version, user_id)
+        resume_data = version.get("parsed_data", {})
+        resume_id = version.get("resume_id") or req.resume_id
+
+    if resume_data is None:
+        if not req.resume_id:
+            raise HTTPException(status_code=400, detail="resume_id or version_id required")
+        resume_result = await resume_intel_agent.get_resume_context(user_id, req.resume_id)
+        if resume_result["status"] == "error":
+            raise HTTPException(status_code=404, detail="Resume not found")
+        resume_data = resume_result.get("parsed_data", {})
 
     jd_data = None
     if req.jd_text:
@@ -212,9 +371,22 @@ async def analyze_ats(req: ATSAnalysisRequest, user_id: str = Depends(_get_user_
             jd_data = jd_result.get("data")
 
     result = await ats_intel_agent.analyze(
-        resume_data=resume_result.get("parsed_data", {}),
+        resume_data=resume_data,
         jd_data=jd_data,
     )
+    result["resume_id"] = resume_id
+    # Normalize to the dashboard score-breakdown shape the frontend consumes.
+    result["score"] = round(result.get("ats_score", 0) or 0)
+    result["atsScore"] = round(result.get("deterministic_score", 0) or 0)
+    llm = result.get("llm_analysis") or {}
+    result["keywordScore"] = round(min(100, result.get("score", 0)))
+    result["readabilityScore"] = round(min(100, result.get("deterministic_score", 0) or 0))
+    result["weaknesses"] = [
+        r for r in (result.get("recommendations") or [])
+        if r.startswith("[HIGH]") or r.startswith("[MEDIUM]") or r.startswith("Missing")
+    ] or (["Missing standard section headers. Use 'Work Experience', 'Education', 'Skills'."] if result.get("score", 0) < 60 else [])
+    result["recommendations"] = result.get("recommendations") or llm.get("missing_keywords", [])
+    result["suggestedRoles"] = []
     return result
 
 

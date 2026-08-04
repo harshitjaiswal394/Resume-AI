@@ -140,6 +140,109 @@ export default function AIResumeBuilder() {
   const [currentScore, setCurrentScore] = useState<number>(0);
   const lastSavedRef = useRef<string>(""); // For dirty checking
 
+  const [activeMode, setActiveMode] = useState<'default' | 'tailored'>('default');
+  const [tailoredVersionId, setTailoredVersionId] = useState<string | null>(null);
+  const [isLoadingTailored, setIsLoadingTailored] = useState(false);
+
+  // Map a tailored version's parsed_data into the builder's ResumeData shape.
+  const mapTailoredToResumeData = (parsed: any): ResumeData => {
+    const src = parsed && typeof parsed === 'object' ? parsed : {};
+    const mapExp = (list: any[]): Experience[] => (list || []).map((e) => ({
+      title: e?.title || '',
+      company: e?.company || '',
+      duration: e?.duration || e?.location || '',
+      description: Array.isArray(e?.bullets)
+        ? e.bullets.map((b: any) => (typeof b === 'string' ? b : b?.text || b?.original_bullet || '')).filter(Boolean)
+        : Array.isArray(e?.description) ? e.description : [],
+    }));
+    const mapCert = (list: any[]): Certification[] => (list || []).map((c) =>
+      typeof c === 'string' ? { name: c, issuer: '', year: '' } : { name: c?.name || '', issuer: c?.issuer || '', year: c?.year || '' }
+    );
+    const mapLang = (list: any[]): Language[] => (list || []).map((l) =>
+      typeof l === 'string' ? { language: l, proficiency: '' } : { language: l?.language || '', proficiency: l?.proficiency || '' }
+    );
+    return {
+      ...INITIAL_DATA,
+      fullName: src.fullName || src.full_name || '',
+      email: src.email || '',
+      phone: src.phone || src.phone_number || '',
+      summary: src.summary || '',
+      skills: Array.isArray(src.skills) ? src.skills.map((s: any) => typeof s === 'string' ? s : s?.name || '') : [],
+      experience: mapExp(src.experience),
+      education: Array.isArray(src.education) ? src.education.map((e: any) =>
+        typeof e === 'string' ? { degree: e, institution: '', year: '' }
+          : { degree: e?.degree || e?.title || '', institution: e?.institution || '', year: e?.year || '' }
+      ) : [],
+      projects: Array.isArray(src.projects) ? src.projects.map((p: any) => ({
+        title: p?.title || p?.name || '',
+        description: Array.isArray(p?.description) ? p.description.join('\n') : p?.description || '',
+        link: p?.link || p?.url || '',
+        tech_stack: p?.tech_stack || p?.techStack || p?.skills || [],
+      })) : [],
+      certifications: mapCert(src.certifications),
+      languages: mapLang(src.languages),
+      internships: Array.isArray(src.internships) ? src.internships.map((i: any) => ({
+        role: i?.role || i?.title || '',
+        company: i?.company || '',
+        duration: i?.duration || '',
+        description: Array.isArray(i?.description) ? i.description : [],
+      })) : [],
+      achievements: Array.isArray(src.achievements) ? src.achievements.map((a: any) =>
+        typeof a === 'string' ? { title: a, description: '' }
+          : { title: a?.title || a?.name || '', description: a?.description || '' }
+      ) : [],
+    };
+  };
+
+  const loadTailoredVersion = async (silent = false) => {
+    if (!resumeId || activeMode === 'tailored') return;
+    setIsLoadingTailored(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+      const listRes = await fetch(`${backendUrl}/api/agents/resume/${resumeId}/versions`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!listRes.ok) throw new Error("No tailored versions");
+      const listJson = await listRes.json();
+      const versions: any[] = listJson.versions ?? [];
+      if (!versions.length) {
+        if (!silent) {
+          toast.error('No tailored version available yet. Tailor your resume in Chat first.');
+        }
+        return;
+      }
+      const latest = versions[0];
+      const dataRes = await fetch(`${backendUrl}/api/agents/resume/version/${latest.version_id}/data`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!dataRes.ok) throw new Error("Version data fetch failed");
+      const dataJson = await dataRes.json();
+      const mapped = mapTailoredToResumeData(dataJson.parsed_data);
+      setData(mapped);
+      setTailoredVersionId(dataJson.version_id);
+      setActiveMode('tailored');
+      if (!silent) {
+        toast.success(`Loaded Tailored Resume v${dataJson.version_number} (${mapped.fullName || 'resume'})`);
+      }
+    } catch (e: any) {
+      console.error('[Builder] Tailored load failed', e);
+      if (!silent) {
+        toast.error(e.message || 'Could not load tailored version');
+      }
+    } finally {
+      setIsLoadingTailored(false);
+    }
+  };
+
+  const switchToDefault = async () => {
+    setActiveMode('default');
+    setTailoredVersionId(null);
+    if (resumeId) {
+      await fetchResume(resumeId);
+    }
+  };
+
   useEffect(() => {
     if (!isAuthReady) return; // WAIT FOR AUTH INITIALIZATION
 
@@ -237,35 +340,50 @@ export default function AIResumeBuilder() {
     loadDraft();
   }, [user, isAuthReady]);
 
+  // Auto-open Tailored mode if a pending tailored version exists for this resume.
+  useEffect(() => {
+    if (!isLoaded || !resumeId || activeMode !== 'default') return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(localStorage.getItem('resumatch_tailored_pending') || 'null');
+    } catch { /* ignore */ }
+    if (!pending || !pending.resume_id || !pending.version_id) return;
+    if (pending.resume_id !== resumeId) return;
+    try {
+      localStorage.removeItem('resumatch_tailored_pending');
+    } catch { /* ignore */ }
+    loadTailoredVersion(true);
+  }, [isLoaded, resumeId, activeMode]);
+
   // Auto-save to both localStorage (permanent) and sessionStorage (this session)
   useEffect(() => {
-    if (!isLoaded) return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
+    if (!isLoaded || activeMode === 'tailored') return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
     const snapshot = JSON.stringify({ data, resumeId, discovery });
     localStorage.setItem('resumatch_builder_data', snapshot);
     sessionStorage.setItem('resumatch_builder_session', snapshot);
-  }, [data, resumeId, discovery, isLoaded]);
+  }, [data, resumeId, discovery, isLoaded, activeMode]);
 
   // Optimized Debounced Auto-save to DB
   useEffect(() => {
-    if (!isLoaded || !user || user.id === 'guest') return;
+    if (!isLoaded || !user || user.id === 'guest' || activeMode === 'tailored') return;
 
     const timer = setTimeout(() => {
       performSilentSave();
     }, 5000); // 5 second debounce for DB performance
 
     return () => clearTimeout(timer);
-  }, [data, discovery, user]);
+  }, [data, discovery, user, activeMode]);
 
   // Save on tab switch/visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (isLoaded && document.visibilityState === 'hidden') {
+      if (isLoaded && activeMode !== 'tailored' && document.visibilityState === 'hidden') {
         performSilentSave();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [data, discovery, resumeId]);
+  }, [data, discovery, resumeId, activeMode]);
 
   const performSilentSave = async () => {
     if (!user || user.id === 'guest' || !isLoaded) return;
@@ -345,9 +463,11 @@ export default function AIResumeBuilder() {
 
       let restoredData: ResumeData = { ...INITIAL_DATA };
       if (resume.parsed_data) {
-        restoredData = typeof resume.parsed_data === 'string' 
+        const parsed = typeof resume.parsed_data === 'string' 
           ? JSON.parse(resume.parsed_data) 
           : resume.parsed_data;
+        // Merge with defaults so no field is ever undefined (keeps inputs controlled)
+        restoredData = { ...INITIAL_DATA, ...parsed };
       }
       
       // CRITICAL: Merge individual columns into restoredData to ensure "My Resume" edits reflect here
@@ -491,6 +611,10 @@ export default function AIResumeBuilder() {
 
   // --- Storage & Flow ---
   const handleSave = async () => {
+    if (activeMode === 'tailored') {
+      toast.info('Switch to Default mode to save manual edits to your resume.');
+      return;
+    }
     setIsSaving(true);
     try {
       const isUpdate = !!resumeId;
@@ -579,7 +703,31 @@ export default function AIResumeBuilder() {
     }
   };
 
-  const handleDownloadDocx = () => {
+  const handleDownloadDocx = async () => {
+    if (activeMode === 'tailored' && tailoredVersionId) {
+      toast.info('Downloading tailored Word file...');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("No session");
+        const res = await fetch(`${backendUrl}/api/agents/resume/version/${tailoredVersionId}/download`, {
+          headers: { "Authorization": `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) throw new Error("Download failed");
+        const blob = await res.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `tailored-resume-${new Date().toISOString().slice(0, 10)}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+        toast.success('Tailored Word file downloaded!');
+      } catch (e) {
+        console.error('Tailored DOCX download failed', e);
+        toast.error('Download failed - please try one more time');
+      }
+      return;
+    }
     if (!previewRef.current) return;
     toast.info('Generating compatible Word file...');
     
@@ -704,7 +852,7 @@ export default function AIResumeBuilder() {
       const { data: resume, error } = await supabase.from('resumes').select('parsed_data').eq('id', resumeId).single();
       if (resume?.parsed_data && !error) {
         const originalData = typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data;
-        setData(originalData);
+        setData({ ...INITIAL_DATA, ...originalData });
         if (originalData.targetRole || originalData.target_role) {
           setDiscovery(prev => ({ ...prev, role: originalData.targetRole || originalData.target_role }));
         }
@@ -738,7 +886,7 @@ export default function AIResumeBuilder() {
       localStorage.removeItem('resumatch_builder_data');
       sessionStorage.removeItem('resumatch_builder_session');
       setResumeId(null);
-      setData({} as any);
+      setData({ ...INITIAL_DATA });
       
       toast.success('Draft deleted successfully');
       router.replace('/dashboard');
@@ -970,6 +1118,34 @@ export default function AIResumeBuilder() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 md:gap-2">
+            {/* Default vs Tailored toggle */}
+            <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
+              <button
+                type="button"
+                onClick={switchToDefault}
+                className={`h-8 rounded-lg px-2.5 md:px-3 text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${
+                  activeMode === 'default'
+                    ? 'bg-white shadow-sm text-slate-900'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Default
+              </button>
+              <button
+                type="button"
+                onClick={() => loadTailoredVersion()}
+                disabled={isLoadingTailored || !resumeId}
+                className={`h-8 rounded-lg px-2.5 md:px-3 text-[10px] md:text-xs font-bold transition-all whitespace-nowrap disabled:opacity-50 ${
+                  activeMode === 'tailored'
+                    ? 'bg-indigo-600 shadow-sm text-white'
+                    : 'text-slate-400 hover:text-indigo-600'
+                }`}
+              >
+                {isLoadingTailored ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : null}
+                Tailored
+              </button>
+            </div>
+
             {/* Desktop-only secondary buttons */}
             <div className="hidden lg:flex items-center gap-2">
                <Button variant="ghost" onClick={handleDeleteDraft} className="h-10 rounded-xl text-slate-300 hover:text-rose-500 px-4 transition-colors">

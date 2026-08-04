@@ -72,7 +72,7 @@ ROUTE_TABLE: Dict[str, ModelRoute] = {
         tier=ModelTier.FLASH,
         provider="vertex-gemini",
         model="gemini-2.5-flash",
-        max_tokens=2000,
+        max_tokens=8192,
         temperature=0.2,
     ),
 
@@ -81,7 +81,7 @@ ROUTE_TABLE: Dict[str, ModelRoute] = {
         tier=ModelTier.FLASH,
         provider="vertex-gemini",
         model="gemini-2.5-flash",
-        max_tokens=4000,
+        max_tokens=16384,
         temperature=0.4,
     ),
 

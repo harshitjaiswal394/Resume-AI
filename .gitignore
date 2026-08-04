@@ -9,6 +9,11 @@
 # GCP CLI credentials (contains credentials.db / access_tokens.db)
 .gcloud/
 
+# Logs (may contain URLs/endpoints/sensitive request data)
+*.log
+**/*.err.log
+**/logs/
+
 # OS / Misc
 **/.DS_Store
 **/.DS_Store?

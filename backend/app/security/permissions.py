@@ -43,12 +43,20 @@ _TOOL_POLICIES: Dict[str, ToolPolicy] = {
         max_payload_bytes=512,
         sensitive=True,
     ),
+    "tailor_resume": ToolPolicy(
+        name="tailor_resume",
+        required_permissions=["resume:write:self"],
+        allowed_roles=["user", "pro", "admin"],
+        rate_limit="100/day",
+        max_payload_bytes=64000,
+        sensitive=True,
+    ),
 }
 
 # Implicit permissions granted to each role.
 _ROLE_PERMISSIONS: Dict[str, List[str]] = {
-    "user": ["jobs:search", "resume:read:self"],
-    "pro": ["jobs:search", "resume:read:self"],
+    "user": ["jobs:search", "resume:read:self", "resume:write:self"],
+    "pro": ["jobs:search", "resume:read:self", "resume:write:self"],
     "admin": ["jobs:search", "resume:read:self", "jobs:admin", "resume:read:all"],
 }
 
