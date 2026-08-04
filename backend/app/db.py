@@ -13,6 +13,33 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL)
 
+# CI / pytest fallback
+if not DATABASE_URL:
+    logger.warning(
+        "DATABASE_URL not configured. Using SQLite test database."
+    )
+    DATABASE_URL = "sqlite:///./test.db"
+
+ENGINE_KWARGS = {}
+
+if DATABASE_URL.startswith("sqlite"):
+    ENGINE_KWARGS["connect_args"] = {
+        "check_same_thread": False
+    }
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    future=True,
+    **ENGINE_KWARGS,
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+
 try:
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
     SQLAlchemyInstrumentor().instrument(engine=engine)
