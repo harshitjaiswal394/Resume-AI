@@ -132,7 +132,7 @@ jobs:
         uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: ${{ vars.GKE_CLUSTER_NAME || 'resumatches-cluster-1' }}
-          location: ${{ vars.GKE_CLUSTER_LOCATION || 'asia-east1' }}
+          location: ${{ vars.GKE_CLUSTER_LOCATION || 'us-east1' }}
           project_id: ${{ env.PROJECT_ID }}
 
       - name: Rollout Backend and Frontend
