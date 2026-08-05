@@ -247,7 +247,10 @@ Respond with ONLY the JSON object:"""
                 # Second attempt (retry): Use powerful model (Llama 70b)
                 current_model = "meta/llama-3.1-8b-instruct" if attempt == 0 else "meta/llama-3.1-70b-instruct"
                 
-                response = self.client.chat.completions.create(
+                # Run the blocking SDK call in a thread so the event loop stays
+                # responsive (critical for SSE heartbeats during long parses).
+                response = await asyncio.to_thread(
+                    self.client.chat.completions.create,
                     model=current_model,
                     messages=messages,
                     temperature=0.05,
@@ -387,7 +390,8 @@ Respond with ONLY the JSON object:"""
             """
             
             try:
-                response = self.client.chat.completions.create(
+                response = await asyncio.to_thread(
+                    self.client.chat.completions.create,
                     model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,

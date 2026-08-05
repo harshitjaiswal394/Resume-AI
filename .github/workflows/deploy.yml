@@ -107,6 +107,50 @@ jobs:
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:latest
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend --all-tags
     
+  deploy:
+    name: "Deploy to GKE"
+    needs: build-and-prep
+    runs-on: ubuntu-latest
+    environment: dev
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: 'gke-gcloud-auth-plugin'
+
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ vars.GKE_CLUSTER_NAME || 'resumatches-cluster-1' }}
+          location: ${{ vars.GKE_CLUSTER_LOCATION || 'asia-east1' }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Rollout Backend and Frontend
+        run: |
+          kubectl rollout restart deployment/backend -n resumatch-ai
+          kubectl rollout restart deployment/frontend -n resumatch-ai
+
+      - name: Verify Rollout Status
+        run: |
+          kubectl rollout status deployment/backend -n resumatch-ai --timeout=300s
+          kubectl rollout status deployment/frontend -n resumatch-ai --timeout=300s
+
+      - name: Check Pod Health
+        run: |
+          kubectl wait --for=condition=Ready pod -l app=backend -n resumatch-ai --timeout=120s
+          kubectl wait --for=condition=Ready pod -l app=frontend -n resumatch-ai --timeout=120s
+          kubectl get pods -n resumatch-ai
+  
   # deploy:
   #   name: "2. Deploy"
   #   needs: build-and-prep
