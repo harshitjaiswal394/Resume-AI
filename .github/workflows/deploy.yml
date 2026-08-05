@@ -147,8 +147,8 @@ jobs:
 
       - name: Check Pod Health
         run: |
-          kubectl wait --for=condition=Ready pod -l app=backend -n resumatch-ai --timeout=120s
-          kubectl wait --for=condition=Ready pod -l app=frontend -n resumatch-ai --timeout=120s
+          kubectl wait --for=condition=Available deployment/backend -n resumatch-ai --timeout=300s
+          kubectl wait --for=condition=Available deployment/frontend -n resumatch-ai --timeout=300s
           kubectl get pods -n resumatch-ai
   
   # deploy:
