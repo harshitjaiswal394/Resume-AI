@@ -150,6 +150,9 @@ async def tailor_resume(req: ResumeTailorRequest, user_id: str = Depends(_get_us
 
     if result["status"] == "error":
         raise HTTPException(status_code=400, detail=result["message"])
+    # Surface the JD's required skills so the frontend can explain why they
+    # appear in the tailored resume (skills section + experience bullets).
+    result["jd_required_skills"] = (jd_result.get("data") or {}).get("skills", [])
     return result
 
 
@@ -161,6 +164,16 @@ async def resume_versions(resume_id: str, user_id: str = Depends(_get_user_id)):
     from app.agents.tools.resume_tools import list_resume_versions
     versions = await list_resume_versions(user_id, resume_id)
     return {"success": True, "resume_id": resume_id, "versions": versions}
+
+
+@router.delete("/resume/version/{version_id}")
+async def resume_version_delete(version_id: str, user_id: str = Depends(_get_user_id)):
+    """Delete a single tailored version (history record), scoped to the user."""
+    from app.agents.tools.resume_tools import delete_resume_version
+    deleted = await delete_resume_version(version_id, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return {"success": True}
 
 
 @router.get("/resume/version/{version_id}/diff")
@@ -177,6 +190,7 @@ async def resume_version_diff(version_id: str, user_id: str = Depends(_get_user_
         "created_at": version["created_at"],
         "diff": version["diff_json"] or {},
         "change_reasons": version["change_reasons"] or [],
+        "jd_skills": version.get("jd_skills") or [],
     }
 
 
@@ -198,6 +212,7 @@ async def resume_version_data(version_id: str, user_id: str = Depends(_get_user_
         "parsed_data": version["parsed_data"],
         "diff": version["diff_json"] or {},
         "change_reasons": version["change_reasons"] or [],
+        "jd_skills": version.get("jd_skills") or [],
     }
 
 

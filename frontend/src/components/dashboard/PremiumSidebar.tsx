@@ -13,7 +13,8 @@ import {
   Crown,
   ChevronLeft,
   ChevronRight,
-  MessageSquare
+  MessageSquare,
+  Wand2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -74,6 +75,14 @@ export function PremiumSidebar({
           `} title={effectiveCollapsed ? 'AI Chat' : undefined}>
             <MessageSquare className="h-[22px] w-[22px] shrink-0" />
             {!effectiveCollapsed && <span className="text-[16px] whitespace-nowrap">AI Chat</span>}
+          </Link>
+          <Link href="/dashboard/tailor" className={`
+            relative flex items-center w-full rounded-2xl transition-all duration-200
+            ${effectiveCollapsed ? 'justify-center py-3' : 'justify-start gap-3 px-4 py-3'}
+            text-slate-500 hover:bg-slate-50 hover:text-slate-900
+          `} title={effectiveCollapsed ? 'Tailor Resume' : undefined}>
+            <Wand2 className="h-[22px] w-[22px] shrink-0" />
+            {!effectiveCollapsed && <span className="text-[16px] whitespace-nowrap">Tailor Resume</span>}
           </Link>
           <NavItem isCollapsed={effectiveCollapsed} icon={<Settings />} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>

@@ -97,6 +97,12 @@ class ResumeTailorAgent:
         """
         start = time.monotonic()
 
+        # JD-required skills the source resume does NOT ground anywhere.
+        # We never add these ourselves; we surface them so the user can add
+        # them manually (suggestions) without violating the no-hallucination
+        # contract.
+        suggested_skills = self.find_missing_skills(resume_data, jd_data.get("skills", []))
+
         # Step 1: Check cache (same resume + same JD = reuse)
         cache_hit = await get_tailoring_cache(user_id, jd_hash, resume_id)
         if cache_hit:
@@ -118,7 +124,9 @@ class ResumeTailorAgent:
                 "tailored_data": cached_tailored,
                 "change_reasons": cache_hit.get("change_reasons", []),
                 "diff_json": cache_hit.get("diff_json"),
+                "jd_skills": cache_hit.get("jd_skills") or [],
                 "version_id": cache_hit["version_id"],
+                "suggested_skills": suggested_skills,
             }
 
         # Step 2: Generate tailored resume via LLM
@@ -200,6 +208,7 @@ Rewrite the resume to better match this JD. Follow all rules strictly."""
                 parsed_data=tailored_resume,
                 diff_from_version=None,
                 jd_hash=jd_hash,
+                jd_skills=jd_data.get("skills", []),
                 change_reasons=change_reasons,
                 diff_json=diff,
             )
@@ -218,6 +227,7 @@ Rewrite the resume to better match this JD. Follow all rules strictly."""
             "version_id": version_id,
             "match_score_before": change_summary.get("match_score_before", 0),
             "match_score_after": change_summary.get("match_score_after", 0),
+            "suggested_skills": suggested_skills,
         }
 
     def _extract_change_reasons(self, tailored_resume: Dict[str, Any]) -> List[str]:
@@ -261,6 +271,35 @@ Rewrite the resume to better match this JD. Follow all rules strictly."""
             tailored_val = tailored_resume.get(key)
             if tailored_val in (None, "", [], {}):
                 tailored_resume[key] = source_val
+
+    @classmethod
+    def find_missing_skills(
+        cls,
+        source_resume: Dict[str, Any],
+        jd_skills: List[Any],
+    ) -> List[str]:
+        """
+        Return the JD-required skills that are NOT grounded anywhere in the
+        source resume (skills column, bullets, education, summary, etc.).
+
+        These are surfaced to the user as "suggested to add manually" — the
+        agent itself never adds ungrounded skills (no-hallucination contract).
+        """
+        if not jd_skills:
+            return []
+        corpus_tokens = cls._build_source_corpus(source_resume)
+        missing = []
+        for skill in jd_skills:
+            skill_lower = str(skill or "").lower().strip()
+            if not skill_lower:
+                continue
+            tokens = cls._tokenize(skill_lower)
+            concrete = {t for t in tokens if t not in cls._noise_tokens}
+            if not concrete:
+                continue
+            if not (concrete & corpus_tokens):
+                missing.append(str(skill).strip())
+        return missing
 
     @classmethod
     def _validate_no_hallucination(

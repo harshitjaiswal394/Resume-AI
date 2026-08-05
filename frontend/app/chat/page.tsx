@@ -951,7 +951,7 @@ function ChatSidebar({
                     </div>
                   </button>
 
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="flex items-center gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

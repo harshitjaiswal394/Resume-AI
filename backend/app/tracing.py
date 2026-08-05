@@ -6,9 +6,16 @@ logger = logging.getLogger("resumatch-api.tracing")
 def instrument_app(app):
     """
     Safely initialize and register OpenTelemetry instrumentation.
+    Only enabled when OTEL_EXPORTER_OTLP_ENDPOINT is configured (production),
+    so local runs skip tracing entirely instead of spamming exporter errors
+    against the in-cluster Jaeger/collector endpoint.
     If OpenTelemetry packages are missing or fail to load, logs a warning
     and allows the application to start normally without breaking features.
     """
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if not endpoint:
+        logger.info("OpenTelemetry tracing disabled: OTEL_EXPORTER_OTLP_ENDPOINT not configured.")
+        return
     try:
         from opentelemetry import trace
         from opentelemetry.sdk.trace import TracerProvider
@@ -18,7 +25,6 @@ def instrument_app(app):
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
         service_name = os.getenv("OTEL_SERVICE_NAME", "backend")
-        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger-service.resumatch-ai.svc.cluster.local:4318/v1/traces")
         excluded_urls = os.getenv("OTEL_PYTHON_EXCLUDED_URLS", "/health")
 
         logger.info(f"Initializing OpenTelemetry Tracer for service '{service_name}' sending to '{endpoint}'")

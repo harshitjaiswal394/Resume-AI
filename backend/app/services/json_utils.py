@@ -67,21 +67,45 @@ def parse_json_response(text: Any) -> Optional[Any]:
     except json.JSONDecodeError:
         pass
 
-    # Last resort: largest valid JSON substring
-    start = text.find("{")
-    if start == -1:
-        return None
-    depth = 0
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
-            if depth == 0:
-                try:
-                    return json.loads(text[start : i + 1])
-                except (ValueError, TypeError):
-                    break
+    # Strip invalid control characters that json.loads rejects
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
 
-    logger.error("JSON parse failed after all attempts | Raw: %s", original[:300])
+    # Last resort: scan for a valid JSON substring, skipping braces inside strings.
+    # After a failed candidate, resume at the next opening brace (trailing-garbage case).
+    search_from = text.find("{")
+    while search_from != -1:
+        depth = 0
+        in_string = False
+        escaped = False
+        for i in range(search_from, len(text)):
+            ch = text[i]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}" and depth > 0:
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[search_from : i + 1])
+                    except (ValueError, TypeError):
+                        break
+        search_from = text.find("{", search_from + 1)
+
+    logger.error(
+        "JSON parse failed after all attempts | Raw: %s",
+        original[:500],
+    )
     return None

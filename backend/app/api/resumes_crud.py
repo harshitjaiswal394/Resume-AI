@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Header
 from typing import List, Dict, Any, Optional
 from app.db import engine, get_db
 from sqlalchemy import text
@@ -140,14 +140,34 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
     return {"success": True}
 
 @router.delete("/{resume_id}")
-async def delete_resume(resume_id: str, user_id: str = "guest"):
-    """Deletes a resume and associated data."""
+async def delete_resume(resume_id: str, authorization: Optional[str] = Header(None)):
+    """Deletes a resume and associated data (versions, embeddings, job matches)."""
+    uid = None
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            from app.services.auth_service import auth_service
+            result = await auth_service.get_user(authorization.replace("Bearer ", ""))
+            if result.get("success"):
+                uid = result["user"]["id"]
+        except Exception:
+            uid = None
+
     try:
         with engine.begin() as conn:
             # 1. Delete associated job matches
             conn.execute(text("DELETE FROM job_matches WHERE resume_id = :id"), {"id": resume_id})
-            # 2. Delete the resume itself
-            conn.execute(text("DELETE FROM resumes WHERE id = :id"), {"id": resume_id})
+            # 2. Delete associated tailored versions
+            conn.execute(text("DELETE FROM resume_versions WHERE resume_id = :id"), {"id": resume_id})
+            # 3. Delete associated embeddings
+            conn.execute(text("DELETE FROM resume_embeddings WHERE resume_id = :id"), {"id": resume_id})
+            # 4. Delete the resume itself (scoped to user when authenticated)
+            if uid:
+                conn.execute(
+                    text("DELETE FROM resumes WHERE id = :id AND user_id = :uid"),
+                    {"id": resume_id, "uid": uid},
+                )
+            else:
+                conn.execute(text("DELETE FROM resumes WHERE id = :id"), {"id": resume_id})
         return {"success": True}
     except Exception as e:
         logger.error(f"DATABASE_ERROR in delete_resume: {str(e)}")

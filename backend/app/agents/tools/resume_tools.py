@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,6 +19,52 @@ from sqlalchemy import text
 from app.db import engine
 
 logger = logging.getLogger("resumatch-ai.tools.resume")
+
+
+# ── Schema bootstrap (additive) ─────────────────────────────────────────────
+
+_versions_schema_checked = False
+_versions_schema_lock = threading.Lock()
+
+_RESUME_VERSIONS_CREATE = text("""
+    CREATE TABLE IF NOT EXISTS resume_versions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        resume_id TEXT NOT NULL,
+        version_number SERIAL,
+        parent_version_id TEXT,
+        parsed_data JSONB NOT NULL,
+        diff_json JSONB,
+        jd_hash TEXT,
+        jd_skills JSONB,
+        change_reasons JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+""")
+
+_RESUME_VERSIONS_ALTER = text("""
+    ALTER TABLE resume_versions ADD COLUMN IF NOT EXISTS jd_skills JSONB
+""")
+
+
+def ensure_resume_versions_schema() -> None:
+    """Create the resume_versions table and add any missing columns (additive).
+
+    Runs once per process so every read path can rely on the full schema even
+    before a version is ever stored.
+    """
+    global _versions_schema_checked
+    if _versions_schema_checked:
+        return
+    with _versions_schema_lock:
+        if _versions_schema_checked:
+            return
+        with engine.begin() as conn:
+            conn.execute(_RESUME_VERSIONS_CREATE)
+            conn.execute(_RESUME_VERSIONS_ALTER)
+        _versions_schema_checked = True
+        logger.info("RESUME_VERSIONS_SCHEMA_READY | jd_skills column ensured")
+
 
 
 # ── Resume Parsing ───────────────────────────────────────────────────────────
@@ -136,6 +183,7 @@ async def store_resume_version(
     parsed_data: Dict[str, Any],
     diff_from_version: Optional[str] = None,
     jd_hash: Optional[str] = None,
+    jd_skills: Optional[List[str]] = None,
     change_reasons: Optional[List[str]] = None,
     diff_json: Optional[Dict[str, Any]] = None,
 ) -> str:
@@ -148,23 +196,9 @@ async def store_resume_version(
         f"{user_id}:{resume_id}:{json.dumps(parsed_data, sort_keys=True)}:{time.time()}".encode()
     ).hexdigest()[:16]
 
-    with engine.begin() as conn:
-        # Ensure the resume_versions table exists (additive migration)
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS resume_versions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                resume_id TEXT NOT NULL,
-                version_number SERIAL,
-                parent_version_id TEXT,
-                parsed_data JSONB NOT NULL,
-                diff_json JSONB,
-                jd_hash TEXT,
-                change_reasons JSONB,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            )
-        """))
+    ensure_resume_versions_schema()
 
+    with engine.begin() as conn:
         # Get next version number
         result = conn.execute(
             text("SELECT COALESCE(MAX(version_number), 0) + 1 FROM resume_versions WHERE resume_id = :rid"),
@@ -174,8 +208,8 @@ async def store_resume_version(
 
         conn.execute(
             text("""
-                INSERT INTO resume_versions (id, user_id, resume_id, version_number, parent_version_id, parsed_data, diff_json, jd_hash, change_reasons, created_at)
-                VALUES (:id, :uid, :rid, :vn, :pvd, :pd, :dj, :jh, :cr, NOW())
+                INSERT INTO resume_versions (id, user_id, resume_id, version_number, parent_version_id, parsed_data, diff_json, jd_hash, jd_skills, change_reasons, created_at)
+                VALUES (:id, :uid, :rid, :vn, :pvd, :pd, :dj, :jh, :js, :cr, NOW())
             """),
             {
                 "id": version_id,
@@ -186,6 +220,7 @@ async def store_resume_version(
                 "pd": json.dumps(parsed_data),
                 "dj": json.dumps(diff_json) if diff_json else None,
                 "jh": jd_hash,
+                "js": json.dumps(jd_skills) if jd_skills else None,
                 "cr": json.dumps(change_reasons) if change_reasons else None,
             },
         )
@@ -274,8 +309,9 @@ async def store_resume_embeddings(
 
 async def get_tailoring_cache(user_id: str, jd_hash: str, resume_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Check if we already tailored this resume for this JD (cache hit)."""
+    ensure_resume_versions_schema()
     select = """
-        SELECT id, resume_id, parsed_data, change_reasons, diff_json, created_at
+        SELECT id, resume_id, parsed_data, change_reasons, diff_json, jd_skills, created_at
         FROM resume_versions
         WHERE user_id = :uid AND jd_hash = :jh
     """
@@ -295,6 +331,7 @@ async def get_tailoring_cache(user_id: str, jd_hash: str, resume_id: Optional[st
             "parsed_data": row.parsed_data,
             "change_reasons": row.change_reasons,
             "diff_json": row.diff_json,
+            "jd_skills": row.jd_skills if hasattr(row, "jd_skills") else None,
             "cached_at": row.created_at.isoformat() if row.created_at else None,
         }
     return None
@@ -302,11 +339,12 @@ async def get_tailoring_cache(user_id: str, jd_hash: str, resume_id: Optional[st
 
 async def get_resume_version(version_id: str, user_id: str) -> Optional[Dict[str, Any]]:
     """Fetch a single tailored resume version."""
+    ensure_resume_versions_schema()
     with engine.connect() as conn:
         row = conn.execute(
             text("""
                 SELECT id, resume_id, version_number, parent_version_id, parsed_data,
-                       diff_json, jd_hash, change_reasons, created_at
+                       diff_json, jd_hash, jd_skills, change_reasons, created_at
                 FROM resume_versions
                 WHERE id = :vid AND user_id = :uid
             """),
@@ -323,6 +361,7 @@ async def get_resume_version(version_id: str, user_id: str) -> Optional[Dict[str
         "parsed_data": row.parsed_data,
         "diff_json": row.diff_json,
         "jd_hash": row.jd_hash,
+        "jd_skills": row.jd_skills if hasattr(row, "jd_skills") else None,
         "change_reasons": row.change_reasons,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
@@ -390,6 +429,8 @@ async def list_resume_versions(user_id: str, resume_id: str, fallback_all: bool 
     (e.g. the source resume was deleted), fall back to the user's latest
     versions so the Tailored toggle still resolves.
     """
+    ensure_resume_versions_schema()
+
     def build(row) -> Dict[str, Any]:
         diff = row.diff_json or {}
         return {
@@ -432,6 +473,16 @@ async def list_resume_versions(user_id: str, resume_id: str, fallback_all: bool 
     return versions
 
 
+async def delete_resume_version(version_id: str, user_id: str) -> bool:
+    """Delete a single tailored resume version (scoped to the owning user)."""
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("DELETE FROM resume_versions WHERE id = :vid AND user_id = :uid"),
+            {"vid": version_id, "uid": user_id},
+        )
+    return (result.rowcount or 0) > 0
+
+
 def _summarize_diff(diff: Dict[str, Any]) -> Dict[str, Any]:
     """Extract a lightweight summary of a stored diff for list views."""
     if not diff:
@@ -441,6 +492,7 @@ def _summarize_diff(diff: Dict[str, Any]) -> Dict[str, Any]:
         bullets_changed += len(entry.get("bullet_changes", []) or [])
     return {
         "summary_changed": bool(diff.get("summary")),
+        "summary": diff.get("summary"),
         "skills_added": len((diff.get("skills") or {}).get("added", []) or []),
         "skills_removed": len((diff.get("skills") or {}).get("removed", []) or []),
         "bullets_changed": bullets_changed,

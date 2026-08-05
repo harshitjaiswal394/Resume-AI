@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
   push:
-    branches: [ "feature/ai-gateway-agents" ]
+    branches: [ "feature/tailor-resume" ]
   workflow_dispatch:
 
 env:

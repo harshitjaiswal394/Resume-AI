@@ -46,9 +46,11 @@ export default function SmartCoverLetter() {
   }, [user]);
 
   const fetchResumes = async () => {
+    if (!user) return;
     const { data, error } = await supabase
       .from('resumes')
       .select('id, title, updated_at, parsed_data')
+      .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
     
     if (data) {
@@ -80,17 +82,21 @@ export default function SmartCoverLetter() {
         body: JSON.stringify({ jdUrl })
       });
 
-      const result = await response.json();
+      let result: any;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(`Fetch failed (HTTP ${response.status || 'unknown'})`);
+      }
       if (result.success && result.jdText) {
         setJdText(result.jdText);
         toast.success('Job description fetched successfully!');
       } else {
-        throw new Error(result.detail || 'Fetch failed');
+        throw new Error(result.detail || `Fetch failed (HTTP ${response.status || 'unknown'})`);
       }
     } catch (e: any) {
       console.error('JD Fetch Error:', e);
-      // As requested: throw toast error user to paste JD directly
-      toast.error('Could not fetch Job Description. Please paste it manually below.');
+      toast.error(e.message || 'Could not fetch Job Description. Please paste it manually below.');
     } finally {
       setIsLoading(false);
     }

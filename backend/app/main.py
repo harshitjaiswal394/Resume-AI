@@ -66,6 +66,13 @@ async def startup_event():
         scheduler.start()
         logger.info("Background scheduler started.")
 
+    # Ensure additive DB schema (resume_versions.jd_skills etc.) is present
+    try:
+        from app.agents.tools.resume_tools import ensure_resume_versions_schema
+        ensure_resume_versions_schema()
+    except Exception as e:
+        logger.error("Schema bootstrap failed: %s", e, exc_info=True)
+
     # Initialize the 10-agent system
     try:
         from app.services.provider_adapters import build_default_provider_router
