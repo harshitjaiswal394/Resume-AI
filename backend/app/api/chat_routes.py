@@ -725,7 +725,7 @@ def _friendly_stream_error(exc: Exception) -> str:
         return "All AI providers are currently unavailable. Please try again later."
     if not text:
         return "AI service is currently unavailable. Please try again later."
-    return f"AI service error: {text[:300]}"
+    return "AI service is currently unavailable. Please try again later."
 
 
 def _get_latest_resume_context(user_id: str, selected_resume_id: Optional[str] = None):
