@@ -18,28 +18,33 @@ import {
   SheetTrigger
 } from '@/components/ui/sheet';
 import {
-  Sparkles,
-  Plus,
-  Trash2,
-  Save,
-  Download,
+  ArrowLeft,
+  Check,
+  Briefcase,
   ChevronLeft,
   ChevronRight,
-  User,
-  List,
-  Briefcase,
-  GraduationCap,
+  Copy,
+  Download,
   Eye,
   FileDown,
-  Wand2,
+  FileText,
+  GraduationCap,
+  List,
   Loader2,
-  Upload,
+  Lock,
   Mail,
-  Phone,
-  Copy,
-  RefreshCw,
   MoreVertical,
-  Settings
+  Phone,
+  Plus,
+  RefreshCw,
+  Save,
+  Settings,
+  Sparkles,
+  Target,
+  Trash2,
+  Upload,
+  User,
+  Wand2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
@@ -1620,56 +1625,70 @@ export default function AIResumeBuilder() {
 
   // --- Render Helpers ---
   const steps = [
-    { id: 1, name: 'Personal', icon: User },
-    { id: 2, name: 'Skills', icon: List },
-    { id: 3, name: 'Experience', icon: Briefcase },
-    { id: 4, name: 'Education', icon: GraduationCap },
-    { id: 5, name: 'Projects', icon: Wand2 },
-    { id: 6, name: 'Certifications', icon: Badge },
-    { id: 7, name: 'Languages', icon: List },
-    { id: 8, name: 'Achievements', icon: Sparkles },
-    { id: 9, name: 'Internships', icon: Briefcase }
+    { id: 1, name: 'Personal', icon: User, desc: 'Your name, contact details and a high-impact summary.' },
+    { id: 2, name: 'Skills', icon: List, desc: 'Core skills and expertise that match your target role.' },
+    { id: 3, name: 'Experience', icon: Briefcase, desc: 'Work history with achievement-driven bullet points.' },
+    { id: 4, name: 'Education', icon: GraduationCap, desc: 'Degrees, institutions and graduation years.' },
+    { id: 5, name: 'Projects', icon: Wand2, desc: 'Hands-on projects that showcase your real-world impact.' },
+    { id: 6, name: 'Certifications', icon: Badge, desc: 'Professional certifications and credentials.' },
+    { id: 7, name: 'Languages', icon: List, desc: 'Languages you speak and your proficiency level.' },
+    { id: 8, name: 'Achievements', icon: Sparkles, desc: 'Awards, recognitions and standout wins.' },
+    { id: 9, name: 'Internships', icon: Briefcase, desc: 'Internships and early-career experience.' }
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[var(--bg-surface)] lg:flex-row">
       {/* --- Left Panel: Editor --- */}
-      <div className="flex-1 flex flex-col h-full bg-white border-r border-slate-200 overflow-y-auto">
-        <header className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between bg-white/50 backdrop-blur-md sticky top-0 z-10 gap-2">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
-              <ChevronLeft className="h-5 w-5" />
+      <div className="flex h-full min-h-0 flex-1 flex-col bg-[var(--bg-base)] lg:border-r lg:border-[var(--border-soft)]">
+        <header className="sticky top-0 z-20 shrink-0 border-b border-[var(--border-soft)] bg-white/80 backdrop-blur-xl">
+          <div className="flex items-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 lg:px-8">
+            {/* Back */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.back()}
+              aria-label="Go back"
+              className="h-9 w-9 shrink-0 rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]"
+            >
+              <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-none mb-1">AI Builder</h1>
+
+            {/* Title + target role */}
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <div className="group relative flex items-center gap-2 cursor-pointer" onClick={() => {
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-500 text-white shadow-sm sm:h-8 sm:w-8">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <h1 className="truncate text-sm font-semibold leading-none tracking-tight text-[var(--text-primary)] sm:text-base">
+                  Resume Builder
+                </h1>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
                   const newRole = prompt("Enter your target role:", discovery.role);
                   if (newRole !== null) setDiscovery({ ...discovery, role: newRole });
-                }}>
-                  <p className="text-xs md:text-sm text-slate-500 font-medium truncate max-w-[100px] md:max-w-none hover:text-indigo-600 transition-colors">
-                    Target: {discovery.role || "Set Role"}
-                  </p>
-                  <Wand2 className="h-3 w-3 text-slate-300 group-hover:text-indigo-400" />
-                </div>
-                {originalScore !== null && (
-                  <Badge className="bg-green-50 text-green-600 border-green-100 font-black text-[8px] md:text-[10px] uppercase">
-                    +{currentScore - originalScore}
-                  </Badge>
-                )}
-              </div>
+                }}
+                title="Edit target role"
+                className="group mt-1.5 flex max-w-full items-center gap-1.5 sm:max-w-[300px]"
+              >
+                <Target className="h-3 w-3 shrink-0 text-brand-600" />
+                <span className="truncate text-[11px] font-medium text-[var(--text-muted)] transition-colors group-hover:text-brand-600 sm:text-xs">
+                  Target: <span className="font-semibold text-brand-600">{discovery.role || 'Set role'}</span>
+                </span>
+                <Wand2 className="h-3 w-3 shrink-0 text-[var(--text-subtle)] transition-colors group-hover:text-brand-500" />
+              </button>
             </div>
-          </div>
-          <div className="flex items-center gap-1.5 md:gap-2">
-            {/* Default vs Tailored toggle */}
-            <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
+
+            {/* Default / Tailored toggle (sm+) */}
+            <div className="hidden shrink-0 items-center rounded-full bg-[var(--bg-muted)] p-1 ring-1 ring-[var(--border-soft)] sm:flex">
               <button
                 type="button"
                 onClick={switchToDefault}
-                className={`h-8 rounded-lg px-2.5 md:px-3 text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${
+                className={`h-7 whitespace-nowrap rounded-full px-2.5 text-[11px] font-semibold transition-all sm:h-8 sm:px-3.5 sm:text-xs ${
                   activeMode === 'default'
-                    ? 'bg-white shadow-sm text-slate-900'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'bg-white text-[var(--text-primary)] shadow-sm ring-1 ring-[var(--border-soft)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 Default
@@ -1678,123 +1697,206 @@ export default function AIResumeBuilder() {
                 type="button"
                 onClick={() => loadTailoredVersion()}
                 disabled={isLoadingTailored || !resumeId}
-                className={`h-8 rounded-lg px-2.5 md:px-3 text-[10px] md:text-xs font-bold transition-all whitespace-nowrap disabled:opacity-50 ${
+                className={`h-7 whitespace-nowrap rounded-full px-2.5 text-[11px] font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:px-3.5 sm:text-xs ${
                   activeMode === 'tailored'
-                    ? 'bg-indigo-600 shadow-sm text-white'
-                    : 'text-slate-400 hover:text-indigo-600'
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-brand-600'
                 }`}
               >
-                {isLoadingTailored ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : null}
+                {isLoadingTailored && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
                 Tailored
               </button>
             </div>
 
-            {/* Desktop-only secondary buttons */}
-            <div className="hidden lg:flex items-center gap-2">
-               <Button variant="ghost" onClick={handleDeleteDraft} className="h-10 rounded-xl text-slate-300 hover:text-rose-500 px-4 transition-colors">
+            {/* Desktop secondary actions */}
+            <div className="hidden shrink-0 items-center gap-1 lg:flex">
+              <Button variant="ghost" size="icon" onClick={handleCopyForWord} title="Copy for Word" className="h-9 w-9 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-brand-600">
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleDownloadDocx} title="Export Word (.doc)" className="h-9 w-9 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-brand-600">
+                <FileDown className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleReimport} title="Restore original data" className="h-9 w-9 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-brand-600">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleDeleteDraft} title="Delete draft" className="h-9 w-9 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500">
                 <Trash2 className="h-4 w-4" />
               </Button>
-              <Button variant="outline" onClick={handleReimport} className="h-10 rounded-xl border-slate-200 px-4 text-indigo-600 hover:bg-indigo-50">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                <span className="hidden xl:inline">Import Original</span>
-              </Button>
-              <Button variant="ghost" onClick={handleCopyForWord} className="h-10 rounded-xl text-slate-500 hover:text-indigo-600 px-4 transition-colors">
-                <Copy className="h-4 w-4 mr-2" />
-                <span className="hidden xl:inline">Copy</span>
-              </Button>
-              <Button variant="outline" onClick={handleDownloadDocx} className="h-10 rounded-xl border-slate-200 px-4 text-slate-600 hover:text-slate-900">
-                <FileDown className="h-4 w-4 mr-2" />
-                <span className="hidden xl:inline">Word</span>
-              </Button>
+              <div className="mx-1 h-6 w-px bg-[var(--border-soft)]" />
             </div>
 
-            {/* Mobile Actions Menu */}
-            <div className="lg:hidden">
+            {/* Mobile actions sheet */}
+            <div className="shrink-0 lg:hidden">
               <Sheet>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full text-slate-500">
-                    <MoreVertical className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" aria-label="More actions" className="h-9 w-9 rounded-lg text-[var(--text-muted)]">
+                    <MoreVertical className="h-4 w-4" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="bottom" className="rounded-t-[24px] p-6 pb-12 space-y-4">
-                  <SheetHeader className="mb-4">
-                    <SheetTitle>Actions</SheetTitle>
+                <SheetContent side="bottom" className="rounded-t-3xl border-t-[var(--border-soft)] px-5 pb-8 pt-6">
+                  <SheetHeader className="mb-4 text-left">
+                    <SheetTitle className="text-base font-semibold text-[var(--text-primary)]">Builder actions</SheetTitle>
                   </SheetHeader>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button variant="outline" onClick={handleReimport} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
-                      <RefreshCw className="h-4 w-4 text-indigo-500" />
-                      Restore Original
-                    </Button>
-                    <Button variant="outline" onClick={handleCopyForWord} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
-                      <Copy className="h-4 w-4 text-slate-500" />
-                      Copy Content
-                    </Button>
-                    <Button variant="outline" onClick={handleDownloadDocx} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
-                      <FileDown className="h-4 w-4 text-slate-500" />
-                      Export Word
-                    </Button>
-                    <Button variant="outline" onClick={handleDeleteDraft} className="h-12 rounded-2xl justify-start gap-3 px-4 border-rose-100 text-rose-500 hover:bg-rose-50">
-                      <Trash2 className="h-4 w-4" />
-                      Delete Draft
-                    </Button>
+                  <div className="space-y-4">
+                    <div className="flex items-center rounded-xl bg-[var(--bg-muted)] p-1">
+                      <button
+                        type="button"
+                        onClick={switchToDefault}
+                        className={`h-10 flex-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeMode === 'default'
+                            ? 'bg-white text-[var(--text-primary)] shadow-sm'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        Default
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => loadTailoredVersion()}
+                        disabled={isLoadingTailored || !resumeId}
+                        className={`h-10 flex-1 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 ${
+                          activeMode === 'tailored'
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {isLoadingTailored && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
+                        Tailored
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <Button variant="outline" onClick={handleReimport} className="h-11 justify-start gap-2.5 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                        <RefreshCw className="h-4 w-4 text-brand-600" /> Restore Original
+                      </Button>
+                      <Button variant="outline" onClick={handleCopyForWord} className="h-11 justify-start gap-2.5 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                        <Copy className="h-4 w-4 text-[var(--text-subtle)]" /> Copy Content
+                      </Button>
+                      <Button variant="outline" onClick={handleDownloadDocx} className="h-11 justify-start gap-2.5 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                        <FileDown className="h-4 w-4 text-[var(--text-subtle)]" /> Export Word
+                      </Button>
+                      <Button variant="outline" onClick={handleDeleteDraft} className="h-11 justify-start gap-2.5 rounded-lg border-danger-200 text-danger-500 hover:bg-danger-50">
+                        <Trash2 className="h-4 w-4" /> Delete Draft
+                      </Button>
+                    </div>
                   </div>
                 </SheetContent>
               </Sheet>
             </div>
 
-            {/* Save Button (Compact on mobile) */}
-            <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4 shrink-0 transition-all active:scale-95">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" /> : <Save className="h-4 w-4 md:mr-2 text-indigo-600" />}
-              <span className="hidden sm:inline">Save</span>
+            {/* Save */}
+            <Button
+              variant="outline"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="h-9 shrink-0 rounded-lg border-[var(--border-soft)] px-2.5 font-medium text-[var(--text-muted)] hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600 sm:h-10 sm:px-4"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" /> : <Save className="h-4 w-4 text-brand-600" />}
+              <span className="ml-1.5 hidden md:inline">Save</span>
             </Button>
 
-            {/* View/Download PDF (Primary) */}
-            <Button onClick={handleDownloadPDF} className="h-9 md:h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 px-3 md:px-4 shrink-0 ml-1">
-              <Download className="h-4 w-4 md:mr-2" />
-              <span className="hidden sm:inline font-bold">PDF</span>
+            {/* Download PDF */}
+            <Button
+              onClick={handleDownloadPDF}
+              className="h-9 shrink-0 rounded-lg bg-brand-600 px-2.5 text-white shadow-sm hover:bg-brand-800 active:scale-[0.98] sm:h-10 sm:px-4"
+            >
+              <Download className="h-4 w-4" />
+              <span className="ml-1.5 hidden font-semibold md:inline">PDF</span>
             </Button>
           </div>
         </header>
-        <div className="px-4 md:px-12 py-4 md:py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4 overflow-hidden">
-          <div className="flex-1 w-full flex flex-col gap-4">
-            <div className="flex items-center overflow-x-auto no-scrollbar gap-4 md:gap-8 pb-1 md:pb-0">
-              {(steps || []).map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setStep(s.id)}
-                  className={`flex items-center gap-2 pb-3 border-b-2 transition-all whitespace-nowrap px-1 ${
-                    step === s.id ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  <div className={`p-1.5 rounded-lg ${step === s.id ? 'bg-indigo-50' : 'bg-transparent'}`}>
-                    <s.icon className={`h-4 w-4 ${step === s.id ? 'text-indigo-600' : 'text-slate-400'}`} />
-                  </div>
-                  <span className="text-xs md:text-sm">{s.name}</span>
-                </button>
-              ))}
+        <div className="shrink-0 border-b border-[var(--border-soft)] bg-white/60 px-3 py-2.5 backdrop-blur sm:px-5 sm:py-3 lg:px-8">
+          <div className="flex items-stretch gap-4 sm:gap-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-0.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {steps.map((s) => {
+                  const isActive = step === s.id;
+                  const isDone = s.id < step;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setStep(s.id)}
+                      aria-current={isActive ? 'step' : undefined}
+                      className={`group flex items-center gap-1.5 whitespace-nowrap rounded-full px-1.5 py-1.5 transition-all sm:gap-2 sm:px-2.5 ${
+                        isActive ? 'bg-brand-50' : 'hover:bg-[var(--bg-muted)]'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition-all sm:h-7 sm:w-7 sm:text-xs ${
+                          isDone
+                            ? 'bg-brand-600 text-white'
+                            : isActive
+                              ? 'bg-brand-600 text-white shadow-[0_0_0_3px_rgba(24,95,165,0.15)]'
+                              : 'bg-[var(--bg-muted)] text-[var(--text-subtle)]'
+                        }`}
+                      >
+                        {isDone ? <Check className="h-3.5 w-3.5" /> : <s.icon className="h-3.5 w-3.5" />}
+                      </span>
+                      <span
+                        className={`text-[11px] font-semibold sm:text-xs ${
+                          isActive ? 'text-brand-700' : isDone ? 'text-[var(--text-primary)]' : 'text-[var(--text-subtle)]'
+                        }`}
+                      >
+                        {s.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex items-center gap-3">
+                <Progress value={(step / steps.length) * 100} className="h-1.5 flex-1" />
+                <span className="shrink-0 text-[10px] font-bold tabular-nums text-[var(--text-subtle)]">
+                  {step} of {steps.length}
+                </span>
+              </div>
             </div>
-            <Progress value={(step / steps.length) * 100} className="h-1 bg-slate-200" />
-          </div>
 
-          {originalScore !== null && (
-            <div className="hidden sm:flex ml-4 md:ml-12 pl-4 md:pl-12 border-l border-slate-200 items-center gap-3 md:gap-6">
-              <div className="text-center">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Initial Score</p>
-                <p className="text-xl font-black text-slate-400">{originalScore}</p>
+            {originalScore !== null && (
+              <div className="hidden shrink-0 items-center gap-3 border-l border-[var(--border-soft)] pl-4 md:flex sm:pl-6">
+                <div className="text-right">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-subtle)]">Initial</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--text-subtle)]">{originalScore}</p>
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-50 to-brand-100 text-brand-600">
+                  <ChevronRight className="h-4 w-4" />
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-accent-700">Optimized</p>
+                  <p className="flex items-center gap-1.5 text-base font-bold tabular-nums text-brand-700">
+                    {currentScore || 85}
+                    {currentScore > originalScore && (
+                      <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-bold text-accent-700">
+                        +{currentScore - originalScore}
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
-              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-                <ChevronRight className="h-5 w-5" />
-              </div>
-              <div className="text-center">
-                <p className="text-[10px] font-black text-green-600 uppercase tracking-tighter">Optimized</p>
-                <p className="text-2xl font-black text-indigo-600">{currentScore || 85}</p>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        <ScrollArea className="flex-1 p-4 md:p-8 lg:p-12">
-          <div className="max-w-2xl mx-auto">
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+            {(() => {
+              const s = steps.find((x) => x.id === step);
+              if (!s) return null;
+              return (
+                <div className="mb-6 sm:mb-8">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-500 text-white shadow-sm sm:h-11 sm:w-11">
+                      <s.icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-semibold leading-tight tracking-tight text-[var(--text-primary)] sm:text-xl">
+                        {s.name}
+                      </h2>
+                      <p className="mt-0.5 text-xs text-[var(--text-muted)] sm:text-sm">{s.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <AnimatePresence mode="wait">
               {step === 1 && (
                 <motion.div
@@ -1802,37 +1904,50 @@ export default function AIResumeBuilder() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
+                  className="space-y-5 sm:space-y-6"
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">Full Name</label>
-                      <Input value={data.fullName} onChange={(e) => setData({ ...data, fullName: e.target.value })} placeholder="Jane Doe" className="h-12 rounded-xl" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Full Name</label>
+                      <Input
+                        value={data.fullName}
+                        onChange={(e) => setData({ ...data, fullName: e.target.value })}
+                        placeholder="Jane Doe"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">Email Address</label>
-                      <Input value={data.email} onChange={(e) => setData({ ...data, email: e.target.value })} placeholder="jane@example.com" className="h-12 rounded-xl" />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Email Address</label>
+                      <Input
+                        type="email"
+                        value={data.email}
+                        onChange={(e) => setData({ ...data, email: e.target.value })}
+                        placeholder="jane@example.com"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">Phone Number</label>
-                      <Input value={data.phone} onChange={(e) => setData({ ...data, phone: e.target.value })} placeholder="+1 234 567 890" className="h-12 rounded-xl" />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Phone Number</label>
+                      <Input
+                        type="tel"
+                        value={data.phone}
+                        onChange={(e) => setData({ ...data, phone: e.target.value })}
+                        placeholder="+1 234 567 890"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold text-slate-700">Professional Summary</label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={handleGenerateSummary} 
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Professional Summary</label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateSummary}
                         disabled={isOptimizing}
-                        className="text-indigo-600 hover:text-indigo-700 h-8 gap-1 p-1 disabled:opacity-50"
+                        className="h-8 gap-1.5 rounded-lg border-brand-200 bg-brand-50 px-3 font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50"
                       >
-                        {isOptimizing ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Wand2 className="h-3 w-3" />
-                        )}
+                        {isOptimizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
                         {isOptimizing ? 'Generating...' : 'AI Generate'}
                       </Button>
                     </div>
@@ -1840,21 +1955,21 @@ export default function AIResumeBuilder() {
                       value={data.summary}
                       onChange={(e) => setData({ ...data, summary: e.target.value })}
                       placeholder="High-impact 3-sentence summary..."
-                      className="min-h-[120px] rounded-xl resize-none"
+                      className="min-h-[120px] rounded-lg border-[var(--border-soft)] resize-none focus-visible:border-brand-300 focus-visible:ring-brand-500/30"
                     />
                   </div>
                 </motion.div>
               )}
 
               {step === 2 && (
-                <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                  <div className="space-y-4">
-                    <label className="text-sm font-semibold text-slate-700">Skills & Expertise</label>
+                <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium text-[var(--text-primary)]">Skills & Expertise</label>
                     <div className="flex gap-2">
                       <Input
                         id="skill-input"
                         placeholder="e.g. React, Python, Product Management"
-                        className="h-12 rounded-xl"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             const val = (e.target as HTMLInputElement).value;
@@ -1865,21 +1980,34 @@ export default function AIResumeBuilder() {
                           }
                         }}
                       />
-                      <Button onClick={() => {
-                        const el = document.getElementById('skill-input') as HTMLInputElement;
-                        if (el.value) {
-                          setData({ ...data, skills: [...data.skills, el.value] });
-                          el.value = '';
-                        }
-                      }} className="h-12 px-6 rounded-xl bg-slate-900">Add</Button>
+                      <Button
+                        onClick={() => {
+                          const el = document.getElementById('skill-input') as HTMLInputElement;
+                          if (el.value) {
+                            setData({ ...data, skills: [...data.skills, el.value] });
+                            el.value = '';
+                          }
+                        }}
+                        className="h-11 rounded-lg bg-brand-600 px-6 font-semibold hover:bg-brand-800 sm:h-12"
+                      >
+                        Add
+                      </Button>
                     </div>
-                    <div className="flex flex-wrap gap-2 pt-2">
+                    <p className="text-xs text-[var(--text-subtle)]">Press Enter to add a skill as a tag.</p>
+                    <div className="flex flex-wrap gap-2 pt-1">
                       {(data.skills || []).map((s, i) => (
-                        <div key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold flex items-center gap-2 border border-indigo-100">
+                        <div key={i} className="group flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 transition-colors hover:border-brand-200">
                           {s}
-                          <button onClick={() => {
-                            const newSkills = [...data.skills]; newSkills.splice(i, 1); setData({ ...data, skills: newSkills });
-                          }}><Trash2 className="h-3 w-3" /></button>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${s}`}
+                            onClick={() => {
+                              const newSkills = [...data.skills]; newSkills.splice(i, 1); setData({ ...data, skills: newSkills });
+                            }}
+                            className="text-brand-300 transition-colors hover:text-danger-500"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1888,26 +2016,50 @@ export default function AIResumeBuilder() {
               )}
 
               {step === 3 && (
-                <motion.div key="step3" className="space-y-8">
+                <motion.div key="step3" className="space-y-5 sm:space-y-6">
                   {(data.experience || []).map((exp, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <CardContent className="p-6 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Job Title" value={exp.title} onChange={(e) => {
-                            const newExp = [...data.experience]; newExp[idx].title = e.target.value; setData({ ...data, experience: newExp });
-                          }} className="h-10 border-none bg-slate-50 font-bold" />
-                          <Input placeholder="Company" value={exp.company} onChange={(e) => {
-                            const newExp = [...data.experience]; newExp[idx].company = e.target.value; setData({ ...data, experience: newExp });
-                          }} className="h-10 border-none bg-slate-50" />
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)]">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove work experience"
+                        onClick={() => {
+                          const newExp = [...data.experience];
+                          newExp.splice(idx, 1);
+                          setData({ ...data, experience: newExp });
+                        }}
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Job Title"
+                            value={exp.title}
+                            onChange={(e) => {
+                              const newExp = [...data.experience]; newExp[idx].title = e.target.value; setData({ ...data, experience: newExp });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 font-semibold focus-visible:border-brand-300 sm:h-11"
+                          />
+                          <Input
+                            placeholder="Company"
+                            value={exp.company}
+                            onChange={(e) => {
+                              const newExp = [...data.experience]; newExp[idx].company = e.target.value; setData({ ...data, experience: newExp });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-brand-300 sm:h-11"
+                          />
                         </div>
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-slate-400 uppercase">Key Achievements</label>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
+                          <label className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-subtle)]">Key Achievements</label>
                           <Button
                             onClick={() => handleOptimizeExperience(idx)}
-                            variant="outline" size="sm"
-                            className="h-8 rounded-lg border-indigo-100 text-indigo-600 hover:bg-indigo-50 font-bold"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg border-brand-200 bg-brand-50 font-semibold text-brand-700 hover:bg-brand-100"
                           >
-                            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                             Optimize Bullet Points
                           </Button>
                         </div>
@@ -1918,45 +2070,61 @@ export default function AIResumeBuilder() {
                               onChange={(e) => {
                                 const newExp = [...data.experience]; newExp[idx].description[bIdx] = e.target.value; setData({ ...data, experience: newExp });
                               }}
-                              className="min-h-[60px] text-sm border-none focus-visible:ring-0 p-0 shadow-none"
+                              className="min-h-[60px] rounded-lg border-[var(--border-soft)] text-sm focus-visible:border-brand-300 focus-visible:ring-brand-500/30"
                             />
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Enhance with AI"
                               onClick={() => handleEnhanceBullet(idx, bIdx)}
-                              className="h-8 w-8 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              className="h-8 w-8 shrink-0 rounded-lg text-brand-500 hover:bg-brand-50 hover:text-brand-600"
                             >
                               <Wand2 className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => {
-                              const newExp = [...data.experience]; newExp[idx].description.splice(bIdx, 1); setData({ ...data, experience: newExp });
-                            }} className="h-8 w-8 text-slate-300 hover:text-red-500">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Remove bullet"
+                              onClick={() => {
+                                const newExp = [...data.experience]; newExp[idx].description.splice(bIdx, 1); setData({ ...data, experience: newExp });
+                              }}
+                              className="h-8 w-8 shrink-0 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500"
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         ))}
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          const newExp = [...data.experience]; newExp[idx].description.push(''); setData({ ...data, experience: newExp });
-                        }} className="w-full border-dashed border-slate-200 hover:bg-slate-50 text-slate-400 h-8 rounded-lg">
-                          <Plus className="h-3 w-3 mr-1" /> Add Bullet
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newExp = [...data.experience]; newExp[idx].description.push(''); setData({ ...data, experience: newExp });
+                          }}
+                          className="h-8 w-full rounded-lg border border-dashed border-[var(--border-soft)] text-[var(--text-muted)] hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600"
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" /> Add Bullet
                         </Button>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, experience: [...data.experience, { title: '', company: '', duration: '', description: [''] }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add New Work Experience
+                  <Button
+                    onClick={() => setData({ ...data, experience: [...data.experience, { title: '', company: '', duration: '', description: [''] }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add New Work Experience
                   </Button>
                 </motion.div>
               )}
 
               {step === 4 && (
-                <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+                <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.education || []).map((edu, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute top-4 right-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-10"
+                        aria-label="Remove education"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] transition-all hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:group-hover:opacity-100"
                         onClick={() => {
                           const newEdu = [...data.education];
                           newEdu.splice(idx, 1);
@@ -1965,214 +2133,380 @@ export default function AIResumeBuilder() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <Input placeholder="Degree (e.g. BS Computer Science)" value={edu.degree} onChange={(e) => {
-                          const newEdu = [...data.education]; newEdu[idx].degree = e.target.value; setData({ ...data, education: newEdu });
-                        }} className="h-12 rounded-xl" />
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Institution" value={edu.institution} onChange={(e) => {
-                            const newEdu = [...data.education]; newEdu[idx].institution = e.target.value; setData({ ...data, education: newEdu });
-                          }} className="h-10 border-none bg-slate-50" />
-                          <Input placeholder="Year" value={edu.year} onChange={(e) => {
-                            const newEdu = [...data.education]; newEdu[idx].year = e.target.value; setData({ ...data, education: newEdu });
-                          }} className="h-10 border-none bg-slate-50" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Input
+                          placeholder="Degree (e.g. BS Computer Science)"
+                          value={edu.degree}
+                          onChange={(e) => {
+                            const newEdu = [...data.education]; newEdu[idx].degree = e.target.value; setData({ ...data, education: newEdu });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
+                        />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Institution"
+                            value={edu.institution}
+                            onChange={(e) => {
+                              const newEdu = [...data.education]; newEdu[idx].institution = e.target.value; setData({ ...data, education: newEdu });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-brand-300"
+                          />
+                          <Input
+                            placeholder="Year"
+                            value={edu.year}
+                            onChange={(e) => {
+                              const newEdu = [...data.education]; newEdu[idx].year = e.target.value; setData({ ...data, education: newEdu });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-brand-300"
+                          />
                         </div>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, education: [...data.education, { degree: '', institution: '', year: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Education
+                  <Button
+                    onClick={() => setData({ ...data, education: [...data.education, { degree: '', institution: '', year: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Education
                   </Button>
                 </motion.div>
               )}
 
               {step === 5 && (
-                <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.projects || []).map((proj, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newProj = [...data.projects]; newProj.splice(idx, 1); setData({ ...data, projects: newProj });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove project"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newProj = [...data.projects]; newProj.splice(idx, 1); setData({ ...data, projects: newProj });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <Input placeholder="Project Title" value={proj.title} onChange={(e) => {
-                          const newProj = [...data.projects]; newProj[idx].title = e.target.value; setData({ ...data, projects: newProj });
-                        }} className="h-12 rounded-xl font-bold" />
-                        <Input placeholder="Link (Optional)" value={proj.link} onChange={(e) => {
-                          const newProj = [...data.projects]; newProj[idx].link = e.target.value; setData({ ...data, projects: newProj });
-                        }} className="h-10 border-none bg-slate-50" />
-                        <Textarea placeholder="Brief description of your impact..." value={proj.description} onChange={(e) => {
-                          const newProj = [...data.projects]; newProj[idx].description = e.target.value; setData({ ...data, projects: newProj });
-                        }} className="min-h-[100px] rounded-xl resize-none" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Input
+                          placeholder="Project Title"
+                          value={proj.title}
+                          onChange={(e) => {
+                            const newProj = [...data.projects]; newProj[idx].title = e.target.value; setData({ ...data, projects: newProj });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
+                        />
+                        <Input
+                          placeholder="Link (Optional)"
+                          value={proj.link}
+                          onChange={(e) => {
+                            const newProj = [...data.projects]; newProj[idx].link = e.target.value; setData({ ...data, projects: newProj });
+                          }}
+                          className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 text-brand-700 focus-visible:border-brand-300"
+                        />
+                        <Textarea
+                          placeholder="Brief description of your impact..."
+                          value={proj.description}
+                          onChange={(e) => {
+                            const newProj = [...data.projects]; newProj[idx].description = e.target.value; setData({ ...data, projects: newProj });
+                          }}
+                          className="min-h-[100px] rounded-lg border-[var(--border-soft)] resize-none focus-visible:border-brand-300 focus-visible:ring-brand-500/30"
+                        />
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, projects: [...data.projects, { title: '', description: '', link: '', tech_stack: [] }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Project
+                  <Button
+                    onClick={() => setData({ ...data, projects: [...data.projects, { title: '', description: '', link: '', tech_stack: [] }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Project
                   </Button>
                 </motion.div>
               )}
 
               {step === 6 && (
-                <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.certifications || []).map((cert, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newCerts = [...data.certifications]; newCerts.splice(idx, 1); setData({ ...data, certifications: newCerts });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove certification"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newCerts = [...data.certifications]; newCerts.splice(idx, 1); setData({ ...data, certifications: newCerts });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <Input placeholder="Certification Name" value={cert.name} onChange={(e) => {
-                          const newCerts = [...data.certifications]; newCerts[idx].name = e.target.value; setData({ ...data, certifications: newCerts });
-                        }} className="h-12 rounded-xl font-bold" />
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Issuer" value={cert.issuer} onChange={(e) => {
-                            const newCerts = [...data.certifications]; newCerts[idx].issuer = e.target.value; setData({ ...data, certifications: newCerts });
-                          }} className="h-10 border-none bg-slate-50" />
-                          <Input placeholder="Year" value={cert.year} onChange={(e) => {
-                            const newCerts = [...data.certifications]; newCerts[idx].year = e.target.value; setData({ ...data, certifications: newCerts });
-                          }} className="h-10 border-none bg-slate-50" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Input
+                          placeholder="Certification Name"
+                          value={cert.name}
+                          onChange={(e) => {
+                            const newCerts = [...data.certifications]; newCerts[idx].name = e.target.value; setData({ ...data, certifications: newCerts });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
+                        />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Issuer"
+                            value={cert.issuer}
+                            onChange={(e) => {
+                              const newCerts = [...data.certifications]; newCerts[idx].issuer = e.target.value; setData({ ...data, certifications: newCerts });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-brand-300"
+                          />
+                          <Input
+                            placeholder="Year"
+                            value={cert.year}
+                            onChange={(e) => {
+                              const newCerts = [...data.certifications]; newCerts[idx].year = e.target.value; setData({ ...data, certifications: newCerts });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-brand-300"
+                          />
                         </div>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, certifications: [...data.certifications, { name: '', issuer: '', year: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Certification
+                  <Button
+                    onClick={() => setData({ ...data, certifications: [...data.certifications, { name: '', issuer: '', year: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Certification
                   </Button>
                 </motion.div>
               )}
 
               {step === 7 && (
-                <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                     {(data.languages || []).map((lang, idx) => (
-                      <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                        <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-slate-300 hover:text-red-500" onClick={() => {
-                          const newLangs = [...data.languages]; newLangs.splice(idx, 1); setData({ ...data, languages: newLangs });
-                        }}>
-                          <Trash2 className="h-4 w-4" />
+                      <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remove language"
+                          className="absolute right-2 top-2 z-10 h-7 w-7 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                          onClick={() => {
+                            const newLangs = [...data.languages]; newLangs.splice(idx, 1); setData({ ...data, languages: newLangs });
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        <CardContent className="p-4 space-y-2">
-                          <Input placeholder="Language" value={lang.language} onChange={(e) => {
-                            const newLangs = [...data.languages]; newLangs[idx].language = e.target.value; setData({ ...data, languages: newLangs });
-                          }} className="h-10 rounded-lg font-bold" />
-                          <Input placeholder="Proficiency (e.g. Native)" value={lang.proficiency} onChange={(e) => {
-                            const newLangs = [...data.languages]; newLangs[idx].proficiency = e.target.value; setData({ ...data, languages: newLangs });
-                          }} className="h-8 border-none bg-slate-50 text-xs" />
+                        <CardContent className="space-y-2 p-3.5 sm:p-4">
+                          <Input
+                            placeholder="Language"
+                            value={lang.language}
+                            onChange={(e) => {
+                              const newLangs = [...data.languages]; newLangs[idx].language = e.target.value; setData({ ...data, languages: newLangs });
+                            }}
+                            className="h-10 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-brand-300 focus-visible:ring-brand-500/30"
+                          />
+                          <Input
+                            placeholder="Proficiency (e.g. Native)"
+                            value={lang.proficiency}
+                            onChange={(e) => {
+                              const newLangs = [...data.languages]; newLangs[idx].proficiency = e.target.value; setData({ ...data, languages: newLangs });
+                            }}
+                            className="h-9 rounded-lg border-transparent bg-[var(--bg-muted)]/70 text-xs focus-visible:border-brand-300"
+                          />
                         </CardContent>
                       </Card>
                     ))}
                   </div>
-                  <Button onClick={() => setData({ ...data, languages: [...data.languages, { language: '', proficiency: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Language
+                  <Button
+                    onClick={() => setData({ ...data, languages: [...data.languages, { language: '', proficiency: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Language
                   </Button>
                 </motion.div>
               )}
 
               {step === 8 && (
-                <motion.div key="step8" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                <motion.div key="step8" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.achievements || []).map((ach, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newAch = [...data.achievements]; newAch.splice(idx, 1); setData({ ...data, achievements: newAch });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove achievement"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newAch = [...data.achievements]; newAch.splice(idx, 1); setData({ ...data, achievements: newAch });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-2">
-                        <Input placeholder="Title (e.g. Hackathon Winner)" value={ach.title} onChange={(e) => {
-                          const newAch = [...data.achievements]; newAch[idx].title = e.target.value; setData({ ...data, achievements: newAch });
-                        }} className="h-12 rounded-xl font-bold" />
-                        <Textarea placeholder="Describe the accomplishment..." value={ach.description} onChange={(e) => {
-                          const newAch = [...data.achievements]; newAch[idx].description = e.target.value; setData({ ...data, achievements: newAch });
-                        }} className="min-h-[80px] rounded-xl resize-none" />
+                      <CardContent className="space-y-3 p-4 sm:p-5">
+                        <Input
+                          placeholder="Title (e.g. Hackathon Winner)"
+                          value={ach.title}
+                          onChange={(e) => {
+                            const newAch = [...data.achievements]; newAch[idx].title = e.target.value; setData({ ...data, achievements: newAch });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-brand-300 focus-visible:ring-brand-500/30 sm:h-12"
+                        />
+                        <Textarea
+                          placeholder="Describe the accomplishment..."
+                          value={ach.description}
+                          onChange={(e) => {
+                            const newAch = [...data.achievements]; newAch[idx].description = e.target.value; setData({ ...data, achievements: newAch });
+                          }}
+                          className="min-h-[80px] rounded-lg border-[var(--border-soft)] resize-none focus-visible:border-brand-300 focus-visible:ring-brand-500/30"
+                        />
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, achievements: [...data.achievements, { title: '', description: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Achievement
+                  <Button
+                    onClick={() => setData({ ...data, achievements: [...data.achievements, { title: '', description: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Achievement
                   </Button>
                 </motion.div>
               )}
 
               {step === 9 && (
-                <motion.div key="step9" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+                <motion.div key="step9" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.internships || []).map((intern, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newIntern = [...data.internships]; newIntern.splice(idx, 1); setData({ ...data, internships: newIntern });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove internship"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newIntern = [...data.internships]; newIntern.splice(idx, 1); setData({ ...data, internships: newIntern });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Role" value={intern.role} onChange={(e) => {
-                            const newInt = [...data.internships]; newInt[idx].role = e.target.value; setData({ ...data, internships: newInt });
-                          }} className="h-10 border-none bg-slate-50 font-bold" />
-                          <Input placeholder="Company" value={intern.company} onChange={(e) => {
-                            const newInt = [...data.internships]; newInt[idx].company = e.target.value; setData({ ...data, internships: newInt });
-                          }} className="h-10 border-none bg-slate-50" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Role"
+                            value={intern.role}
+                            onChange={(e) => {
+                              const newInt = [...data.internships]; newInt[idx].role = e.target.value; setData({ ...data, internships: newInt });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 font-semibold focus-visible:border-brand-300 sm:h-11"
+                          />
+                          <Input
+                            placeholder="Company"
+                            value={intern.company}
+                            onChange={(e) => {
+                              const newInt = [...data.internships]; newInt[idx].company = e.target.value; setData({ ...data, internships: newInt });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-brand-300 sm:h-11"
+                          />
                         </div>
                         {(intern.description || []).map((bullet, bIdx) => (
                           <div key={bIdx} className="flex gap-2">
-                            <Textarea value={bullet} onChange={(e) => {
-                              const newInt = [...data.internships]; newInt[idx].description[bIdx] = e.target.value; setData({ ...data, internships: newInt });
-                            }} className="min-h-[60px] text-sm border-none focus-visible:ring-0 p-0 shadow-none" />
-                            <Button variant="ghost" size="icon" onClick={() => {
-                              const newInt = [...data.internships]; newInt[idx].description.splice(bIdx, 1); setData({ ...data, internships: newInt });
-                            }}><Trash2 className="h-4 w-4" /></Button>
+                            <Textarea
+                              value={bullet}
+                              onChange={(e) => {
+                                const newInt = [...data.internships]; newInt[idx].description[bIdx] = e.target.value; setData({ ...data, internships: newInt });
+                              }}
+                              className="min-h-[60px] rounded-lg border-[var(--border-soft)] text-sm focus-visible:border-brand-300 focus-visible:ring-brand-500/30"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Remove bullet"
+                              onClick={() => {
+                                const newInt = [...data.internships]; newInt[idx].description.splice(bIdx, 1); setData({ ...data, internships: newInt });
+                              }}
+                              className="h-8 w-8 shrink-0 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         ))}
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          const newInt = [...data.internships]; newInt[idx].description.push(''); setData({ ...data, internships: newInt });
-                        }} className="w-full border-dashed border-slate-200 text-slate-400">Add Bullet</Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newInt = [...data.internships]; newInt[idx].description.push(''); setData({ ...data, internships: newInt });
+                          }}
+                          className="h-8 w-full rounded-lg border border-dashed border-[var(--border-soft)] text-[var(--text-muted)] hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600"
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" /> Add Bullet
+                        </Button>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, internships: [...data.internships, { role: '', company: '', duration: '', description: [''] }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Internship
+                  <Button
+                    onClick={() => setData({ ...data, internships: [...data.internships, { role: '', company: '', duration: '', description: [''] }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Internship
                   </Button>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <div className="mt-12 flex items-center justify-between gap-4">
+            <div className="mt-8 flex items-center justify-between gap-3 sm:mt-10">
               <Button
                 variant="outline"
                 disabled={step === 1}
                 onClick={() => setStep(step - 1)}
-                className="flex-1 h-12 rounded-xl border-slate-200 font-bold"
+                className="h-11 flex-1 rounded-lg border-[var(--border-soft)] font-medium text-[var(--text-muted)] hover:border-brand-300 hover:text-brand-600 sm:h-12"
               >
-                Previous Section
+                <ChevronLeft className="mr-1.5 h-4 w-4" />
+                Previous
               </Button>
               <Button
                 disabled={step === steps.length}
                 onClick={() => setStep(step + 1)}
-                className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 font-bold text-white shadow-lg"
+                className="h-11 flex-1 rounded-lg bg-brand-600 font-semibold text-white shadow-sm hover:bg-brand-800 sm:h-12"
               >
                 Next Section
-                <ChevronRight className="ml-2 h-5 w-5" />
+                <ChevronRight className="ml-1.5 h-4 w-4" />
               </Button>
             </div>
+
+            <p className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-[var(--text-subtle)]">
+              <Lock className="h-3 w-3" /> Your draft is auto-saved and encrypted locally.
+            </p>
           </div>
         </ScrollArea>
       </div>
 
       {/* --- Right Panel: Live Preview (Desktop) --- */}
-      <div className="hidden lg:flex flex-1 bg-slate-200/50 p-8 lg:p-12 justify-center overflow-y-auto overflow-x-hidden relative">
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
-          <Badge variant="outline" className="bg-white/80 backdrop-blur-md px-3 py-1 font-bold text-indigo-600 border-indigo-100 shadow-sm">
-            <Sparkles className="h-3 w-3 mr-1.5" />
-            ATS Optimized
-          </Badge>
-          <div className="bg-white h-8 w-24 rounded-lg shadow-sm border border-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400 gap-2">
-            A4 PAPER
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+      <div className="hidden min-h-0 flex-1 flex-col bg-[var(--bg-surface)] lg:flex">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-soft)] bg-white/70 px-4 py-2.5 backdrop-blur sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Eye className="h-4 w-4 shrink-0 text-brand-600" />
+            <span className="truncate text-sm font-semibold text-[var(--text-primary)]">Live Preview</span>
+            <Badge variant="info" className="hidden shrink-0 md:inline-flex">
+              <Sparkles className="h-3 w-3" /> ATS Optimized
+            </Badge>
+            <span className="hidden shrink-0 items-center gap-1.5 text-[10px] font-bold tracking-widest text-[var(--text-subtle)] xl:inline-flex">
+              A4 PAPER <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={handleCopyForWord} title="Copy for Word" className="h-8 rounded-lg px-2.5 text-[var(--text-muted)] hover:text-brand-600">
+              <Copy className="h-3.5 w-3.5" /> <span className="hidden 2xl:inline">Copy</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleDownloadDocx} title="Export Word (.doc)" className="h-8 rounded-lg px-2.5 text-[var(--text-muted)] hover:text-brand-600">
+              <FileDown className="h-3.5 w-3.5" /> <span className="hidden 2xl:inline">Word</span>
+            </Button>
+            <Button size="sm" onClick={handleDownloadPDF} className="h-8 rounded-lg bg-brand-600 px-3 font-semibold text-white shadow-sm hover:bg-brand-800">
+              <Download className="h-3.5 w-3.5" /> <span className="hidden 2xl:inline">PDF</span>
+            </Button>
           </div>
         </div>
 
-        <Reorder.Group
+        <div className="relative flex min-h-0 flex-1 justify-center overflow-auto p-6 lg:p-8 xl:p-10">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundImage: 'radial-gradient(circle, rgba(15,23,42,0.07) 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+          />
+          <Reorder.Group
           as="div"
           axis="y"
           values={data.sectionOrder}
@@ -2206,59 +2540,59 @@ export default function AIResumeBuilder() {
           <div className="p-8 md:p-12 border-t border-slate-50 text-center shrink-0">
             <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
           </div>
-        </Reorder.Group>
+          </Reorder.Group>
+        </div>
       </div>
 
       {/* --- Mobile: Live Preview Floating Toggle & Sheet --- */}
-      <div className="lg:hidden fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-5 right-5 z-50 lg:hidden">
         <Sheet open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
           <SheetTrigger asChild>
-            <Button variant="default" size="icon" className="h-14 w-14 rounded-full bg-indigo-600 shadow-2xl shadow-indigo-200">
+            <Button
+              variant="default"
+              size="icon"
+              aria-label="Open live preview"
+              className="h-14 w-14 rounded-full bg-gradient-to-br from-brand-600 to-brand-500 text-white shadow-[0_12px_30px_rgba(24,95,165,0.4)] active:scale-95"
+            >
               <Eye className="h-6 w-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[90vh] p-0 border-none rounded-t-[32px] overflow-y-auto">
-            <SheetHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white shrink-0">
-              <div>
-                <SheetTitle className="text-xl font-black">Live Preview</SheetTitle>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ATS Optimized Analysis</p>
+          <SheetContent side="bottom" className="h-[90vh] overflow-y-auto rounded-t-[28px] border-none p-0">
+            <SheetHeader className="flex shrink-0 flex-row items-center justify-between gap-3 border-b border-[var(--border-soft)] bg-white px-4 py-3.5 sm:px-5">
+              <div className="flex min-w-0 items-center gap-2">
+                <Eye className="h-4 w-4 shrink-0 text-brand-600" />
+                <SheetTitle className="truncate text-base font-semibold text-[var(--text-primary)]">Live Preview</SheetTitle>
+                <Badge variant="info" className="hidden shrink-0 sm:inline-flex">
+                  <Sparkles className="h-3 w-3" /> ATS
+                </Badge>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={handleCopyForWord} variant="ghost" size="sm" className="rounded-xl text-slate-400">
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button onClick={handleCopyForWord} variant="ghost" size="icon" aria-label="Copy for Word" className="h-9 w-9 rounded-lg text-[var(--text-muted)]">
                   <Copy className="h-4 w-4" />
                 </Button>
-                <Button onClick={handleDownloadDocx} variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-600 font-bold">
-                  <FileDown className="h-4 w-4 mr-2" /> Word
+                <Button onClick={handleDownloadDocx} variant="outline" size="sm" className="h-9 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                  <FileDown className="mr-1.5 h-4 w-4" /> Word
                 </Button>
-                <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="rounded-xl border-indigo-100 text-indigo-600 font-bold">
-                  <Download className="h-4 w-4 mr-2" /> PDF
+                <Button onClick={handleDownloadPDF} size="sm" className="h-9 rounded-lg bg-brand-600 font-semibold text-white hover:bg-brand-800">
+                  <Download className="mr-1.5 h-4 w-4" /> PDF
                 </Button>
               </div>
             </SheetHeader>
-            <div className="flex-1 bg-slate-100/50 p-4 flex justify-center pb-32">
+            <div className="flex justify-center bg-[var(--bg-surface)] p-4 pb-32">
               {/* Scaled Preview for Mobile Sheet */}
-              <div className="bg-white shadow-2xl w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.4] sm:scale-[0.6] flex flex-col font-sans" ref={previewRef}>
-                {/* We reuse the same content as desktop preview here or refactor it. 
-                       For now, since it uses a ref, it will visually match if we put the same content. 
-                       Actually, the ref should be on the visible one or shared. 
-                       Alternative: use a shared component ResumePreview. 
-                   */}
-                {/* Restoring the content inside the sheet for mobile view */}
-                <div className="h-2 bg-indigo-600 w-full" />
-                <div className="p-16 pb-12 space-y-4">
-                  <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
-                  <div className="flex items-center gap-4 text-slate-500 text-xs font-bold tracking-widest uppercase">
+              <div className="h-fit w-[210mm] min-h-[297mm] origin-top scale-[0.4] flex flex-col bg-white font-sans shadow-2xl sm:scale-[0.55]">
+                <div className="h-2 w-full bg-indigo-600" />
+                <div className="space-y-4 p-16 pb-12">
+                  <h2 className="text-5xl font-black uppercase leading-none tracking-tighter text-slate-900">{data.fullName || "Your Name"}</h2>
+                  <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
                     {data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-indigo-600" /> {data.email}</span>}
                     {data.phone && <span className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-indigo-600" /> {data.phone}</span>}
                   </div>
-                  <div className="h-px bg-slate-100 w-24 !mt-6" />
+                  <div className="h-px w-24 !mt-6 bg-slate-100" />
                 </div>
-                {/* ... Simplified version for mobile preview toggle ... */}
-                <div className="px-16 pb-16 space-y-10 flex-1">
+                <div className="flex-1 space-y-10 px-16 pb-16">
                   {(data.sectionOrder || []).map((sectionId) => (
-                    <div key={sectionId}>
-                      {renderResumeSection(sectionId)}
-                    </div>
+                    <div key={sectionId}>{renderResumeSection(sectionId)}</div>
                   ))}
                 </div>
               </div>
