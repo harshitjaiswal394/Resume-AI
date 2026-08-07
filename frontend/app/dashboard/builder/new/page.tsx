@@ -44,6 +44,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/lib/supabase';
+import { secureGet, secureSet } from '@/lib/secureStorage';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -307,10 +308,12 @@ export default function AIResumeBuilder() {
       // PHASE 3: Browser Cache Fallback (Guest or Offline sessions)
       // Only used if no Cloud data is available for this account.
       if (!activeResumeId) {
-        const savedSnapshot = sessionStorage.getItem('resumatch_builder_session') || localStorage.getItem('resumatch_builder_data');
+        const sessionSnapshot = await secureGet(sessionStorage, 'resumatch_builder_session');
+        const localSnapshot = await secureGet(localStorage, 'resumatch_builder_data');
+        const savedSnapshot = sessionSnapshot || localSnapshot;
         if (savedSnapshot) {
           try {
-            const parsed = JSON.parse(savedSnapshot);
+            const parsed = typeof savedSnapshot === 'string' ? JSON.parse(savedSnapshot) : savedSnapshot;
             const restoredData = parsed.data || parsed;
             const restoredResumeId = parsed.resumeId || null;
             const restoredDiscovery = parsed.discovery || null;
@@ -355,12 +358,22 @@ export default function AIResumeBuilder() {
     loadTailoredVersion(true);
   }, [isLoaded, resumeId, activeMode]);
 
-  // Auto-save to both localStorage (permanent) and sessionStorage (this session)
+  // Auto-save draft (AES-GCM encrypted — resume content contains PII like
+  // phone/email/certs and must not sit in browser storage as clear text).
   useEffect(() => {
     if (!isLoaded || activeMode === 'tailored') return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
-    const snapshot = JSON.stringify({ data, resumeId, discovery });
-    localStorage.setItem('resumatch_builder_data', snapshot);
-    sessionStorage.setItem('resumatch_builder_session', snapshot);
+    const snapshot = { data, resumeId, discovery };
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      try {
+        await secureSet(localStorage, 'resumatch_builder_data', snapshot);
+        await secureSet(sessionStorage, 'resumatch_builder_session', snapshot);
+      } catch (e) {
+        console.warn('[Builder] Encrypted draft save skipped:', e);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [data, resumeId, discovery, isLoaded, activeMode]);
 
   // Optimized Debounced Auto-save to DB

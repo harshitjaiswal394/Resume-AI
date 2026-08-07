@@ -86,10 +86,10 @@ def _clean_html(html: str) -> str:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         return "\n".join(lines)
     except ImportError:
-        # Fallback: basic regex cleanup
+        # Fallback: basic regex cleanup (case-insensitive — HTML tags can be uppercase)
         import re
-        text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL)
-        text = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
+        text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<[^>]+>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
         return text
