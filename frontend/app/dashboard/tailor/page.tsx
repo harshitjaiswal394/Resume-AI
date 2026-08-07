@@ -519,9 +519,10 @@ export default function TailorPage() {
 
     setIsFetching(true);
     try {
+      const token = await getToken();
       const res = await fetch(`${backendUrl}/api/cover-letter/fetch-jd`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ jdUrl }),
       });
       let result: any;

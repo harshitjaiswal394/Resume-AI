@@ -34,6 +34,7 @@ DEFAULT_LIMITS: Dict[str, Tuple[int, int]] = {
     "file_upload": (50, 3600),    # 50 files / hour / user
     "tool_call": (100, 3600),     # 100 tool calls / hour / user
     "embedding": (300, 3600),     # 300 embedding generations / hour / user
+    "auth": (10, 300),            # 10 auth actions / 5 min / user
 }
 
 # Per-IP, per-org and per-key multipliers are handled via scoped keys; the
@@ -45,6 +46,7 @@ IP_LIMITS: Dict[str, Tuple[int, int]] = {
     "file_upload": (200, 3600),
     "tool_call": (400, 3600),
     "embedding": (1000, 3600),
+    "auth": (30, 300),
 }
 
 _ORG_LIMITS: Dict[str, Tuple[int, int]] = {

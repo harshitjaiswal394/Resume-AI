@@ -251,7 +251,7 @@ async def resume_version_to_builder(version_id: str, user_id: str = Depends(_get
     """Feed a tailored version into the resume builder as a new resume."""
     from app.agents.tools.resume_tools import get_resume_version, merge_source_sections_into_version
     from app.api.builder_models import ResumeCreateRequest, ExperienceItem, EducationItem
-    from app.api.resumes_crud import create_resume
+    from app.api.resumes_crud import create_resume_record
 
     version = await get_resume_version(version_id, user_id)
     if not version:
@@ -299,7 +299,7 @@ async def resume_version_to_builder(version_id: str, user_id: str = Depends(_get
         parsed_data=parsed,
     )
 
-    created = await create_resume(payload, user_id=user_id)
+    created = await create_resume_record(payload, user_id=user_id)
     return {
         "success": True,
         "resume_id": created.get("resume_id"),

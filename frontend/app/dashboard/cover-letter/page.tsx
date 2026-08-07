@@ -76,9 +76,11 @@ export default function SmartCoverLetter() {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
       const response = await fetch(`${backendUrl}/api/cover-letter/fetch-jd`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ jdUrl })
       });
 
@@ -118,9 +120,11 @@ export default function SmartCoverLetter() {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
       const response = await fetch(`${backendUrl}/api/cover-letter/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           userId: user?.id,
           resumeId: selectedResumeId,

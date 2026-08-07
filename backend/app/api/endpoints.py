@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Body, UploadFile, File
+from fastapi import APIRouter, HTTPException, Body, UploadFile, File, Request, Header
 from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from app.services.ai_service import ai_service
 from app.services.resume_service import resume_service
 from app.services.job_portal_service import job_portal_service
+from app.api.deps import get_client_ip
+from app.security import rate_limiter
 from typing import List, Dict, Any, Optional
 import logging
 import json
@@ -14,19 +16,55 @@ logger = logging.getLogger("resumatch-api.endpoints")
 
 from app.db import persist_pipeline_results
 
+
+async def _optional_user_id(authorization: Optional[str]) -> Optional[str]:
+    """Resolve user id from a Bearer token if present and valid, else None.
+
+    Lets authenticated callers be identified (and their body-supplied user_id
+    overridden) without breaking the guest landing-page flow, which sends no
+    token at all.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    from app.services.auth_service import auth_service
+    result = await auth_service.get_user(authorization.replace("Bearer ", ""))
+    if result.get("success"):
+        return result["user"]["id"]
+    return None
+
+
+async def _enforce_rate_limit(request: Request, user_id: Optional[str]) -> None:
+    ip = await get_client_ip(request)
+    result = rate_limiter.check(
+        "ai_request",
+        user_id=None if user_id in (None, "guest") else user_id,
+        ip=ip,
+    )
+    if not result.allowed:
+        logger.warning(
+            "RATE_LIMITED | endpoint=%s user=%s ip=%s",
+            request.url.path, user_id, ip,
+        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
+
 @resume_router.post("/tailor")
-async def tailor_resume(payload: Dict[str, Any] = Body(...)):
+async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = None, authorization: Optional[str] = Header(None)):
     """
     Re-analyzes and re-matches based on user personalization (role, exp, location)
     """
     resume_id = payload.get("resumeId")
+    authed_user_id = await _optional_user_id(authorization)
     user_id = payload.get("userId") or "guest"
+    if authed_user_id:
+        user_id = authed_user_id
     preferences = payload.get("preferences", {})
     parsed_data = payload.get("parsedData")
     
     if not preferences or not parsed_data:
         raise HTTPException(status_code=400, detail="Preferences and parsed data are required")
-        
+
+    await _enforce_rate_limit(request, user_id)
+
     target_role = preferences.get("target_role") or preferences.get("targetRole") or "Software Engineer"
     logger.info(f"Tailoring results for Resume: {resume_id}, Role: {target_role}")
     
@@ -83,19 +121,22 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @resume_router.post("/cover-letter")
-async def generate_cover_letter(payload: Dict[str, Any] = Body(...)):
+async def generate_cover_letter(payload: Dict[str, Any] = Body(...), request: Request = None, authorization: Optional[str] = Header(None)):
     """Generate a tailored cover letter using AI."""
     resume_data = payload.get("resume") or payload.get("resumeData")
     job_role = payload.get("jobRole") or payload.get("job_role", "Software Engineer")
+    authed_user_id = await _optional_user_id(authorization)
     
     if not resume_data:
         raise HTTPException(status_code=400, detail="Resume data is required")
+
+    await _enforce_rate_limit(request, authed_user_id)
     
     try:
         content = await ai_service.generate_cover_letter(resume_data, job_role)
         return {"success": True, "content": content}
     except Exception as e:
-        logger.error(f"Cover letter generation failed: {str(e)}")
+        logger.error(f"Cover letter generation failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @resume_router.get("/domains")
@@ -103,34 +144,42 @@ async def get_domains(q: str = ""):
     """Returns distinct domains from the job_postings table for autocomplete."""
     from app.db import engine
     from sqlalchemy import text
-    with engine.connect() as conn:
-        if q:
-            result = conn.execute(
-                text("SELECT DISTINCT domain FROM job_postings WHERE domain ILIKE :q ORDER BY domain LIMIT 20"),
-                {"q": f"%{q}%"}
-            )
-        else:
-            result = conn.execute(
-                text("SELECT DISTINCT domain FROM job_postings ORDER BY domain LIMIT 50")
-            )
-        return {"domains": [row[0] for row in result if row[0]]}
+    try:
+        with engine.connect() as conn:
+            if q:
+                result = conn.execute(
+                    text("SELECT DISTINCT domain FROM job_postings WHERE domain ILIKE :q ORDER BY domain LIMIT 20"),
+                    {"q": f"%{q}%"}
+                )
+            else:
+                result = conn.execute(
+                    text("SELECT DISTINCT domain FROM job_postings ORDER BY domain LIMIT 50")
+                )
+            return {"domains": [row[0] for row in result if row[0]]}
+    except Exception as e:
+        logger.error(f"Failed to fetch domains: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch domains")
 
 @resume_router.get("/locations")
 async def get_locations(q: str = ""):
     """Returns distinct locations from the job_postings table for autocomplete."""
     from app.db import engine
     from sqlalchemy import text
-    with engine.connect() as conn:
-        if q:
-            result = conn.execute(
-                text("SELECT DISTINCT location FROM job_postings WHERE location ILIKE :q ORDER BY location LIMIT 20"),
-                {"q": f"%{q}%"}
-            )
-        else:
-            result = conn.execute(
-                text("SELECT DISTINCT location FROM job_postings ORDER BY location LIMIT 50")
-            )
-        return {"locations": [row[0] for row in result if row[0]]}
+    try:
+        with engine.connect() as conn:
+            if q:
+                result = conn.execute(
+                    text("SELECT DISTINCT location FROM job_postings WHERE location ILIKE :q ORDER BY location LIMIT 20"),
+                    {"q": f"%{q}%"}
+                )
+            else:
+                result = conn.execute(
+                    text("SELECT DISTINCT location FROM job_postings ORDER BY location LIMIT 50")
+                )
+            return {"locations": [row[0] for row in result if row[0]]}
+    except Exception as e:
+        logger.error(f"Failed to fetch locations: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch locations")
 
 async def process_resume_stream_generator(content: bytes, filename: str, user_id: str, resume_id: str):
     """
@@ -235,7 +284,7 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         yield f"data: {json.dumps({'success': False, 'error': str(e)})}\n\n"
 
 @resume_router.post("/save-analysis")
-async def save_analysis(payload: Dict[str, Any] = Body(...)):
+async def save_analysis(payload: Dict[str, Any] = Body(...), request: Request = None, authorization: Optional[str] = Header(None)):
     """
     Persists pre-existing analysis data to the database.
     Used for migrating guest analysis results to a user account.
@@ -247,13 +296,19 @@ async def save_analysis(payload: Dict[str, Any] = Body(...)):
     if not user_id or not resume_id or not data:
         raise HTTPException(status_code=400, detail="Missing userId, resumeId, or data")
 
+    authed_user_id = await _optional_user_id(authorization)
+    if authed_user_id:
+        user_id = authed_user_id
+
+    await _enforce_rate_limit(request, user_id)
+
     try:
         success = persist_pipeline_results(user_id, resume_id, data)
         if not success:
             raise HTTPException(status_code=500, detail="Persistence failed")
         return {"success": True}
     except Exception as e:
-        logger.error(f"Save analysis failed: {str(e)}")
+        logger.error(f"Save analysis failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 class RewriteBulletRequest(BaseModel):
@@ -261,25 +316,34 @@ class RewriteBulletRequest(BaseModel):
     target_role: Optional[str] = Field("Software Engineer", alias="targetRole")
 
 @resume_router.post("/rewrite-bullet")
-async def rewrite_bullet(request: RewriteBulletRequest):
+async def rewrite_bullet(request: RewriteBulletRequest, req: Request = None, authorization: Optional[str] = Header(None)):
     """Rewrites a single resume bullet point for higher impact."""
     if not request.bullet.strip():
         raise HTTPException(status_code=400, detail="Bullet text cannot be empty")
+
+    authed_user_id = await _optional_user_id(authorization)
+    await _enforce_rate_limit(req, authed_user_id)
         
     try:
         optimized = await ai_service.rewrite_bullet_point(request.bullet, request.target_role)
         logger.info(f"AI Rewriting: '{request.bullet[:50]}...' -> '{optimized[:50]}...'")
         return {"success": True, "optimized": optimized}
     except Exception as e:
-        logger.error(f"Bullet rewrite failed: {str(e)}")
+        logger.error(f"Bullet rewrite failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @resume_router.post("/process-stream")
 async def process_resume_stream(
     file: UploadFile = File(...),
     user_id: str = "guest",
-    resume_id: str = "guest"
+    resume_id: str = "guest",
+    request: Request = None,
+    authorization: Optional[str] = Header(None),
 ):
+    authed_user_id = await _optional_user_id(authorization)
+    if authed_user_id:
+        user_id = authed_user_id
+    await _enforce_rate_limit(request, user_id)
     content = await file.read()
     return StreamingResponse(
         process_resume_stream_generator(content, file.filename, user_id, resume_id),
@@ -295,11 +359,17 @@ async def process_resume_stream(
 async def process_resume(
     file: UploadFile = File(...),
     user_id: str = "guest",
-    resume_id: str = "guest"
+    resume_id: str = "guest",
+    request: Request = None,
+    authorization: Optional[str] = Header(None),
 ):
     """
     Production-grade pipeline: Extract -> Parse -> Match -> Save
     """
+    authed_user_id = await _optional_user_id(authorization)
+    if authed_user_id:
+        user_id = authed_user_id
+    await _enforce_rate_limit(request, user_id)
     try:
         content = await file.read()
         text = await resume_service.extract_text(content, file.filename)
