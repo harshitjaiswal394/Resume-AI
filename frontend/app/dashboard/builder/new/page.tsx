@@ -1637,9 +1637,9 @@ export default function AIResumeBuilder() {
   ];
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-[var(--bg-surface)] lg:flex-row">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[var(--bg-surface)] md:flex-row">
       {/* --- Left Panel: Editor --- */}
-      <div className="flex h-full min-h-0 flex-1 flex-col bg-[var(--bg-base)] lg:border-r lg:border-[var(--border-soft)]">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-base)] md:border-r md:border-[var(--border-soft)] xl:max-w-[640px]">
         <header className="sticky top-0 z-20 shrink-0 border-b border-[var(--border-soft)] bg-white/80 backdrop-blur-xl">
           <div className="flex items-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 lg:px-8">
             {/* Back */}
@@ -1709,7 +1709,7 @@ export default function AIResumeBuilder() {
             </div>
 
             {/* Desktop secondary actions */}
-            <div className="hidden shrink-0 items-center gap-1 lg:flex">
+            <div className="hidden shrink-0 items-center gap-1 md:flex">
               <Button variant="ghost" size="icon" onClick={handleCopyForWord} title="Copy for Word" className="h-9 w-9 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-brand-600">
                 <Copy className="h-4 w-4" />
               </Button>
@@ -1726,7 +1726,7 @@ export default function AIResumeBuilder() {
             </div>
 
             {/* Mobile actions sheet */}
-            <div className="shrink-0 lg:hidden">
+            <div className="shrink-0 md:hidden">
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" aria-label="More actions" className="h-9 w-9 rounded-lg text-[var(--text-muted)]">
@@ -2475,7 +2475,7 @@ export default function AIResumeBuilder() {
       </div>
 
       {/* --- Right Panel: Live Preview (Desktop) --- */}
-      <div className="hidden min-h-0 flex-1 flex-col bg-[var(--bg-surface)] lg:flex">
+      <div className="hidden min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-surface)] md:flex">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-soft)] bg-white/70 px-4 py-2.5 backdrop-blur sm:px-5">
           <div className="flex min-w-0 items-center gap-2.5">
             <Eye className="h-4 w-4 shrink-0 text-brand-600" />
@@ -2511,7 +2511,7 @@ export default function AIResumeBuilder() {
           axis="y"
           values={data.sectionOrder}
           onReorder={(newOrder) => setData({ ...data, sectionOrder: newOrder })}
-          className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] lg:scale-[0.8] xl:scale-[0.9] flex flex-col font-sans"
+          className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] md:scale-[0.5] lg:scale-[0.7] xl:scale-[0.8] 2xl:scale-[0.9] flex flex-col font-sans"
           ref={previewRef as any}
           data-resume-preview
         >
@@ -2545,7 +2545,7 @@ export default function AIResumeBuilder() {
       </div>
 
       {/* --- Mobile: Live Preview Floating Toggle & Sheet --- */}
-      <div className="fixed bottom-5 right-5 z-50 lg:hidden">
+      <div className="fixed bottom-5 right-5 z-50 md:hidden">
         <Sheet open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
           <SheetTrigger asChild>
             <Button
