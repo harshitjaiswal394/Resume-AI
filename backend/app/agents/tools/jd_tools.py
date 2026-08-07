@@ -86,13 +86,34 @@ def _clean_html(html: str) -> str:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         return "\n".join(lines)
     except ImportError:
-        # Fallback: basic regex cleanup (case-insensitive — HTML tags can be uppercase)
-        import re
-        text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<[^>]+>", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-        return text
+        # Fallback: stdlib HTML parser (avoid regex-based HTML filtering)
+        from html.parser import HTMLParser
+
+        class _TextExtractor(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self._skip_tags = {"script", "style", "nav", "footer", "header", "aside", "iframe"}
+                self._skip_depth = 0
+                self._parts: List[str] = []
+
+            def handle_starttag(self, tag: str, attrs: Any) -> None:
+                if tag.lower() in self._skip_tags:
+                    self._skip_depth += 1
+
+            def handle_endtag(self, tag: str) -> None:
+                if tag.lower() in self._skip_tags and self._skip_depth > 0:
+                    self._skip_depth -= 1
+
+            def handle_data(self, data: str) -> None:
+                if self._skip_depth == 0 and data:
+                    self._parts.append(data)
+
+        parser = _TextExtractor()
+        parser.feed(html)
+        parser.close()
+        text = "\n".join(parser._parts)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return "\n".join(lines)
 
 
 # ── JD Caching ──────────────────────────────────────────────────────────────
