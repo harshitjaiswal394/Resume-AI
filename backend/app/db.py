@@ -9,9 +9,32 @@ from opentelemetry.trace import Status, StatusCode
 load_dotenv()
 
 logger = logging.getLogger("resumatch-api.db")
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL)
+if not DATABASE_URL:
+    logger.warning("DATABASE_URL not found. Using SQLite test database.")
+    DATABASE_URL = "sqlite:///./test.db"
+
+engine_kwargs = {}
+
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {
+        "check_same_thread": False
+    }
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    future=True,
+    **engine_kwargs,
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
 
 try:
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor

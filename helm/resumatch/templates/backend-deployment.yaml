@@ -64,16 +64,51 @@ spec:
             secretKeyRef:
               name: resumatch-secrets
               key: NVIDIA_API_KEY
+        - name: NVIDIA_LLM_MODEL
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: NVIDIA_LLM_MODEL
         - name: GEMINI_API_KEY
           valueFrom:
             secretKeyRef:
               name: resumatch-secrets
               key: GEMINI_API_KEY
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: OPENAI_API_KEY
         - name: ANTHROPIC_API_KEY
           valueFrom:
             secretKeyRef:
               name: resumatch-secrets
               key: ANTHROPIC_API_KEY
+        - name: GOOGLE_CLOUD_PROJECT
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: GOOGLE_CLOUD_PROJECT
+        - name: GOOGLE_CLOUD_LOCATION
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: GOOGLE_CLOUD_LOCATION
+        - name: GOOGLE_GENAI_USE_VERTEXAI
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: GOOGLE_GENAI_USE_VERTEXAI
+        - name: VERTEX_GEMINI_MODEL
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: VERTEX_GEMINI_MODEL
+        - name: DEFAULT_PROVIDER
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: DEFAULT_PROVIDER
         - name: RAZORPAY_KEY_ID
           valueFrom:
             secretKeyRef:
@@ -94,6 +129,98 @@ spec:
             secretKeyRef:
               name: resumatch-secrets
               key: CRON_SECRET
+        - name: AI_SECURITY_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_SECURITY_ENABLED
+        - name: AI_INJECTION_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_INJECTION_ENABLED
+        - name: AI_INJECTION_BLOCK_THRESHOLD
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_INJECTION_BLOCK_THRESHOLD
+        - name: AI_INJECTION_WARN_THRESHOLD
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_INJECTION_WARN_THRESHOLD
+        - name: AI_PII_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_PII_ENABLED
+        - name: AI_PII_MASK_BEFORE_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_PII_MASK_BEFORE_PROVIDER
+        - name: AI_PII_BLOCK_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_PII_BLOCK_MODE
+        - name: AI_TOOL_PERMISSIONS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_TOOL_PERMISSIONS_ENABLED
+        - name: AI_RATE_LIMIT_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_RATE_LIMIT_ENABLED
+        - name: AI_AUDIT_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_AUDIT_ENABLED
+        - name: AI_AUDIT_PROMPT_CAPTURE
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_AUDIT_PROMPT_CAPTURE
+        - name: AI_AUDIT_DB_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_AUDIT_DB_BACKEND
+        - name: AI_PROMPT_VERSIONING_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_PROMPT_VERSIONING_ENABLED
+        - name: AI_OUTPUT_VALIDATION_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_OUTPUT_VALIDATION_ENABLED
+        - name: AI_OUTPUT_MAX_LENGTH
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_OUTPUT_MAX_LENGTH
+        - name: AI_MESSAGE_MAX_LENGTH
+          valueFrom:
+            configMapKeyRef:
+              name: resumatch-config
+              key: AI_MESSAGE_MAX_LENGTH
+
+        securityContext:
+          runAsNonRoot: {{ .Values.backend.podSecurity.runAsNonRoot }}
+          runAsUser: {{ .Values.backend.podSecurity.runAsUser }}
+          runAsGroup: {{ .Values.backend.podSecurity.runAsGroup }}
+          readOnlyRootFilesystem: {{ .Values.backend.podSecurity.readOnlyRootFilesystem }}
+          allowPrivilegeEscalation: {{ .Values.backend.podSecurity.allowPrivilegeEscalation }}
+          capabilities:
+            drop:
+{{- range .Values.backend.podSecurity.capabilities.drop }}
+            - {{ . }}
+{{- end }}
 
         livenessProbe:
           httpGet:

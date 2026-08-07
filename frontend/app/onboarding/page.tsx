@@ -23,6 +23,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { LoadingScreen } from '@/components/ui/loading';
 import { toast } from 'sonner';
 import { AuthModal } from '@/components/common/AuthModal';
 import { extractTextFromFile } from '@/lib/pdf';
@@ -464,33 +465,7 @@ export default function OnboardingFlow() {
               <div className="flex flex-col lg:flex-row">
                 {/* Left: Illustration */}
                 <div className="lg:w-1/2 bg-indigo-50/30 p-12 flex flex-col items-center justify-center border-r border-slate-50 relative overflow-hidden">
-                  {/* Animated Scanning Effect */}
-                  <div className="relative w-48 h-48">
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.3, 1],
-                        opacity: [0.3, 0.1, 0.3]
-                      }}
-                      transition={{ duration: 4, repeat: Infinity }}
-                      className="absolute inset-0 bg-indigo-500/10 rounded-full blur-3xl"
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="relative z-10 w-full h-full rounded-[3rem] bg-white border border-white/80 shadow-[0_25px_60px_rgba(79,70,229,0.12)] flex items-center justify-center"
-                    >
-                      <div className="relative">
-                        <FileText className="h-24 w-24 text-indigo-600" />
-                        <motion.div
-                          animate={{ 
-                            top: ["0%", "100%", "0%"]
-                          }}
-                          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                          className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent blur-[1px]"
-                        />
-                      </div>
-                    </motion.div>
-                  </div>
+                  <LoadingScreen compact label="Analyzing…" sublabel={`Our AI is matching ${fileName} with your career goals`} />
                 </div>
 
                 {/* Right: Progress Content */}
@@ -699,28 +674,9 @@ export default function OnboardingFlow() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
+              className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
             >
-              <div className="max-w-md space-y-8">
-                <div className="relative">
-                  <div className="h-24 w-24 rounded-3xl bg-indigo-50 flex items-center justify-center mx-auto animate-pulse">
-                    <Sparkles className="h-12 w-12 text-indigo-600" />
-                  </div>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                    className="absolute -inset-2 border-2 border-dashed border-indigo-200 rounded-[32px]"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <h2 className="text-2xl font-bold text-slate-900">Fine-tuning your strategy</h2>
-                  <p className="text-slate-500 font-medium">We&apos;re matching your specific goals with current market demands in <span className="text-indigo-600">{personalizeData.location}</span>.</p>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
-                  <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Finalizing results...</span>
-                </div>
-              </div>
+              <LoadingScreen compact label="Fine-tuning your strategy" sublabel={`We're matching your goals with current market demands in ${personalizeData.location}`} />
             </motion.div>
           )}
         </AnimatePresence>

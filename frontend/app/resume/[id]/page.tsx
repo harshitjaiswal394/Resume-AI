@@ -31,7 +31,7 @@ import { toast } from 'sonner';
 import { ScoreGauge } from '@/components/resume/ScoreGauge';
 import { SkillPill } from '@/components/resume/SkillPill';
 import { CoverLetterModal } from '@/components/resume/CoverLetterModal';
-import { Skeleton, SkeletonCard, SkeletonGauge, SkeletonText } from '@/components/ui/skeleton';
+import { LoadingScreen } from '@/components/ui/loading';
 import { motion } from 'motion/react';
 
 export default function ResumeView() {
@@ -119,26 +119,7 @@ export default function ResumeView() {
   }, [id]);
 
   if (loading) return (
-    <div className="container mx-auto py-10 px-4 space-y-8">
-      <div className="flex items-center gap-4">
-        <Skeleton className="h-10 w-10 rounded-full" />
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-      </div>
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="space-y-6">
-          <SkeletonGauge />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-        <div className="lg:col-span-2 space-y-6">
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      </div>
-    </div>
+    <LoadingScreen label="Loading your analysis…" sublabel="Fetching resume report & job matches" />
   );
 
   if (!resume) return (

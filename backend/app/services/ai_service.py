@@ -65,7 +65,8 @@ class AIService:
                     messages.append({"role": "system", "content": system_prompt})
                 messages.append({"role": "user", "content": prompt})
                 
-                response = nvidia_service.client.chat.completions.create(
+                response = await asyncio.to_thread(
+                    nvidia_service.client.chat.completions.create,
                     model=model,
                     messages=messages,
                     temperature=temperature,
@@ -112,7 +113,8 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
                 messages=[
                     {"role": "system", "content": "You are a professional ATS resume analyzer. Output only valid JSON."},
@@ -187,7 +189,7 @@ class AIService:
         embedding = await nvidia_service.generate_embedding(profile_text)
         
         # 2. Vector Similarity Search from Knowledge Base (Top 50)
-        candidates = execute_vector_search(embedding, limit=50, filters=filters)
+        candidates = await asyncio.to_thread(execute_vector_search, embedding, limit=50, filters=filters)
         
         if not candidates:
             logger.warning("No job candidates found in Knowledge Base.")
@@ -235,7 +237,8 @@ class AIService:
         try:
             from app.services.nvidia_service import nvidia_service
             prompt = f"Create a cover letter for {job_role} based on: {json.dumps(resume_data)}"
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2048
@@ -283,7 +286,8 @@ class AIService:
         try:
             start_time = time.time()
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-8b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -327,7 +331,8 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-8b-instruct",
                 messages=[
                     {"role": "system", "content": "You are a professional recruiting assistant specialized in JD cleaning. Extract core details only."},
@@ -392,7 +397,8 @@ class AIService:
         
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-70b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -428,7 +434,8 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-8b-instruct",
                 messages=[{"role": "system", "content": "You are a job data extraction API. Output ONLY JSON."},
                          {"role": "user", "content": prompt}],

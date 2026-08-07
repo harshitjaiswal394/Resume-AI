@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Copy, Check, Download, FileText, Sparkles } from 'lucide-react';
+import { LoadingScreen } from '@/components/ui/loading';
+import { Copy, Check, Download, FileText, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateCoverLetter, ParsedResume } from '@/lib/ai';
 import { supabase } from '@/lib/supabase';
@@ -101,12 +102,7 @@ export function CoverLetterModal({ isOpen, onClose, resume, jobMatch }: CoverLet
               </Button>
             </div>
           ) : isGenerating ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-              <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
-              <p className="text-sm font-medium text-muted-foreground animate-pulse">
-                Crafting your perfect cover letter...
-              </p>
-            </div>
+            <LoadingScreen compact label="Crafting your perfect cover letter…" sublabel="Our AI is drafting a compelling letter" />
           ) : (
             <ScrollArea className="h-[400px] w-full rounded-xl border bg-muted/30 p-4">
               <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">

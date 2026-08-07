@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
+import { secureGet } from '@/lib/secureStorage';
 
 export default function BuilderDiscovery() {
   const router = useRouter();
@@ -28,17 +29,19 @@ export default function BuilderDiscovery() {
   const [hasDraft, setHasDraft] = useState(false);
 
   React.useEffect(() => {
-    const localDraft = localStorage.getItem('resumatch_builder_data');
-    if (localDraft) {
-      try {
-        const parsed = JSON.parse(localDraft);
-        // Look for data in both new structure { data: {...} } and old flat structure
-        const d = parsed.data || parsed;
-        if (d.fullName || d.summary || d.experience?.length > 1) {
-          setHasDraft(true);
-        }
-      } catch (e) {}
-    }
+    (async () => {
+      const localDraft = await secureGet(localStorage, 'resumatch_builder_data');
+      if (localDraft) {
+        try {
+          const parsed = typeof localDraft === 'string' ? JSON.parse(localDraft) : localDraft;
+          // Look for data in both new structure { data: {...} } and old flat structure
+          const d = parsed.data || parsed;
+          if (d.fullName || d.summary || d.experience?.length > 1) {
+            setHasDraft(true);
+          }
+        } catch (e) {}
+      }
+    })();
   }, []);
 
   const handleStart = () => {

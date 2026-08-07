@@ -135,6 +135,8 @@ async def get_locations(q: str = ""):
 async def process_resume_stream_generator(content: bytes, filename: str, user_id: str, resume_id: str):
     """
     Yields progress events and persists the final result.
+    Heartbeats ('ping') are emitted during long AI calls so the stream stays
+    alive through the nginx gateway's proxy_read_timeout (60s default).
     """
     logger.info(f"Starting stream processing for file: {filename}")
     try:
@@ -143,13 +145,22 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         text = await resume_service.extract_text(content, filename)
         yield f"data: {json.dumps({'step': 'parsing', 'status': 'done', 'label': 'Parsing resume structure'})}\n\n"
 
-        # 2. Parsing (Flash)
+        # 2. Parsing (Flash) - LLM can take 60s+; keep stream alive with pings
         yield f"data: {json.dumps({'step': 'ats', 'status': 'loading', 'label': 'Checking ATS compatibility'})}\n\n"
-        parsed_data = await ai_service.parse_resume(text)
+        parse_task = asyncio.ensure_future(ai_service.parse_resume(text))
+        try:
+            while True:
+                done, _ = await asyncio.wait({parse_task}, timeout=20.0)
+                if done:
+                    parsed_data = parse_task.result()
+                    break
+                yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+        except asyncio.CancelledError:
+            parse_task.cancel()
+            raise
         yield f"data: {json.dumps({'step': 'ats', 'status': 'done', 'label': 'Checking ATS compatibility'})}\n\n"
 
-        # 3. Analysis & Matching (PARALLEL)
-        # 3. Analysis & Matching (PARALLEL)
+        # 3. Analysis & Matching (PARALLEL) - heartbeats while tasks are still running
         yield f"data: {json.dumps({'step': 'skills', 'status': 'loading', 'label': 'Extracted keywords & finding matches'})}\n\n"
         
         # Standardize roles
@@ -157,17 +168,23 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         if hasattr(parsed_data, 'get'):
             roles = [parsed_data.get('target_role') or parsed_data.get('targetRole') or 'Software Engineer']
             
-        analysis_task = ai_service.analyze_resume(parsed_data)
-        matches_task = ai_service.generate_job_matches(parsed_data, roles, filters={"days_old": 25})
+        analysis_task = asyncio.ensure_future(ai_service.analyze_resume(parsed_data))
+        matches_task = asyncio.ensure_future(ai_service.generate_job_matches(parsed_data, roles, filters={"days_old": 25}))
         
-        # Run with heartbeats to prevent LB timeout
-        yield f"data: {json.dumps({'type': 'ping'})}\n\n"
-        
-        # Wait for both tasks securely
+        # Wait for both tasks securely, pinging while anything is still pending
+        analysis = None
+        matches = None
         try:
-            # Gather with a timeout to be safe, but the LB timeout is protected by the 'ping' earlier
-            # If matching takes > 60s, we still want to finish
-            analysis, matches = await asyncio.gather(analysis_task, matches_task)
+            pending = {analysis_task, matches_task}
+            while pending:
+                done, pending = await asyncio.wait(pending, timeout=20.0)
+                for task in done:
+                    if task is analysis_task:
+                        analysis = task.result()
+                    else:
+                        matches = task.result()
+                if pending:
+                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
         except Exception as e:
             logger.error(f"AI Pipeline error: {str(e)}")
             analysis = analysis or {"score": 75, "resume_score": 75}
@@ -181,7 +198,7 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
             if isinstance(match, dict):
                 match["apply_links"] = job_portal_service.generate_links(
                     match.get("role", "Software Engineer"), 
-                    parsed_data.get("skills", []),
+                    parsed_data.get("skills", []) if hasattr(parsed_data, 'get') else [],
                     "India"
                 )
         yield f"data: {json.dumps({'step': 'matching', 'status': 'done', 'label': 'Matches found'})}\n\n"
@@ -266,7 +283,12 @@ async def process_resume_stream(
     content = await file.read()
     return StreamingResponse(
         process_resume_stream_generator(content, file.filename, user_id, resume_id),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
     )
 
 @resume_router.post("/process")

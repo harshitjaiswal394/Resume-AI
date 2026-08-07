@@ -44,8 +44,8 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/lib/supabase';
+import { secureGet, secureSet, secureRemove } from '@/lib/secureStorage';
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 
 // --- Types ---
 interface Experience {
@@ -140,6 +140,125 @@ export default function AIResumeBuilder() {
   const [currentScore, setCurrentScore] = useState<number>(0);
   const lastSavedRef = useRef<string>(""); // For dirty checking
 
+  const [activeMode, setActiveMode] = useState<'default' | 'tailored'>('default');
+  const [tailoredVersionId, setTailoredVersionId] = useState<string | null>(null);
+  const [isLoadingTailored, setIsLoadingTailored] = useState(false);
+
+  // Map a tailored version's parsed_data into the builder's ResumeData shape.
+  const mapTailoredToResumeData = (parsed: any): ResumeData => {
+    const src = parsed && typeof parsed === 'object' ? parsed : {};
+    const mapExp = (list: any[]): Experience[] => (list || []).map((e) => ({
+      title: e?.title || '',
+      company: e?.company || '',
+      duration: e?.duration || e?.location || '',
+      description: Array.isArray(e?.bullets)
+        ? e.bullets.map((b: any) => (typeof b === 'string' ? b : b?.text || b?.original_bullet || '')).filter(Boolean)
+        : Array.isArray(e?.description) ? e.description : [],
+    }));
+    const mapCert = (list: any[]): Certification[] => (list || []).map((c) =>
+      typeof c === 'string' ? { name: c, issuer: '', year: '' } : { name: c?.name || '', issuer: c?.issuer || '', year: c?.year || '' }
+    );
+    const mapLang = (list: any[]): Language[] => (list || []).map((l) =>
+      typeof l === 'string' ? { language: l, proficiency: '' } : { language: l?.language || '', proficiency: l?.proficiency || '' }
+    );
+    return {
+      ...INITIAL_DATA,
+      fullName: src.fullName || src.full_name || '',
+      email: src.email || '',
+      phone: src.phone || src.phone_number || '',
+      summary: src.summary || '',
+      skills: Array.isArray(src.skills) ? src.skills.map((s: any) => typeof s === 'string' ? s : s?.name || '') : [],
+      experience: mapExp(src.experience),
+      education: Array.isArray(src.education) ? src.education.map((e: any) =>
+        typeof e === 'string' ? { degree: e, institution: '', year: '' }
+          : { degree: e?.degree || e?.title || '', institution: e?.institution || '', year: e?.year || '' }
+      ) : [],
+      projects: Array.isArray(src.projects) ? src.projects.map((p: any) => ({
+        title: p?.title || p?.name || '',
+        description: Array.isArray(p?.description) ? p.description.join('\n') : p?.description || '',
+        link: p?.link || p?.url || '',
+        tech_stack: p?.tech_stack || p?.techStack || p?.skills || [],
+      })) : [],
+      certifications: mapCert(src.certifications),
+      languages: mapLang(src.languages),
+      internships: Array.isArray(src.internships) ? src.internships.map((i: any) => ({
+        role: i?.role || i?.title || '',
+        company: i?.company || '',
+        duration: i?.duration || '',
+        description: Array.isArray(i?.description) ? i.description : [],
+      })) : [],
+      achievements: Array.isArray(src.achievements) ? src.achievements.map((a: any) =>
+        typeof a === 'string' ? { title: a, description: '' }
+          : { title: a?.title || a?.name || '', description: a?.description || '' }
+      ) : [],
+    };
+  };
+
+  const loadTailoredVersion = async (silent = false) => {
+    if (!resumeId || activeMode === 'tailored') return;
+    setIsLoadingTailored(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+      const listRes = await fetch(`${backendUrl}/api/agents/resume/${resumeId}/versions`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!listRes.ok) throw new Error("No tailored versions");
+      const listJson = await listRes.json();
+      const versions: any[] = listJson.versions ?? [];
+      if (!versions.length) {
+        if (!silent) {
+          toast.error('No tailored version available yet. Tailor your resume in Chat first.');
+        }
+        return;
+      }
+      const latest = versions[0];
+      const dataRes = await fetch(`${backendUrl}/api/agents/resume/version/${latest.version_id}/data`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!dataRes.ok) throw new Error("Version data fetch failed");
+      const dataJson = await dataRes.json();
+      const mapped = mapTailoredToResumeData(dataJson.parsed_data);
+      setData(mapped);
+      setTailoredVersionId(dataJson.version_id);
+      setActiveMode('tailored');
+      // Persist the Tailored-mode selection AND a local copy of the tailored
+      // data so returning to this page restores the tailored view immediately
+      // (even before the backend is re-queried). The mode flag holds only
+      // non-PII ids, so it is stored in plain localStorage; the resume data
+      // (PII) is encrypted like other drafts.
+      try {
+        localStorage.setItem('resumatch_tailored_mode', JSON.stringify({ resumeId, versionId: dataJson.version_id }));
+      } catch { /* ignore */ }
+      secureSet(localStorage, 'resumatch_tailored_data', { resumeId, versionId: dataJson.version_id, data: mapped }).catch(() => {});
+      if (!silent) {
+        toast.success(`Loaded Tailored Resume v${dataJson.version_number} (${mapped.fullName || 'resume'})`);
+      }
+    } catch (e: any) {
+      console.error('[Builder] Tailored load failed', e);
+      if (!silent) {
+        toast.error(e.message || 'Could not load tailored version');
+      }
+    } finally {
+      setIsLoadingTailored(false);
+    }
+  };
+
+  const switchToDefault = async () => {
+    setActiveMode('default');
+    setTailoredVersionId(null);
+    try { localStorage.removeItem('resumatch_tailored_mode'); } catch { /* ignore */ }
+    secureRemove(localStorage, 'resumatch_tailored_data');
+    if (resumeId) {
+      await fetchResume(resumeId);
+    }
+  };
+
+  // NOTE: this deliberately depends on `user?.id` (a stable string), NOT the
+  // `user` object. AuthProvider re-creates the user object on every auth event
+  // (including automatic token refresh when returning to this tab/page), so
+  // depending on `user` would re-run loadDraft -> fetchResume and clobber the
+  // Tailored-mode data with the original resume while the toggle stays Tailored.
   useEffect(() => {
     if (!isAuthReady) return; // WAIT FOR AUTH INITIALIZATION
 
@@ -161,7 +280,8 @@ export default function AIResumeBuilder() {
       if (urlId) {
         console.log('[Builder] Authority: URL ID identified. Restoring cloud record...', urlId);
         if (user) {
-          await fetchResume(urlId);
+          await fetchResume(urlId, { skipData: isTailoredResume(urlId) });
+          setResumeId(urlId);
           setIsLoaded(true);
           return;
         }
@@ -183,7 +303,7 @@ export default function AIResumeBuilder() {
             const cloudId = latestResumes[0].id;
             console.log('[Builder] Authority: Cloud record found! Syncing account state...', cloudId);
             setResumeId(cloudId);
-            await fetchResume(cloudId);
+            await fetchResume(cloudId, { skipData: isTailoredResume(cloudId) });
             activeResumeId = cloudId;
             
             // Re-sync URL
@@ -204,10 +324,12 @@ export default function AIResumeBuilder() {
       // PHASE 3: Browser Cache Fallback (Guest or Offline sessions)
       // Only used if no Cloud data is available for this account.
       if (!activeResumeId) {
-        const savedSnapshot = sessionStorage.getItem('resumatch_builder_session') || localStorage.getItem('resumatch_builder_data');
+        const sessionSnapshot = await secureGet(sessionStorage, 'resumatch_builder_session');
+        const localSnapshot = await secureGet(localStorage, 'resumatch_builder_data');
+        const savedSnapshot = sessionSnapshot || localSnapshot;
         if (savedSnapshot) {
           try {
-            const parsed = JSON.parse(savedSnapshot);
+            const parsed = typeof savedSnapshot === 'string' ? JSON.parse(savedSnapshot) : savedSnapshot;
             const restoredData = parsed.data || parsed;
             const restoredResumeId = parsed.resumeId || null;
             const restoredDiscovery = parsed.discovery || null;
@@ -235,37 +357,95 @@ export default function AIResumeBuilder() {
     };
 
     loadDraft();
-  }, [user, isAuthReady]);
+  }, [user?.id, isAuthReady]);
 
-  // Auto-save to both localStorage (permanent) and sessionStorage (this session)
+  // Auto-open Tailored mode if a pending tailored version exists for this
+  // resume (from Chat), or the user previously left the builder in Tailored
+  // mode. When we have a locally cached tailored copy we restore it directly
+  // (no network, no race with fetchResume); otherwise we re-fetch from the
+  // backend. The plain `resumatch_tailored_mode` flag holds only non-PII ids,
+  // so it is read synchronously — the PII resume data stays encrypted.
   useEffect(() => {
-    if (!isLoaded) return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
-    const snapshot = JSON.stringify({ data, resumeId, discovery });
-    localStorage.setItem('resumatch_builder_data', snapshot);
-    sessionStorage.setItem('resumatch_builder_session', snapshot);
-  }, [data, resumeId, discovery, isLoaded]);
+    if (!isLoaded || !resumeId || activeMode !== 'default') return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(localStorage.getItem('resumatch_tailored_pending') || 'null');
+    } catch { /* ignore */ }
+    if (pending && pending.resume_id && pending.version_id && pending.resume_id === resumeId) {
+      try {
+        localStorage.removeItem('resumatch_tailored_pending');
+      } catch { /* ignore */ }
+      loadTailoredVersion(true);
+      return;
+    }
+    let flag: { resumeId?: string } | null = null;
+    try {
+      flag = JSON.parse(localStorage.getItem('resumatch_tailored_mode') || 'null');
+    } catch { /* ignore */ }
+    if (!flag) {
+      // Older builds stored this flag encrypted — read it via secureGet too.
+      secureGet(localStorage, 'resumatch_tailored_mode')
+        .then((stored) => {
+          const old = stored as { resumeId?: string } | null;
+          if (old && old.resumeId === resumeId) loadTailoredVersion(true);
+        })
+        .catch(() => {});
+    }
+    if (flag && flag.resumeId === resumeId) {
+      secureGet(localStorage, 'resumatch_tailored_data')
+        .then((stored) => {
+          const s = stored as { resumeId?: string; versionId?: string; data?: ResumeData } | null;
+          if (s && s.resumeId === resumeId && s.data) {
+            setData(s.data);
+            setTailoredVersionId(s.versionId || null);
+            setActiveMode('tailored');
+          } else {
+            loadTailoredVersion(true);
+          }
+        })
+        .catch(() => loadTailoredVersion(true));
+    }
+  }, [isLoaded, resumeId, activeMode]);
+
+  // Auto-save draft (AES-GCM encrypted — resume content contains PII like
+  // phone/email/certs and must not sit in browser storage as clear text).
+  useEffect(() => {
+    if (!isLoaded || activeMode === 'tailored') return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
+    const snapshot = { data, resumeId, discovery };
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      try {
+        await secureSet(localStorage, 'resumatch_builder_data', snapshot);
+        await secureSet(sessionStorage, 'resumatch_builder_session', snapshot);
+      } catch (e) {
+        console.warn('[Builder] Encrypted draft save skipped:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data, resumeId, discovery, isLoaded, activeMode]);
 
   // Optimized Debounced Auto-save to DB
   useEffect(() => {
-    if (!isLoaded || !user || user.id === 'guest') return;
+    if (!isLoaded || !user || user.id === 'guest' || activeMode === 'tailored') return;
 
     const timer = setTimeout(() => {
       performSilentSave();
     }, 5000); // 5 second debounce for DB performance
 
     return () => clearTimeout(timer);
-  }, [data, discovery, user]);
+  }, [data, discovery, user?.id, activeMode]);
 
   // Save on tab switch/visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (isLoaded && document.visibilityState === 'hidden') {
+      if (isLoaded && activeMode !== 'tailored' && document.visibilityState === 'hidden') {
         performSilentSave();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [data, discovery, resumeId]);
+  }, [data, discovery, resumeId, activeMode]);
 
   const performSilentSave = async () => {
     if (!user || user.id === 'guest' || !isLoaded) return;
@@ -323,7 +503,18 @@ export default function AIResumeBuilder() {
     }
   };
 
-  const fetchResume = async (id: string) => {
+  // True when the user previously left THIS resume in Tailored mode (plain,
+  // non-PII flag in localStorage). Used to stop fetchResume from ever writing
+  // the original resume over the Tailored view.
+  const isTailoredResume = (id: string | null): boolean => {
+    if (!id) return false;
+    try {
+      const flag = JSON.parse(localStorage.getItem('resumatch_tailored_mode') || 'null');
+      return !!flag && flag.resumeId === id;
+    } catch { return false; }
+  };
+
+  const fetchResume = async (id: string, opts: { skipData?: boolean } = {}) => {
     console.log('[Builder] Fetching resume from DB:', id);
     const { data: resume, error } = await supabase
       .from('resumes')
@@ -345,9 +536,11 @@ export default function AIResumeBuilder() {
 
       let restoredData: ResumeData = { ...INITIAL_DATA };
       if (resume.parsed_data) {
-        restoredData = typeof resume.parsed_data === 'string' 
+        const parsed = typeof resume.parsed_data === 'string' 
           ? JSON.parse(resume.parsed_data) 
           : resume.parsed_data;
+        // Merge with defaults so no field is ever undefined (keeps inputs controlled)
+        restoredData = { ...INITIAL_DATA, ...parsed };
       }
       
       // CRITICAL: Merge individual columns into restoredData to ensure "My Resume" edits reflect here
@@ -364,14 +557,18 @@ export default function AIResumeBuilder() {
       if (resume.phone_number) restoredData.phone = resume.phone_number;
       if (resume.title && !restoredData.fullName) restoredData.fullName = resume.title.split("'s Resume")[0];
       
-      setData(restoredData);
+      // When the user left this resume in Tailored mode, the original data must
+      // NOT overwrite the Tailored view — the auto-open restore below fills in
+      // the tailored data instead. Keep discovery/scores, skip the form data.
+      if (!opts.skipData) {
+        setData(restoredData);
+        lastSavedRef.current = JSON.stringify({ data: restoredData, discovery: newDiscovery });
+      }
       
       // Restore score metrics
       if (resume.original_score !== undefined) setOriginalScore(resume.original_score);
       if (resume.resume_score !== undefined) setCurrentScore(resume.resume_score || 0);
 
-      // Sync lastSavedRef to prevent immediate auto-save loop
-      lastSavedRef.current = JSON.stringify({ data: restoredData, discovery: newDiscovery });
       console.log('[Builder] State restored from DB');
     } else {
       console.error('[Builder] Fetch resume failed or record missing', error);
@@ -491,6 +688,10 @@ export default function AIResumeBuilder() {
 
   // --- Storage & Flow ---
   const handleSave = async () => {
+    if (activeMode === 'tailored') {
+      toast.info('Switch to Default mode to save manual edits to your resume.');
+      return;
+    }
     setIsSaving(true);
     try {
       const isUpdate = !!resumeId;
@@ -579,34 +780,186 @@ export default function AIResumeBuilder() {
     }
   };
 
-  const handleDownloadDocx = () => {
+  // --- Export helpers: clean, null-safe resume document builders ---
+
+  const cleanVal = (v: unknown): string => (v == null ? '' : String(v)).trim();
+  const cleanArr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : []);
+  const escapeHtml = (v: unknown): string =>
+    String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const sectionDocxHtml = (sectionId: string): string => {
+    switch (sectionId) {
+      case 'summary':
+        return cleanVal(data.summary)
+          ? `<h3>Profile</h3><p>${escapeHtml(cleanVal(data.summary))}</p>`
+          : '';
+      case 'skills': {
+        const skills = cleanArr(data.skills).map(cleanVal).filter(Boolean);
+        return skills.length
+          ? `<h3>Expertise</h3><p>${skills.map(escapeHtml).join(' &bull; ')}</p>`
+          : '';
+      }
+      case 'experience': {
+        const exps = cleanArr(data.experience).filter((e: any) => cleanVal(e?.title) || cleanVal(e?.company));
+        if (!exps.length) return '';
+        const body = exps
+          .map((exp: any) => {
+            const title = cleanVal(exp.title);
+            const company = cleanVal(exp.company);
+            const duration = cleanVal(exp.duration);
+            const bullets = cleanArr(exp.description).map(cleanVal).filter(Boolean);
+            const head = [title && `<b>${escapeHtml(title)}</b>`, company && escapeHtml(company)]
+              .filter(Boolean)
+              .join(' &mdash; ');
+            let html = `<h4>${head}${duration ? ` <span class="right">${escapeHtml(duration)}</span>` : ''}</h4>`;
+            if (bullets.length) html += `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`;
+            return html;
+          })
+          .join('');
+        return `<h3>Experience</h3>${body}`;
+      }
+      case 'education': {
+        const edus = cleanArr(data.education).filter((e: any) => cleanVal(e?.degree));
+        if (!edus.length) return '';
+        const body = edus
+          .map((edu: any) => {
+            const degree = `<b>${escapeHtml(cleanVal(edu.degree))}</b>`;
+            const institution = cleanVal(edu.institution) ? ` &mdash; ${escapeHtml(edu.institution)}` : '';
+            const year = cleanVal(edu.year) ? ` <span class="right">${escapeHtml(edu.year)}</span>` : '';
+            return `<p>${degree}${institution}${year}</p>`;
+          })
+          .join('');
+        return `<h3>Education</h3>${body}`;
+      }
+      case 'projects': {
+        const projects = cleanArr(data.projects).filter((p: any) => cleanVal(p?.title));
+        if (!projects.length) return '';
+        const body = projects
+          .map((proj: any) => {
+            const title = `<b>${escapeHtml(cleanVal(proj.title))}</b>`;
+            const link = cleanVal(proj.link) ? ` <span class="link">${escapeHtml(proj.link)}</span>` : '';
+            const desc = cleanVal(proj.description) ? `<p>${escapeHtml(proj.description)}</p>` : '';
+            return `<h4>${title}${link}</h4>${desc}`;
+          })
+          .join('');
+        return `<h3>Projects</h3>${body}`;
+      }
+      case 'certifications': {
+        const certs = cleanArr(data.certifications).filter((c: any) => cleanVal(c?.name));
+        if (!certs.length) return '';
+        const body = certs
+          .map((cert: any) => {
+            const name = `<b>${escapeHtml(cleanVal(cert.name))}</b>`;
+            const year = cleanVal(cert.year) ? ` <span class="right">${escapeHtml(cert.year)}</span>` : '';
+            return `<p>${name}${year}</p>`;
+          })
+          .join('');
+        return `<h3>Certifications</h3>${body}`;
+      }
+      case 'languages': {
+        const langs = cleanArr(data.languages).filter((l: any) => cleanVal(l?.language));
+        if (!langs.length) return '';
+        const body = langs
+          .map((lang: any) => {
+            const name = `<b>${escapeHtml(cleanVal(lang.language))}</b>`;
+            const prof = cleanVal(lang.proficiency) ? ` &mdash; ${escapeHtml(lang.proficiency)}` : '';
+            return `<p>${name}${prof}</p>`;
+          })
+          .join('');
+        return `<h3>Languages</h3>${body}`;
+      }
+      case 'achievements': {
+        const items = cleanArr(data.achievements).filter((a: any) => cleanVal(a?.title) || cleanVal(a?.description));
+        if (!items.length) return '';
+        const body = items
+          .map((ach: any) => {
+            const title = cleanVal(ach.title) ? `<h4>${escapeHtml(ach.title)}</h4>` : '';
+            const desc = cleanVal(ach.description) ? `<p>${escapeHtml(ach.description)}</p>` : '';
+            return `${title}${desc}`;
+          })
+          .join('');
+        return `<h3>Highlights</h3>${body}`;
+      }
+      case 'internships': {
+        const ints = cleanArr(data.internships).filter((i: any) => cleanVal(i?.role));
+        if (!ints.length) return '';
+        const body = ints
+          .map((int: any) => {
+            const role = `<b>${escapeHtml(cleanVal(int.role))}</b>`;
+            const company = cleanVal(int.company) ? ` &mdash; ${escapeHtml(int.company)}` : '';
+            const bullets = cleanArr(int.description).map(cleanVal).filter(Boolean);
+            let html = `<h4>${role}${company}</h4>`;
+            if (bullets.length) html += `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`;
+            return html;
+          })
+          .join('');
+        return `<h3>Internships</h3>${body}`;
+      }
+      default:
+        return '';
+    }
+  };
+
+  const handleDownloadDocx = async () => {
+    if (activeMode === 'tailored' && tailoredVersionId) {
+      toast.info('Downloading tailored Word file...');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("No session");
+        const res = await fetch(`${backendUrl}/api/agents/resume/version/${tailoredVersionId}/download`, {
+          headers: { "Authorization": `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) throw new Error("Download failed");
+        const blob = await res.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `tailored-resume-${new Date().toISOString().slice(0, 10)}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+        toast.success('Tailored Word file downloaded!');
+      } catch (e) {
+        console.error('Tailored DOCX download failed', e);
+        toast.error('Download failed - please try one more time');
+      }
+      return;
+    }
     if (!previewRef.current) return;
     toast.info('Generating compatible Word file...');
-    
-    // Improved XML template for Word compatibility
-    const header = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head><meta charset='utf-8'><title>Resume</title>
-      <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
-      <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.4; }
-        h2 { font-size: 28pt; margin: 0; color: #0f172a; text-transform: uppercase; }
-        h3 { font-size: 14pt; color: #4f46e5; border-bottom: 1px solid #e1e4e8; padding-bottom: 2pt; }
-        .flex { display: flex; }
-        .gap-4 { gap: 1rem; }
-      </style></head><body>
-    `;
-    const footer = "</body></html>";
-    const source = header + previewRef.current.innerHTML + footer;
-    
-    // Use the older format for maximum compatibility on localhost
-    const blob = new Blob(['\ufeff', source], {
-      type: 'application/msword'
-    });
-    
+
+    const name = cleanVal(data.fullName);
+    const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
+    const headerBlock = name ? `<h2>${escapeHtml(name)}</h2>` : '';
+    const contactBlock = contacts.length ? `<p>${contacts.map(escapeHtml).join(' &bull; ')}</p>` : '';
+    const sections = cleanArr(data.sectionOrder).map(sectionDocxHtml).filter(Boolean).join('');
+
+    const source =
+      `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>` +
+      `<head><meta charset='utf-8'><title>Resume</title>` +
+      `<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->` +
+      `<style>` +
+      `body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.4; color: #0f172a; }` +
+      `h2 { font-size: 28pt; margin: 0 0 4pt; color: #0f172a; text-transform: uppercase; }` +
+      `h3 { font-size: 14pt; color: #4f46e5; border-bottom: 1px solid #e1e4e8; padding-bottom: 2pt; text-transform: uppercase; }` +
+      `h4 { font-size: 12pt; margin: 10pt 0 2pt; }` +
+      `p, li { font-size: 11pt; }` +
+      `.right { float: right; }` +
+      `.link { color: #4f46e5; }` +
+      `</style></head><body>` +
+      headerBlock + contactBlock + sections +
+      `</body></html>`;
+
+    const blob = new Blob(['\ufeff', source], { type: 'application/msword' });
+
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${(data.fullName || 'Resume').trim().replace(/[^a-z0-9]/gi, '_')}.doc`;
+    link.download = `${(cleanVal(data.fullName) || 'Resume').replace(/[^a-z0-9]/gi, '_')}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -614,87 +967,423 @@ export default function AIResumeBuilder() {
   };
 
   const handleDownloadPDF = async () => {
-    if (!previewRef.current) return;
     toast.info('Generating high-fidelity PDF...');
 
-    const originalEl = previewRef.current;
-    const originalGCS = window.getComputedStyle;
-    
-    const oklchToRgb = (val: string) => {
-      if (!val || typeof val !== 'string' || !val.includes('oklch')) return val;
-      return val.replace(/oklch\([^)]+\)/g, (match) => {
-        if (match.includes('0.55')) return 'rgb(79, 70, 229)';   // indigo-600
-        if (match.includes('0.64') || match.includes('0.63')) return 'rgb(99, 102, 241)';   // indigo-500
-        if (match.includes('0.2')) return 'rgb(15, 23, 42)';    // slate-900
-        if (match.includes('0.92')) return 'rgb(241, 245, 249)'; // slate-100
-        if (match.includes('0.44')) return 'rgb(71, 85, 105)';   // slate-600
-        return 'rgb(79, 70, 229)';
-      });
-    };
-
     try {
-      (window as any).getComputedStyle = (el: Element, pseudo?: string) => {
-        const style = originalGCS(el, pseudo);
-        return new Proxy(style, {
-          get(target, prop) {
-            if (prop === 'getPropertyValue') {
-              return (p: string) => {
-                const val = target.getPropertyValue(p);
-                return (typeof val === 'string' && val.includes('oklch')) ? oklchToRgb(val) : val;
-              };
-            }
-            const val = (target as any)[prop];
-            if (typeof val === 'function') return val.bind(target);
-            if (typeof val === 'string' && val.includes('oklch')) return oklchToRgb(val);
-            return val;
-          }
-        });
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+
+      type PdfSettings = {
+        mx: number; my: number; bar: number; afterBar: number;
+        name: number; contact: number; headerAfter: number;
+        section: number; ruleGap: number;
+        body: number; gap: number; sectionPad: number;
+        head: number; headLine: number; company: number; companyGap: number; itemPad: number;
+        bullet: number; bulletGap: number;
       };
 
-      const canvas = await html2canvas(originalEl, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc) => {
-          const clonedRoot = clonedDoc.querySelector('[data-resume-preview]');
-          
-          const resetStyle = clonedDoc.createElement('style');
-          resetStyle.innerHTML = `
-            * { 
-              letter-spacing: normal !important; 
-              font-variant-ligatures: none !important;
-              font-kerning: none !important;
-              word-spacing: normal !important;
-              text-rendering: optimizeSpeed !important;
-              -webkit-font-smoothing: antialiased !important;
-            }
-            [style*="oklch"] { color: inherit; }
-          `;
-          clonedDoc.head.appendChild(resetStyle);
+      const layouts: Record<'normal' | 'compact', PdfSettings> = {
+        normal: {
+          mx: 18, my: 18, bar: 4, afterBar: 10,
+          name: 22, contact: 9, headerAfter: 7,
+          section: 11, ruleGap: 6,
+          body: 10, gap: 1.8, sectionPad: 4,
+          head: 11, headLine: 0.5, company: 9.5, companyGap: 4.6, itemPad: 3,
+          bullet: 10, bulletGap: 4.2,
+        },
+        compact: {
+          mx: 14, my: 11, bar: 3, afterBar: 7,
+          name: 17, contact: 8.5, headerAfter: 5,
+          section: 10, ruleGap: 5,
+          body: 8.5, gap: 1.4, sectionPad: 2.5,
+          head: 10, headLine: 0.3, company: 9, companyGap: 3.8, itemPad: 2,
+          bullet: 8.5, bulletGap: 3.4,
+        },
+      };
 
-          if (clonedRoot instanceof HTMLElement) {
-            clonedRoot.style.width = '210mm';
-            clonedRoot.style.transform = 'none';
-            clonedRoot.style.position = 'relative';
-            clonedRoot.style.margin = '0';
+      // Renders the whole resume into `doc`. When `paint` is false it only
+      // simulates layout (identical math, no drawing) so we can measure page count.
+      const renderLayout = (doc: typeof pdf, st: PdfSettings, paint: boolean) => {
+        const contentW = pageW - st.mx * 2;
+        let y = st.my;
+        let pages = 1;
+
+        const ensure = (needed: number, keepAfter = 0) => {
+          if (y + needed + keepAfter > pageH - st.my) {
+            pages += 1;
+            y = st.my;
+            if (paint) doc.addPage();
+          }
+        };
+
+        const wrap = (text: string, size: number, width = contentW): string[] => {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(size);
+          return doc.splitTextToSize(text, width) as string[];
+        };
+
+        const draw = (lines: string | string[], size: number, color: [number, number, number], style: 'normal' | 'bold' | 'italic', lineGap: number, indent = 0) => {
+          if (paint) {
+            doc.setFont('helvetica', style);
+            doc.setFontSize(size);
+            doc.setTextColor(color[0], color[1], color[2]);
+          }
+          const arr = Array.isArray(lines) ? lines : [lines];
+          arr.forEach((ln) => {
+            ensure(size * 0.35 + lineGap);
+            if (paint) doc.text(ln, st.mx + indent, y);
+            y += size * 0.35 + lineGap;
+          });
+        };
+
+        const sectionTitle = (title: string) => {
+          ensure(10, 16); // keep the title together with the first block of content
+          if (paint) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(st.section);
+            doc.setTextColor(79, 70, 229);
+            doc.text(title.toUpperCase(), st.mx, y);
+          }
+          y += 1.5;
+          if (paint) {
+            doc.setDrawColor(225, 228, 232);
+            doc.line(st.mx, y, pageW - st.mx, y);
+          }
+          y += st.ruleGap;
+        };
+
+        const bullets = (items: string[]) => {
+          items.forEach((b) => {
+            const lines = wrap(b, st.bullet, contentW - 6);
+            const h = lines.length * st.bulletGap;
+            ensure(h + 1); // never split a single bullet across pages
+            lines.forEach((ln, li) => {
+              if (paint) {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(st.bullet);
+                doc.setTextColor(71, 85, 105);
+                if (li === 0) doc.text('•', st.mx + 1, y);
+                doc.text(ln, st.mx + 5, y);
+              }
+              y += st.bulletGap;
+            });
+          });
+        };
+
+        // Accent bar
+        if (paint) {
+          doc.setFillColor(79, 70, 229);
+          doc.rect(0, 0, pageW, st.bar, 'F');
+        }
+        y = st.my + st.bar + st.afterBar;
+
+        // Header (only non-empty values)
+        const name = cleanVal(data.fullName);
+        if (name) {
+          ensure(14);
+          draw(name.toUpperCase(), st.name, [15, 23, 42], 'bold', 2);
+          y += 4;
+        }
+        const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
+        if (contacts.length) {
+          ensure(8);
+          draw(contacts.join('   •   '), st.contact, [100, 116, 139], 'bold', 2);
+          y += 2;
+        }
+        if (paint) {
+          doc.setDrawColor(241, 245, 249);
+          doc.line(st.mx, y, pageW - st.mx, y);
+        }
+        y += st.headerAfter;
+
+        // Sections (only render non-empty ones — no null/placeholder values)
+        const renderSection = (sectionId: string) => {
+          switch (sectionId) {
+            case 'summary': {
+              const text = cleanVal(data.summary);
+              if (!text) return;
+              sectionTitle('Profile');
+              draw(wrap(text, st.body), st.body, [71, 85, 105], 'normal', st.gap);
+              y += st.sectionPad;
+              return;
+            }
+            case 'skills': {
+              const skills = cleanArr(data.skills).map(cleanVal).filter(Boolean);
+              if (!skills.length) return;
+              sectionTitle('Expertise');
+              draw(wrap(skills.join('  •  '), st.body), st.body, [71, 85, 105], 'normal', st.gap);
+              y += st.sectionPad;
+              return;
+            }
+            case 'experience': {
+              const exps = cleanArr(data.experience).filter((e: any) => cleanVal(e?.title) || cleanVal(e?.company));
+              if (!exps.length) return;
+              sectionTitle('Experience');
+              exps.forEach((exp: any) => {
+                const title = cleanVal(exp.title);
+                const company = cleanVal(exp.company);
+                const duration = cleanVal(exp.duration);
+                const blist = cleanArr(exp.description).map(cleanVal).filter(Boolean);
+                const firstBulletH = blist.length ? Math.max(1, wrap(blist[0], st.bullet, contentW - 6).length) * st.bulletGap : 6;
+                ensure(12, Math.min(firstBulletH + 4, 18)); // keep header with its first bullet
+                if (title) {
+                  draw(title, st.head, [15, 23, 42], 'bold', st.headLine);
+                  y += st.itemPad;
+                }
+                if (company || duration) {
+                  ensure(8);
+                  if (paint) {
+                    if (company) {
+                      doc.setFont('helvetica', 'italic');
+                      doc.setFontSize(st.company);
+                      doc.setTextColor(99, 102, 241);
+                      doc.text(company, st.mx, y);
+                    }
+                    if (duration) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.company);
+                      doc.setTextColor(100, 116, 139);
+                      doc.text(duration, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                bullets(blist);
+                y += st.itemPad;
+              });
+              y += 2;
+              return;
+            }
+            case 'education': {
+              const edus = cleanArr(data.education).filter((e: any) => cleanVal(e?.degree));
+              if (!edus.length) return;
+              sectionTitle('Education');
+              edus.forEach((edu: any) => {
+                const degree = cleanVal(edu.degree);
+                const institution = cleanVal(edu.institution);
+                const year = cleanVal(edu.year);
+                ensure(8, 6);
+                if (degree) {
+                  draw(degree, st.head - 0.5, [15, 23, 42], 'bold', st.headLine);
+                  y += st.itemPad;
+                }
+                if (institution || year) {
+                  ensure(8);
+                  if (paint) {
+                    if (institution) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body);
+                      doc.setTextColor(71, 85, 105);
+                      doc.text(institution, st.mx, y);
+                    }
+                    if (year) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 0.5);
+                      doc.setTextColor(100, 116, 139);
+                      doc.text(year, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                y += 1;
+              });
+              y += 2;
+              return;
+            }
+            case 'projects': {
+              const projects = cleanArr(data.projects).filter((p: any) => cleanVal(p?.title));
+              if (!projects.length) return;
+              sectionTitle('Projects');
+              projects.forEach((proj: any) => {
+                const title = cleanVal(proj.title);
+                const link = cleanVal(proj.link);
+                const desc = cleanVal(proj.description);
+                ensure(9, 8);
+                if (title) {
+                  if (paint) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(st.head - 0.5);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(title, st.mx, y);
+                    if (link) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 1);
+                      doc.setTextColor(79, 70, 229);
+                      doc.text(link, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                if (desc) {
+                  draw(wrap(desc, st.body), st.body, [71, 85, 105], 'normal', st.gap);
+                  y += 2;
+                }
+                y += 2;
+              });
+              y += 2;
+              return;
+            }
+            case 'certifications': {
+              const certs = cleanArr(data.certifications).filter((c: any) => cleanVal(c?.name));
+              if (!certs.length) return;
+              sectionTitle('Certifications');
+              certs.forEach((cert: any) => {
+                const cname = cleanVal(cert.name);
+                const year = cleanVal(cert.year);
+                ensure(8);
+                if (cname) {
+                  if (paint) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(st.head - 0.5);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(cname, st.mx, y);
+                    if (year) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 0.5);
+                      doc.setTextColor(100, 116, 139);
+                      doc.text(year, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                y += 1;
+              });
+              y += 2;
+              return;
+            }
+            case 'languages': {
+              const langs = cleanArr(data.languages).filter((l: any) => cleanVal(l?.language));
+              if (!langs.length) return;
+              sectionTitle('Languages');
+              langs.forEach((lang: any) => {
+                const lname = cleanVal(lang.language);
+                const prof = cleanVal(lang.proficiency);
+                ensure(8);
+                if (lname) {
+                  if (paint) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(st.head - 0.5);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(lname, st.mx, y);
+                    if (prof) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 0.5);
+                      doc.setTextColor(79, 70, 229);
+                      doc.text(`• ${prof}`, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+              });
+              y += 2;
+              return;
+            }
+            case 'achievements': {
+              const items = cleanArr(data.achievements).filter((a: any) => cleanVal(a?.title) || cleanVal(a?.description));
+              if (!items.length) return;
+              sectionTitle('Highlights');
+              items.forEach((ach: any) => {
+                const title = cleanVal(ach.title);
+                const desc = cleanVal(ach.description);
+                ensure(9, 8);
+                if (title) {
+                  draw(title, st.head - 0.5, [15, 23, 42], 'bold', st.headLine);
+                  y += st.itemPad;
+                }
+                if (desc) {
+                  draw(wrap(desc, st.body), st.body, [71, 85, 105], 'normal', st.gap);
+                  y += 2;
+                }
+                y += 2;
+              });
+              y += 2;
+              return;
+            }
+            case 'internships': {
+              const ints = cleanArr(data.internships).filter((i: any) => cleanVal(i?.role));
+              if (!ints.length) return;
+              sectionTitle('Internships');
+              ints.forEach((int: any) => {
+                const role = cleanVal(int.role);
+                const company = cleanVal(int.company);
+                const blist = cleanArr(int.description).map(cleanVal).filter(Boolean);
+                const firstBulletH = blist.length ? Math.max(1, wrap(blist[0], st.bullet, contentW - 6).length) * st.bulletGap : 6;
+                ensure(9, Math.min(firstBulletH + 4, 18));
+                if (role || company) {
+                  if (paint) {
+                    if (role) {
+                      doc.setFont('helvetica', 'bold');
+                      doc.setFontSize(st.head - 0.5);
+                      doc.setTextColor(15, 23, 42);
+                      doc.text(role, st.mx, y);
+                    }
+                    if (company) {
+                      doc.setFont('helvetica', 'italic');
+                      doc.setFontSize(st.company);
+                      doc.setTextColor(99, 102, 241);
+                      doc.text(company, st.mx + (role ? doc.getTextWidth(role) + 5 : 0), y);
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                bullets(blist);
+                y += st.itemPad;
+              });
+              y += 2;
+              return;
+            }
+            default:
+              return;
+          }
+        };
+
+        cleanArr(data.sectionOrder).forEach(renderSection);
+        return pages;
+      };
+
+      const probe = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+      // Scale every numeric layout setting by `s` so one pass can shrink the
+      // whole page proportionally (fonts, margins, spacing) to force a fit.
+      const scaleSettings = (base: PdfSettings, s: number): PdfSettings => {
+        const out = {} as PdfSettings;
+        (Object.keys(base) as (keyof PdfSettings)[]).forEach((k) => {
+          out[k] = base[k] * s;
+        });
+        return out;
+      };
+
+      const pageCount = (st: PdfSettings) => renderLayout(probe, st, false);
+
+      // Fit to exactly one page: try the full-size layout first, then compact,
+      // then progressively shrink compact (down to ~0.75x) until it fits.
+      const chosen = (() => {
+        if (pageCount(layouts.normal) === 1) return layouts.normal;
+        if (pageCount(layouts.compact) === 1) return layouts.compact;
+        const MIN_SCALE = 0.75;
+        let lo = MIN_SCALE;
+        let hi = 1;
+        let best = layouts.compact;
+        for (let i = 0; i < 8; i += 1) {
+          const mid = (lo + hi) / 2;
+          const st = scaleSettings(layouts.compact, mid);
+          if (pageCount(st) === 1) {
+            best = st;
+            lo = mid;
+          } else {
+            hi = mid;
           }
         }
-      });
+        return best;
+      })();
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.85); // Optimized quality for compatibility
-      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${(data.fullName || 'Resume').trim().replace(/[^a-z0-9]/gi, '_')}.pdf`);
+      renderLayout(pdf, chosen, true);
+      pdf.save(`${(cleanVal(data.fullName) || 'Resume').replace(/[^a-z0-9]/gi, '_')}.pdf`);
       toast.success('Resume downloaded successfully!');
     } catch (e) {
       console.error('PDF Error:', e);
       toast.error('Export failed - please try one more time');
-    } finally {
-      (window as any).getComputedStyle = originalGCS;
     }
   };
 
@@ -704,7 +1393,7 @@ export default function AIResumeBuilder() {
       const { data: resume, error } = await supabase.from('resumes').select('parsed_data').eq('id', resumeId).single();
       if (resume?.parsed_data && !error) {
         const originalData = typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data;
-        setData(originalData);
+        setData({ ...INITIAL_DATA, ...originalData });
         if (originalData.targetRole || originalData.target_role) {
           setDiscovery(prev => ({ ...prev, role: originalData.targetRole || originalData.target_role }));
         }
@@ -737,8 +1426,10 @@ export default function AIResumeBuilder() {
       // Clear local caches and state IMMEDIATELY
       localStorage.removeItem('resumatch_builder_data');
       sessionStorage.removeItem('resumatch_builder_session');
+      try { localStorage.removeItem('resumatch_tailored_mode'); } catch { /* ignore */ }
+      secureRemove(localStorage, 'resumatch_tailored_data');
       setResumeId(null);
-      setData({} as any);
+      setData({ ...INITIAL_DATA });
       
       toast.success('Draft deleted successfully');
       router.replace('/dashboard');
@@ -970,6 +1661,34 @@ export default function AIResumeBuilder() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 md:gap-2">
+            {/* Default vs Tailored toggle */}
+            <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
+              <button
+                type="button"
+                onClick={switchToDefault}
+                className={`h-8 rounded-lg px-2.5 md:px-3 text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${
+                  activeMode === 'default'
+                    ? 'bg-white shadow-sm text-slate-900'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Default
+              </button>
+              <button
+                type="button"
+                onClick={() => loadTailoredVersion()}
+                disabled={isLoadingTailored || !resumeId}
+                className={`h-8 rounded-lg px-2.5 md:px-3 text-[10px] md:text-xs font-bold transition-all whitespace-nowrap disabled:opacity-50 ${
+                  activeMode === 'tailored'
+                    ? 'bg-indigo-600 shadow-sm text-white'
+                    : 'text-slate-400 hover:text-indigo-600'
+                }`}
+              >
+                {isLoadingTailored ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : null}
+                Tailored
+              </button>
+            </div>
+
             {/* Desktop-only secondary buttons */}
             <div className="hidden lg:flex items-center gap-2">
                <Button variant="ghost" onClick={handleDeleteDraft} className="h-10 rounded-xl text-slate-300 hover:text-rose-500 px-4 transition-colors">

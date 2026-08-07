@@ -1,24 +1,22 @@
 import { Client } from 'pg';
 import * as dotenv from 'dotenv';
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
 dotenv.config();
 
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres.fukxrsqmulucvfvowcou:painkiller%40829445@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require';
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.error('❌ DATABASE_URL is not set. Set it in .env or the environment before running setup.');
+  process.exit(1);
+}
 
 async function setup() {
   console.log('🚀 Starting database setup with pg...');
-  
+
   const client = new Client({
-    host: '3.111.225.200',
-    port: 6543,
-    user: 'postgres.fukxrsqmulucvfvowcou',
-    password: 'painkiller@829445',
-    database: 'postgres',
-    ssl: { 
-      rejectUnauthorized: false,
-      servername: 'aws-1-ap-south-1.pooler.supabase.com'
+    connectionString: databaseUrl,
+    ssl: {
+      rejectUnauthorized: false
     }
   });
 
