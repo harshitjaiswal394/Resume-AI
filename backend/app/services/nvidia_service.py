@@ -7,6 +7,8 @@ import httpx
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 
+from app.services.json_utils import normalize_placeholders
+
 logger = logging.getLogger("nvidia-service")
 
 class NvidiaService:
@@ -211,20 +213,22 @@ Required JSON format:
   "phone": "string",
   "targetRole": "suggested job title based on experience",
   "links": {{
-    "linkedin": "url or null",
-    "github": "url or null",
-    "portfolio": "url or null"
+    "linkedin": "null or url string; use null (not the word 'null') if absent",
+    "github": "null or url string; use null (not the word 'null') if absent",
+    "portfolio": "null or url string; use null (not the word 'null') if absent"
   }},
   "summary": "2-3 sentence professional summary",
   "skills": ["skill1", "skill2"],
   "experience": [{{"title": "string", "company": "string", "location": "string", "duration": "string", "description": ["achievement1"]}}],
   "education": [{{"degree": "string", "institution": "string", "year": "string", "description": "optional detail"}}],
-  "projects": [{{"title": "string", "description": "string", "link": "url or null", "tech_stack": ["tech1"]}}],
+  "projects": [{{"title": "string", "description": "string", "link": "null or url string; use null (not the word 'null') if absent", "tech_stack": ["tech1"]}}],
   "certifications": [{{ "name": "string", "issuer": "string", "year": "string" }}],
   "languages": [{{"language": "string", "proficiency": "Native/Professional/Basic"}}],
   "internships": [{{"role": "string", "company": "string", "duration": "string", "description": ["detail1"]}}],
   "achievements": [{{"title": "string", "description": "string"}}]
 }}
+
+IMPORTANT: Use JSON null (no quotes) for missing values. Never output the literal string "null", "N/A", or "None". Empty text fields should use "".
 
 Respond with ONLY the JSON object:"""
         
@@ -261,7 +265,7 @@ Respond with ONLY the JSON object:"""
                 content = response.choices[0].message.content
                 logger.info(f"Parse attempt {attempt+1} response length: {len(content)} chars")
                 
-                parsed = self._clean_json(content)
+                parsed = normalize_placeholders(self._clean_json(content))
                 
                 if parsed and parsed.get("fullName") and parsed.get("fullName") != "string":
                     logger.info(f"Successfully parsed resume for: {parsed.get('fullName')}")

@@ -186,40 +186,50 @@ async function setup() {
       `);
     }
 
+    // Ownership-scoped policies. Every user can ONLY see/modify their OWN rows.
+    // (The backend service role / direct DATABASE_URL connection bypasses RLS,
+    // so server-side pipeline writes are unaffected.)
+
     // 1. Users table policies
     await client.query(`
-      CREATE POLICY "Users can access own profile" ON users FOR ALL TO authenticated USING (true) WITH CHECK (true);
+      CREATE POLICY "Users can access own profile" ON users FOR ALL TO authenticated USING (id = auth.uid()) WITH CHECK (id = auth.uid());
     `);
 
     // 2. Resumes table policies
     await client.query(`
-      CREATE POLICY "Users can access own resumes" ON resumes FOR ALL TO authenticated USING (true) WITH CHECK (true);
+      CREATE POLICY "Users can read own resumes" ON resumes FOR SELECT TO authenticated USING (user_id = auth.uid());
+      CREATE POLICY "Users can insert own resumes" ON resumes FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can update own resumes" ON resumes FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can delete own resumes" ON resumes FOR DELETE TO authenticated USING (user_id = auth.uid());
     `);
 
     // 3. Job Matches table policies
     await client.query(`
-      CREATE POLICY "Users can access own matches" ON job_matches FOR ALL TO authenticated USING (true) WITH CHECK (true);
+      CREATE POLICY "Users can read own matches" ON job_matches FOR SELECT TO authenticated USING (user_id = auth.uid());
+      CREATE POLICY "Users can insert own matches" ON job_matches FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can update own matches" ON job_matches FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can delete own matches" ON job_matches FOR DELETE TO authenticated USING (user_id = auth.uid());
     `);
 
     // 4. Cover Letters table policies
     await client.query(`
-      CREATE POLICY "Users can access own cover letters" ON cover_letters FOR ALL TO authenticated USING (true) WITH CHECK (true);
+      CREATE POLICY "Users can read own cover letters" ON cover_letters FOR SELECT TO authenticated USING (user_id = auth.uid());
+      CREATE POLICY "Users can insert own cover letters" ON cover_letters FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can update own cover letters" ON cover_letters FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can delete own cover letters" ON cover_letters FOR DELETE TO authenticated USING (user_id = auth.uid());
     `);
 
-    // 5. Other tables
-    const otherTables = ['subscriptions', 'job_search_logs', 'audit_logs', 'resume_embeddings'];
-    for (const table of otherTables) {
-      await client.query(`
-        CREATE POLICY "Users can access own ${table}" ON ${table} FOR ALL TO authenticated USING (true) WITH CHECK (true);
-      `);
-    }
-    
-    // Also allow anon for demo purposes if needed
+    // 5. Other user-owned tables (resume_embeddings is scoped via its owning
+    // resume, so it is queried by the server-side pipeline / service role only).
     await client.query(`
-      CREATE POLICY "Anon can insert resumes" ON resumes FOR INSERT TO anon WITH CHECK (true);
-      CREATE POLICY "Anon can select resumes" ON resumes FOR SELECT TO anon USING (true);
+      CREATE POLICY "Users can access own subscriptions" ON subscriptions FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can access own job_search_logs" ON job_search_logs FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+      -- audit_logs: the Razorpay checkout handler writes a payment record from
+      -- the client with user_id = auth.uid(); reads are restricted to the owner.
+      CREATE POLICY "Users can insert own audit_logs" ON audit_logs FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can read own audit_logs" ON audit_logs FOR SELECT TO authenticated USING (user_id = auth.uid());
     `);
-    
+
     console.log('✅ RLS setup complete.');
     console.log('🎉 Database setup successful!');
   } catch (error) {

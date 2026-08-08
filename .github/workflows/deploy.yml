@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
   push:
-    branches: [ "feature/tailor-resume" ]
+    branches: [ "redesign/builder-premium-ui" ]
   workflow_dispatch:
 
 env:

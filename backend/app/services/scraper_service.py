@@ -1,6 +1,9 @@
+import asyncio
+import ipaddress
 import json
 import logging
 import re
+import socket
 from html import unescape
 from typing import Any, Iterable, Optional
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -34,7 +37,7 @@ class ScraperService:
         return result.get("content")
 
     async def fetch_job_content_diagnostics(self, url: str) -> dict[str, Any]:
-        normalized_url = self._normalize_url(url)
+        normalized_url = await self._validate_public_url(url)
         diagnostics: dict[str, Any] = {
             "url": url,
             "normalized_url": normalized_url,
@@ -96,6 +99,59 @@ class ScraperService:
         diagnostics["final_stage"] = "none"
         logger.warning(f"All scraper strategies returned weak or blocked content: {json.dumps(diagnostics)}")
         return {"content": None, "diagnostics": diagnostics}
+
+    async def _validate_public_url(self, raw_url: str) -> str:
+        """Reject URLs that are not public http(s) destinations (SSRF guard).
+
+        Blocks non-http schemes and destinations resolving to private,
+        loopback, link-local or reserved IP ranges (e.g. cloud metadata
+        169.254.169.254, 127.0.0.1, RFC1918). Runs before any fetch. DNS
+        resolution runs in a worker thread so the event loop is never blocked.
+        """
+        parsed = urlparse(raw_url.strip())
+        if parsed.scheme not in ("http", "https"):
+            logger.warning(f"SSRF guard: rejected non-http scheme for URL: {raw_url[:200]}")
+            raise ValueError("Only http/https URLs are supported")
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            raise ValueError("URL must include a host")
+
+        def _is_private(ip: Any) -> bool:
+            try:
+                addr = ipaddress.ip_address(ip)
+            except ValueError:
+                return False
+            return not addr.is_global
+
+        # Fast path: literal IP addresses are checked directly.
+        if hostname.count(".") >= 1:
+            try:
+                literal_ip = ipaddress.ip_address(hostname.strip("[]"))
+            except ValueError:
+                literal_ip = None
+            if literal_ip is not None:
+                if not literal_ip.is_global:
+                    logger.warning(f"SSRF guard: rejected non-public IP literal: {hostname}")
+                    raise ValueError("Private or loopback URLs are not allowed")
+                return self._normalize_url(raw_url)
+
+        # Hostname path: resolve in a worker thread and block if every
+        # address is non-public.
+        try:
+            infos = await asyncio.to_thread(socket.getaddrinfo, hostname, None, socket.AF_INET)
+            addresses = [info[4][0] for info in infos]
+            if addresses and all(_is_private(a) for a in addresses):
+                logger.warning(f"SSRF guard: host '{hostname}' resolves to private addresses: {addresses}")
+                raise ValueError("URL host resolves to a private or loopback address")
+        except socket.gaierror:
+            # Resolution failure: allow and let the fetch fail with normal handling.
+            logger.warning(f"SSRF guard: DNS resolution failed for '{hostname}'; continuing.")
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.warning(f"SSRF guard: resolution check errored for '{hostname}': {e}")
+
+        return self._normalize_url(raw_url)
 
     def _normalize_url(self, raw_url: str) -> str:
         parsed = urlparse(raw_url.strip())

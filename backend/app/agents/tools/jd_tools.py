@@ -186,12 +186,14 @@ Respond with ONLY a JSON object with these fields:
   "tech_stack": ["technology 1", "technology 2", ...],
   "responsibilities": ["responsibility 1", "responsibility 2", ...],
   "experience_level": "Entry Level|Mid Level|Senior|Lead|Executive",
-  "experience_years": "2-4 years" or null,
-  "salary_range": "$X-$Y" or null,
+  "experience_years": null or "2-4 years",
+  "salary_range": null or "$X-$Y",
   "location": "city, state" or "Remote" or "Hybrid",
   "employment_type": "Full-time|Part-time|Contract",
   "description_summary": "2-3 sentence summary of the role"
 }
+
+IMPORTANT: Use JSON null (no quotes) for missing values. Never output the literal string "null", "N/A", or "None".
 
 Be precise. Only extract information explicitly stated in the JD. If a field is not mentioned, use null."""
 

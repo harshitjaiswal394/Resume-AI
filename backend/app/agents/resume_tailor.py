@@ -25,6 +25,19 @@ from app.agents.tools.version_diff import compute_diff
 
 logger = logging.getLogger("resumatch-ai.agents.resume_tailor")
 
+_NULL_PLACEHOLDERS = {"null", "none", "n/a", "undefined"}
+
+
+def _is_empty_value(value: Any) -> bool:
+    """True when a value is missing or an LLM placeholder string."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip() or value.strip().lower() in _NULL_PLACEHOLDERS
+    if isinstance(value, (list, dict)):
+        return not value
+    return False
+
 
 TAILORING_PROMPT = """You are a resume tailoring expert. Your task is to rewrite a resume to better match a specific job description.
 
@@ -266,10 +279,10 @@ Rewrite the resume to better match this JD. Follow all rules strictly."""
             return
         for key in cls._PASSTHROUGH_KEYS:
             source_val = source_resume.get(key)
-            if source_val in (None, "", [], {}):
+            if _is_empty_value(source_val):
                 continue
             tailored_val = tailored_resume.get(key)
-            if tailored_val in (None, "", [], {}):
+            if _is_empty_value(tailored_val):
                 tailored_resume[key] = source_val
 
     @classmethod

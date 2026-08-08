@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from app.db import engine, get_db
 from sqlalchemy import text
 from app.api.builder_models import ResumeCreateRequest, ResumeUpdateRequest
+from app.api.deps import get_current_user_id
 import uuid
 import json
 import logging
@@ -10,18 +11,10 @@ import logging
 router = APIRouter()
 logger = logging.getLogger("resumatch-api.resumes")
 
-@router.post("/")
-async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = None):
-    """Creates a new modular resume."""
+async def create_resume_record(payload: ResumeCreateRequest, user_id: str) -> dict:
+    """Inserts a modular resume owned by `user_id`. Returns {success, resume_id}."""
     resume_id = str(uuid.uuid4())
-    
-    # Handle guest user_id precisely
     db_user_id = None if user_id in ["guest", "undefined", None] else user_id
-
-    # If user_id is provided in the body (common for builder), use it
-    body_user_id = getattr(payload, 'user_id', None)
-    if body_user_id and not db_user_id:
-        db_user_id = None if body_user_id in ["guest", "undefined"] else body_user_id
 
     try:
         with engine.begin() as conn:
@@ -63,44 +56,59 @@ async def create_resume(payload: ResumeCreateRequest, user_id: Optional[str] = N
                 }
             )
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in create_resume: {str(e)}")
+        logger.error(f"DATABASE_ERROR in create_resume: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
+
+    logger.info(f"Created resume {resume_id} for user {db_user_id}")
     return {"success": True, "resume_id": resume_id}
 
+@router.post("/")
+async def create_resume(payload: ResumeCreateRequest, user_id: str = Depends(get_current_user_id)):
+    """Creates a new modular resume for the authenticated user."""
+    return await create_resume_record(payload, user_id)
+
 @router.get("/{resume_id}")
-async def get_resume(resume_id: str, user_id: str = "guest"):
-    """Fetches a modular resume by ID."""
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT * FROM resumes WHERE id = :id"),
-            {"id": resume_id}
-        ).fetchone()
-        
-        if not result:
-            raise HTTPException(status_code=404, detail="Resume not found")
-            
-        res = dict(result._asdict())
-        # Handle JSONB fields with comprehensive lookup
-        json_fields = [
-            'skills', 'experience', 'education', 'projects', 'certifications', 
-            'languages', 'internships', 'achievements', 'parsed_data', 'score_breakdown'
-        ]
-        for field in json_fields:
-            if res.get(field) and isinstance(res[field], str):
+async def get_resume(resume_id: str, user_id: str = Depends(get_current_user_id)):
+    """Fetches a modular resume by ID (scoped to the authenticated user)."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT * FROM resumes WHERE id = :id AND user_id = :uid"),
+                {"id": resume_id, "uid": user_id}
+            ).fetchone()
+    except Exception as e:
+        logger.error(f"DATABASE_ERROR in get_resume: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database error")
+
+    if not result:
+        logger.warning(f"Resume {resume_id} not found or not owned by user {user_id}")
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    res = dict(result._asdict())
+    # Handle JSONB fields with comprehensive lookup
+    json_fields = [
+        'skills', 'experience', 'education', 'projects', 'certifications', 
+        'languages', 'internships', 'achievements', 'parsed_data', 'score_breakdown'
+    ]
+    for field in json_fields:
+        if res.get(field) and isinstance(res[field], str):
+            try:
                 res[field] = json.loads(res[field])
-        
-        return {"success": True, "resume": res}
+            except Exception:
+                logger.warning(f"Failed to parse JSON field {field} on resume {resume_id}")
+
+    return {"success": True, "resume": res}
 
 @router.put("/{resume_id}")
-async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: str = "guest"):
-    """Updates modular resume sections."""
+async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: str = Depends(get_current_user_id)):
+    """Updates modular resume sections (scoped to the authenticated user)."""
     update_data = payload.dict(exclude_unset=True)
+
     if not update_data:
         return {"success": True, "message": "No changes detected"}
         
     set_clauses = []
-    params = {"id": resume_id}
+    params = {"id": resume_id, "uid": user_id}
     
     json_fields = {
         'experience', 'education', 'projects', 'skills', 
@@ -109,7 +117,6 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
     
     for key, value in update_data.items():
         if key in json_fields:
-            logger.info(f"[DB-FIX] Serializing {key} for database storage...")
             # Pydantic models need to be converted to dicts/lists before json.dumps
             if isinstance(value, list):
                 serializable_value = [v.dict() if hasattr(v, 'dict') else v for v in value]
@@ -121,54 +128,64 @@ async def update_resume(resume_id: str, payload: ResumeUpdateRequest, user_id: s
         elif key == 'section_order':
             params[key] = "{" + ",".join([f'"{s}"' for s in value]) + "}"
         elif key == 'user_id':
-            params[key] = None if value in ["guest", "undefined", None] else value
+            continue
         else:
             params[key] = value
         
         set_clauses.append(f"{key} = :{key}")
     
-    query = f"UPDATE resumes SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id"
+    if not set_clauses:
+        return {"success": True, "message": "No changes detected"}
+
+    query = f"UPDATE resumes SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id AND user_id = :uid"
     
     try:
         with engine.begin() as conn:
-            conn.execute(text(query), params)
-            logger.info(f"[DB-FIX] Successfully updated resume {resume_id}")
+            result = conn.execute(text(query), params)
+            if result.rowcount == 0:
+                logger.warning(f"Resume {resume_id} not found or not owned by user {user_id}")
+                raise HTTPException(status_code=404, detail="Resume not found")
+            logger.info(f"Updated resume {resume_id} for user {user_id}")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in update_resume: {str(e)}")
+        logger.error(f"DATABASE_ERROR in update_resume: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     return {"success": True}
 
 @router.delete("/{resume_id}")
-async def delete_resume(resume_id: str, authorization: Optional[str] = Header(None)):
-    """Deletes a resume and associated data (versions, embeddings, job matches)."""
-    uid = None
-    if authorization and authorization.startswith("Bearer "):
-        try:
-            from app.services.auth_service import auth_service
-            result = await auth_service.get_user(authorization.replace("Bearer ", ""))
-            if result.get("success"):
-                uid = result["user"]["id"]
-        except Exception:
-            uid = None
-
+async def delete_resume(resume_id: str, user_id: str = Depends(get_current_user_id)):
+    """Deletes a resume and associated data (versions, embeddings, job matches), scoped to the user."""
     try:
         with engine.begin() as conn:
-            # 1. Delete associated job matches
-            conn.execute(text("DELETE FROM job_matches WHERE resume_id = :id"), {"id": resume_id})
+            # 1. Delete associated job matches (scoped to the owner)
+            conn.execute(
+                text("DELETE FROM job_matches WHERE resume_id = :id AND user_id = :uid"),
+                {"id": resume_id, "uid": user_id},
+            )
             # 2. Delete associated tailored versions
-            conn.execute(text("DELETE FROM resume_versions WHERE resume_id = :id"), {"id": resume_id})
+            conn.execute(
+                text("DELETE FROM resume_versions WHERE resume_id = :id AND user_id = :uid"),
+                {"id": resume_id, "uid": user_id},
+            )
             # 3. Delete associated embeddings
-            conn.execute(text("DELETE FROM resume_embeddings WHERE resume_id = :id"), {"id": resume_id})
-            # 4. Delete the resume itself (scoped to user when authenticated)
-            if uid:
-                conn.execute(
-                    text("DELETE FROM resumes WHERE id = :id AND user_id = :uid"),
-                    {"id": resume_id, "uid": uid},
-                )
-            else:
-                conn.execute(text("DELETE FROM resumes WHERE id = :id"), {"id": resume_id})
+            conn.execute(
+                text("DELETE FROM resume_embeddings WHERE resume_id = :id AND user_id = :uid"),
+                {"id": resume_id, "uid": user_id},
+            )
+            # 4. Delete the resume itself (scoped to user)
+            result = conn.execute(
+                text("DELETE FROM resumes WHERE id = :id AND user_id = :uid"),
+                {"id": resume_id, "uid": user_id},
+            )
+            if result.rowcount == 0:
+                logger.warning(f"Resume {resume_id} not found or not owned by user {user_id}")
+                raise HTTPException(status_code=404, detail="Resume not found")
+        logger.info(f"Deleted resume {resume_id} for user {user_id}")
         return {"success": True}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"DATABASE_ERROR in delete_resume: {str(e)}")
+        logger.error(f"DATABASE_ERROR in delete_resume: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

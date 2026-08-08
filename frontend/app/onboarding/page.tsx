@@ -29,6 +29,7 @@ import { AuthModal } from '@/components/common/AuthModal';
 import { extractTextFromFile } from '@/lib/pdf';
 import { startResumeAnalysis, completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
 import { generateJobLinks } from '@/lib/job-portals';
+import { saveGuestFile, loadGuestFile, clearGuestFile } from '@/lib/guestFile';
 
 type Step = 'upload' | 'analyzing' | 'personalize';
 
@@ -133,6 +134,7 @@ export default function OnboardingFlow() {
     }
 
     fileRef.current = file;
+    saveGuestFile(file);
     setFileName(file.name);
     setCurrentStep('analyzing');
     setUploadProgress(10);
@@ -301,23 +303,38 @@ export default function OnboardingFlow() {
       // If this was a guest analysis, we need to save it to the DB now for the new user
       if (resumeId === 'guest') {
         console.log('Saving guest analysis to new user record...');
-        const file = fileRef.current;
+        let file = fileRef.current;
         const storedState = typeof window !== 'undefined'
           ? sessionStorage.getItem(GUEST_ONBOARDING_STATE_KEY)
           : null;
         const guestState = storedState ? JSON.parse(storedState) : null;
-        const resumeFileName = file?.name || guestState?.fileName || 'guest_resume.docx';
-        const resumeFileType = resumeFileName.endsWith('.pdf') ? 'pdf' : 'docx';
-        const resumeFileSize = file?.size || guestState?.fileSize || 0;
-        let publicUrl = '';
 
-        // 1. Upload to storage if the original file is still available in memory
-        if (file) {
-          const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
-          const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
-          if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
-          ({ data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath));
+        // The original file may no longer be in memory (e.g. page was refreshed
+        // during the guest analysis). Restore it from IndexedDB so the resume
+        // can be uploaded to storage instead of failing.
+        if (!file) {
+          file = await loadGuestFile();
         }
+
+        if (!file) {
+          sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+          setFullAnalysisData(null);
+          setActiveResumeId('guest');
+          setCurrentStep('upload');
+          setIsTailoring(false);
+          toast.error('Session expired. Please re-upload your resume to link it to your account.');
+          return;
+        }
+
+        const resumeFileName = file.name;
+        const resumeFileType = resumeFileName.endsWith('.pdf') ? 'pdf' : 'docx';
+        const resumeFileSize = file.size;
+
+        // 1. Upload the file to storage
+        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
+        if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
+        const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
 
         // 2. Insert resume record
         const { data: resumeData, error: resumeError } = await supabase
@@ -337,14 +354,32 @@ export default function OnboardingFlow() {
         resumeId = resumeData.id;
         setActiveResumeId(resumeId);
 
-        // 3. Persist the analysis data received earlier as a guest
+        // Persist the guest analysis immediately (fast DB write) so the
+        // migration always succeeds even if the tailor call fails below.
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
         sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.id, resumeId, personalizeData, fullAnalysisData.parsed_data);
-        if (!result.success) throw new Error(result.error || 'Failed to tailor results');
+        // Run the tailor with the analysis already computed during the guest
+        // run, so the backend skips the expensive re-analysis. The guest
+        // analysis was already persisted above, so a tailor failure is
+        // non-fatal: the user still lands on the dashboard with their results.
+        const result = await tailorResume(
+          user.id,
+          resumeId,
+          personalizeData,
+          fullAnalysisData.parsed_data,
+          {
+            analysis: fullAnalysisData.analysis,
+            rawText: fullAnalysisData.raw_text,
+          }
+        );
+        if (!result.success) {
+          console.warn('Tailor step failed, but analysis is already persisted:', (result as any).error);
+        }
+        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+        clearGuestFile();
       }
 
       toast.success('Strategy optimized!');

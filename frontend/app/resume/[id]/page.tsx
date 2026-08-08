@@ -3,9 +3,10 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +37,9 @@ import { motion } from 'motion/react';
 
 export default function ResumeView() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
+  const { user, isAuthReady } = useAuth();
   const [resume, setResume] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,11 +47,13 @@ export default function ResumeView() {
   const [activeJobMatch, setActiveJobMatch] = useState<any>(null);
 
   const handleSaveJob = async (matchId: string, isSaved: boolean) => {
+    if (!user) return;
     try {
       const { error } = await supabase
         .from('job_matches')
         .update({ is_saved: isSaved })
-        .eq('id', matchId);
+        .eq('id', matchId)
+        .eq('user_id', user.id);
 
       if (error) throw error;
       toast.success(isSaved ? 'Job saved!' : 'Job removed from saved');
@@ -58,30 +63,62 @@ export default function ResumeView() {
     }
   };
 
+  // Derive the storage object path from the stored public URL and download the
+  // original file via a short-lived signed URL (the resumes bucket is private).
+  const downloadResumeFile = async () => {
+    if (!resume?.file_url) return;
+    try {
+      const publicMarker = '/object/public/';
+      const idx = resume.file_url.indexOf(publicMarker);
+      if (idx === -1) {
+        toast.error('Unable to locate the uploaded file');
+        return;
+      }
+      const filePath = decodeURIComponent(resume.file_url.slice(idx + publicMarker.length));
+      const { data, error } = await supabase.storage.from('resumes').createSignedUrl(filePath, 60);
+      if (error) throw error;
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    } catch (error) {
+      console.error('Error generating download link:', error);
+      toast.error('Failed to generate download link');
+    }
+  };
+
   useEffect(() => {
+    // Protect this report: only the owning account may view it. Redirect
+    // unauthenticated visitors and never load another user's data.
+    if (!isAuthReady) return;
+    if (!user) {
+      router.replace('/');
+      return;
+    }
     if (!id) return;
 
     const fetchData = async () => {
       setLoading(true);
-      
-      // Fetch resume
+
+      // Fetch resume — ownership-scoped so a shared link never renders
+      // another user's data (IDOR protection).
       const { data: resumeData, error: resumeError } = await supabase
         .from('resumes')
         .select('*')
         .eq('id', id)
+        .eq('user_id', user.id)
         .single();
 
       if (resumeError) {
         console.error('Error fetching resume:', resumeError);
+        setResume(null);
       } else {
         setResume(resumeData);
       }
 
-      // Fetch matches
+      // Fetch matches — ownership-scoped.
       const { data: matchesData, error: matchesError } = await supabase
         .from('job_matches')
         .select('*')
-        .eq('resume_id', id);
+        .eq('resume_id', id)
+        .eq('user_id', user.id);
 
       if (matchesError) {
         console.error('Error fetching matches:', matchesError);
@@ -116,7 +153,11 @@ export default function ResumeView() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [id]);
+  }, [id, user, isAuthReady, router]);
+
+  if (!isAuthReady) return (
+    <LoadingScreen label="Loading your analysis…" sublabel="Fetching resume report & job matches" />
+  );
 
   if (loading) return (
     <LoadingScreen label="Loading your analysis…" sublabel="Fetching resume report & job matches" />
@@ -125,6 +166,7 @@ export default function ResumeView() {
   if (!resume) return (
     <div className="container mx-auto py-20 text-center">
       <h2 className="text-2xl font-bold">Resume not found</h2>
+      <p className="mt-2 text-muted-foreground">This report either does not exist or does not belong to your account.</p>
       <Link href="/dashboard" className="text-primary hover:underline mt-4 inline-block">Back to Dashboard</Link>
     </div>
   );
@@ -146,7 +188,7 @@ export default function ResumeView() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => window.open(resume.file_url, '_blank')}>
+            <Button variant="outline" onClick={downloadResumeFile}>
               <Download className="mr-2 h-4 w-4" /> Download PDF
             </Button>
           </div>

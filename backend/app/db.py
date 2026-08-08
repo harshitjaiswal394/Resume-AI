@@ -145,11 +145,26 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
 
 
 import json
+def _strip_control_chars(value):
+    """Recursively remove NUL (0x00) and other C0 control characters that
+    PostgreSQL rejects inside text values (e.g. NUL from PDF extraction).
+    """
+    if isinstance(value, str):
+        return "".join(ch for ch in value if ord(ch) >= 0x20 or ch in "\n\r\t")
+    if isinstance(value, dict):
+        return {k: _strip_control_chars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_strip_control_chars(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_strip_control_chars(v) for v in value)
+    return value
+
 def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
     """
     Saves the entire analysis outcome (Parsed Data, Analysis, Matches) to the DB.
     Replicates the functionality previously held in Next.js Server Actions.
     """
+    data = _strip_control_chars(data)
     parsed_data = data.get("parsed_data", {})
     analysis = data.get("analysis", {})
     matches = data.get("matches", [])

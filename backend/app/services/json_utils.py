@@ -9,6 +9,28 @@ from typing import Any, Optional
 
 logger = logging.getLogger("resumatch-ai.json_utils")
 
+_NULL_PLACEHOLDERS = {"null", "none", "n/a", "undefined"}
+
+
+def normalize_placeholders(value: Any) -> Any:
+    """Recursively convert LLM placeholder strings into clean empty values.
+
+    Models sometimes echo the literal string "null" (or "None", "N/A",
+    "undefined") into text fields instead of emitting real JSON null.
+    Convert those to real empty values so they never render into exported
+    DOCX/PDF files or leak into parsed_data.
+    """
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or stripped.lower() in _NULL_PLACEHOLDERS:
+            return ""
+        return value
+    if isinstance(value, list):
+        return [normalize_placeholders(item) for item in value]
+    if isinstance(value, dict):
+        return {k: normalize_placeholders(v) for k, v in value.items()}
+    return value
+
 
 def strip_code_fence(text: str) -> str:
     """Extract raw JSON from a markdown code block if present."""
@@ -45,7 +67,7 @@ def parse_json_response(text: Any) -> Optional[Any]:
             return None
 
     try:
-        return json.loads(text)
+        return normalize_placeholders(json.loads(text))
     except json.JSONDecodeError:
         pass
 
@@ -63,14 +85,14 @@ def parse_json_response(text: Any) -> Optional[Any]:
         text += "}" * (text.count("{") - text.count("}"))
 
     try:
-        return json.loads(text)
+        return normalize_placeholders(json.loads(text))
     except json.JSONDecodeError:
         pass
 
     # Strip invalid control characters that json.loads rejects
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
     try:
-        return json.loads(text)
+        return normalize_placeholders(json.loads(text))
     except json.JSONDecodeError:
         pass
 
@@ -99,7 +121,7 @@ def parse_json_response(text: Any) -> Optional[Any]:
                 depth -= 1
                 if depth == 0:
                     try:
-                        return json.loads(text[search_from : i + 1])
+                        return normalize_placeholders(json.loads(text[search_from : i + 1]))
                     except (ValueError, TypeError):
                         break
         search_from = text.find("{", search_from + 1)
