@@ -251,8 +251,21 @@ export default function LandingPage() {
 
       let resumeId = activeResumeId;
 
-      if (resumeId === 'guest' && fileRef.current) {
+      if (resumeId === 'guest') {
         const file = fileRef.current;
+
+        // The original file may no longer be in memory (e.g. page was refreshed
+        // during the guest analysis). We cannot create a resume record without a
+        // real file, so ask the user to re-upload instead of silently skipping.
+        if (!file) {
+          setFullAnalysisData(null);
+          setActiveResumeId('guest');
+          setIsPersonalizing(false);
+          setIsTailoring(false);
+          toast.error('Session expired. Please re-upload your resume to link it to your account.');
+          return;
+        }
+
         const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
 
         const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);

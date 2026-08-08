@@ -306,18 +306,30 @@ export default function OnboardingFlow() {
           ? sessionStorage.getItem(GUEST_ONBOARDING_STATE_KEY)
           : null;
         const guestState = storedState ? JSON.parse(storedState) : null;
-        const resumeFileName = file?.name || guestState?.fileName || 'guest_resume.docx';
-        const resumeFileType = resumeFileName.endsWith('.pdf') ? 'pdf' : 'docx';
-        const resumeFileSize = file?.size || guestState?.fileSize || 0;
-        let publicUrl = '';
 
-        // 1. Upload to storage if the original file is still available in memory
-        if (file) {
-          const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
-          const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
-          if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
-          ({ data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath));
+        // The original file may no longer be in memory (e.g. page was refreshed
+        // during the guest analysis). We cannot create a resume record without a
+        // real file, so ask the user to re-upload instead of silently saving a
+        // record with an empty file_url.
+        if (!file) {
+          sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+          setFullAnalysisData(null);
+          setActiveResumeId('guest');
+          setCurrentStep('upload');
+          setIsTailoring(false);
+          toast.error('Session expired. Please re-upload your resume to link it to your account.');
+          return;
         }
+
+        const resumeFileName = file.name;
+        const resumeFileType = resumeFileName.endsWith('.pdf') ? 'pdf' : 'docx';
+        const resumeFileSize = file.size;
+
+        // 1. Upload the file to storage
+        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
+        if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
+        const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
 
         // 2. Insert resume record
         const { data: resumeData, error: resumeError } = await supabase
