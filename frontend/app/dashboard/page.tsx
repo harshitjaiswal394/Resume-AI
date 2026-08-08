@@ -129,7 +129,8 @@ export default function Dashboard() {
           // Persist to DB
           await supabase.from('resumes')
             .update({ parsed_data: newParsedData })
-            .eq('id', selectedResume.id);
+            .eq('id', selectedResume.id)
+            .eq('user_id', user!.id);
 
           toast.success('Bullet point optimized!');
         }
@@ -254,6 +255,7 @@ export default function Dashboard() {
         .from('job_matches')
         .select('*')
         .eq('resume_id', selectedResume.id)
+        .eq('user_id', user.id)
         .order('match_score', { ascending: false });
       if (!error) setJobMatches(data || []);
     };
@@ -619,7 +621,8 @@ export default function Dashboard() {
     const { error } = await supabase
       .from('job_matches')
       .update({ is_saved: isSaved })
-      .eq('id', jobId);
+      .eq('id', jobId)
+      .eq('user_id', user.id);
 
     if (error) {
       toast.error('Failed to update job');

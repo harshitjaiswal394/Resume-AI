@@ -434,12 +434,16 @@ function PreviewSectionTitle({ children }: { children: React.ReactNode }) {
 
 /* ── PDF generation ──────────────────────────────────────────────────────── */
 
+const NULL_PLACEHOLDERS = new Set(["null", "none", "n/a", "undefined"]);
+
 function cleanVal(v: unknown): string {
   if (v == null) return "";
-  if (typeof v === "string") return v.trim();
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  if (typeof v === "object") return bulletText(v as any);
-  return String(v).trim();
+  let out: string;
+  if (typeof v === "string") out = v.trim();
+  else if (typeof v === "number" || typeof v === "boolean") out = String(v);
+  else if (typeof v === "object") return bulletText(v as any);
+  else out = String(v).trim();
+  return NULL_PLACEHOLDERS.has(out.toLowerCase()) ? "" : out;
 }
 
 function cleanArr<T>(v: T[] | null | undefined): T[] {
@@ -447,7 +451,7 @@ function cleanArr<T>(v: T[] | null | undefined): T[] {
 }
 
 function bulletText(b: any): string {
-  if (typeof b === "string") return b;
+  if (typeof b === "string") return cleanVal(b);
   if (b && typeof b === "object") return cleanVal(b.text ?? b.value ?? b.content);
   return "";
 }
@@ -535,6 +539,29 @@ function downloadResumePdf(data: any, filename?: string) {
       });
     };
 
+    const drawCentered = (
+      text: string,
+      size: number,
+      color: [number, number, number],
+      style: "normal" | "bold" | "italic",
+      lineGap: number,
+    ) => {
+      if (paint) {
+        doc.setFont("helvetica", style);
+        doc.setFontSize(size);
+        doc.setTextColor(color[0], color[1], color[2]);
+      }
+      const arr = Array.isArray(text) ? text : [text];
+      arr.forEach((ln) => {
+        ensure(size * 0.35 + lineGap);
+        if (paint) {
+          const w = doc.getTextWidth(ln);
+          doc.text(ln, (pageW - w) / 2, y);
+        }
+        y += size * 0.35 + lineGap;
+      });
+    };
+
     const sectionTitle = (title: string) => {
       ensure(10, 16);
       if (paint) {
@@ -576,18 +603,18 @@ function downloadResumePdf(data: any, filename?: string) {
     }
     y = st.my + st.bar + st.barGap;
 
-    // Header (only non-empty values)
+    // Header (only non-empty values), centered with minimal gaps
     const name = cleanVal(data.fullName || data.full_name);
     if (name) {
       ensure(12);
-      draw(name.toUpperCase(), st.name, [15, 23, 42], "bold", 2);
-      y += 3;
+      drawCentered(name.toUpperCase(), st.name, [15, 23, 42], "bold", 0.5);
+      y += 1;
     }
     const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
     if (contacts.length) {
       ensure(8);
-      draw(contacts.join("   •   "), st.contact, [100, 116, 139], "bold", 2);
-      y += 2;
+      drawCentered(contacts.join("   •   "), st.contact, [100, 116, 139], "bold", 0.5);
+      y += 0.5;
     }
     if (paint) {
       doc.setDrawColor(241, 245, 249);

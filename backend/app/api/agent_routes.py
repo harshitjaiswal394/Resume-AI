@@ -271,9 +271,9 @@ async def resume_version_to_builder(version_id: str, user_id: str = Depends(_get
             company=exp.get("company") or "",
             location=exp.get("location") or "",
             duration=exp.get("duration") or "",
-            description=[b.get("text") or b.get("original_bullet") or str(b)
+            description=[(b.get("text") or b.get("original_bullet") or "")
                          for b in (exp.get("bullets") or [])
-                         if isinstance(b, dict)],
+                         if isinstance(b, dict) and (b.get("text") or b.get("original_bullet"))],
         ))
 
     education = []

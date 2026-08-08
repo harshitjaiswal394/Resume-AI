@@ -176,7 +176,7 @@ export default function SmartCoverLetter() {
     if (!confirmed) return;
 
     try {
-      const { error } = await supabase.from('resumes').delete().eq('id', selectedResumeId);
+      const { error } = await supabase.from('resumes').delete().eq('id', selectedResumeId).eq('user_id', user?.id);
       if (error) throw error;
       
       toast.success('Resume deleted');

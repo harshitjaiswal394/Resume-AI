@@ -299,10 +299,13 @@ export default function AIResumeBuilder() {
       if (urlId) {
         console.log('[Builder] Authority: URL ID identified. Restoring cloud record...', urlId);
         if (user) {
-          await fetchResume(urlId, { skipData: isTailoredResume(urlId) });
-          setResumeId(urlId);
-          setIsLoaded(true);
-          return;
+          const restored = await fetchResume(urlId, { skipData: isTailoredResume(urlId) });
+          if (restored) {
+            setResumeId(urlId);
+            setIsLoaded(true);
+            return;
+          }
+          console.warn('[Builder] Authority: URL resume does not belong to this account. Starting fresh.');
         }
       }
 
@@ -540,12 +543,14 @@ export default function AIResumeBuilder() {
     } catch { return false; }
   };
 
-  const fetchResume = async (id: string, opts: { skipData?: boolean } = {}) => {
+  const fetchResume = async (id: string, opts: { skipData?: boolean } = {}): Promise<boolean> => {
     console.log('[Builder] Fetching resume from DB:', id);
+    if (!user) return false;
     const { data: resume, error } = await supabase
       .from('resumes')
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (resume && !error) {
@@ -602,8 +607,14 @@ export default function AIResumeBuilder() {
       if (resume.resume_score !== undefined) setCurrentScore(resume.resume_score || 0);
 
       console.log('[Builder] State restored from DB');
+      return true;
     } else {
-      console.error('[Builder] Fetch resume failed or record missing', error);
+      console.error('[Builder] Fetch resume failed, record missing, or not owned by this account', error);
+      // Do NOT restore foreign data. Start with a clean slate so another
+      // user's resume can never be rendered or overwritten.
+      setResumeId(null);
+      setData({ ...INITIAL_DATA });
+      return false;
     }
   };
 
@@ -824,10 +835,15 @@ export default function AIResumeBuilder() {
 
   // --- Export helpers: clean, null-safe resume document builders ---
 
-  const cleanVal = (v: unknown): string => (v == null ? '' : String(v)).trim();
+  const NULL_PLACEHOLDERS = new Set(['null', 'none', 'n/a', 'undefined']);
+  const cleanVal = (v: unknown): string => {
+    if (v == null) return '';
+    const out = String(v).trim();
+    return NULL_PLACEHOLDERS.has(out.toLowerCase()) ? '' : out;
+  };
   const cleanArr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : []);
   const escapeHtml = (v: unknown): string =>
-    String(v ?? '')
+    cleanVal(v)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -1008,8 +1024,8 @@ export default function AIResumeBuilder() {
 
     const name = cleanVal(data.fullName);
     const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
-    const headerBlock = name ? `<h2>${escapeHtml(name)}</h2>` : '';
-    const contactBlock = contacts.length ? `<p>${contacts.map(escapeHtml).join(' &bull; ')}</p>` : '';
+    const headerBlock = name ? `<h2 style="text-align:center;margin:0 0 2pt;">${escapeHtml(name)}</h2>` : '';
+    const contactBlock = contacts.length ? `<p style="text-align:center;margin:0 0 4pt;">${contacts.map(escapeHtml).join(' &bull; ')}</p>` : '';
     const sections = effectiveSectionOrder.map(sectionDocxHtml).filter(Boolean).join('');
 
     const source =
@@ -1110,6 +1126,23 @@ export default function AIResumeBuilder() {
           });
         };
 
+        const drawCentered = (text: string, size: number, color: [number, number, number], style: 'normal' | 'bold' | 'italic', lineGap: number) => {
+          if (paint) {
+            doc.setFont('helvetica', style);
+            doc.setFontSize(size);
+            doc.setTextColor(color[0], color[1], color[2]);
+          }
+          const arr = Array.isArray(text) ? text : [text];
+          arr.forEach((ln) => {
+            ensure(size * 0.35 + lineGap);
+            if (paint) {
+              const w = doc.getTextWidth(ln);
+              doc.text(ln, (pageW - w) / 2, y);
+            }
+            y += size * 0.35 + lineGap;
+          });
+        };
+
         const sectionTitle = (title: string) => {
           ensure(10, 16); // keep the title together with the first block of content
           if (paint) {
@@ -1151,18 +1184,18 @@ export default function AIResumeBuilder() {
         }
         y = st.my + st.bar + st.afterBar;
 
-        // Header (only non-empty values)
+        // Header (only non-empty values), centered with minimal gaps
         const name = cleanVal(data.fullName);
         if (name) {
           ensure(14);
-          draw(name.toUpperCase(), st.name, [15, 23, 42], 'bold', 2);
-          y += 4;
+          drawCentered(name.toUpperCase(), st.name, [15, 23, 42], 'bold', 0.5);
+          y += 1;
         }
         const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
         if (contacts.length) {
           ensure(8);
-          draw(contacts.join('   •   '), st.contact, [100, 116, 139], 'bold', 2);
-          y += 2;
+          drawCentered(contacts.join('   •   '), st.contact, [100, 116, 139], 'bold', 0.5);
+          y += 0.5;
         }
         if (paint) {
           doc.setDrawColor(241, 245, 249);
@@ -1475,7 +1508,12 @@ export default function AIResumeBuilder() {
   const handleReimport = async () => {
     if (!resumeId) return;
     try {
-      const { data: resume, error } = await supabase.from('resumes').select('parsed_data').eq('id', resumeId).single();
+      const { data: resume, error } = await supabase
+        .from('resumes')
+        .select('parsed_data')
+        .eq('id', resumeId)
+        .eq('user_id', user?.id)
+        .single();
       if (resume?.parsed_data && !error) {
         const originalData = typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data;
         setData({ ...INITIAL_DATA, ...originalData });
@@ -1504,7 +1542,7 @@ export default function AIResumeBuilder() {
     setIsSaving(true);
     try {
       if (resumeId && user?.id !== 'guest') {
-        const { error } = await supabase.from('resumes').delete().eq('id', resumeId);
+        const { error } = await supabase.from('resumes').delete().eq('id', resumeId).eq('user_id', user.id);
         if (error) throw error;
       }
 

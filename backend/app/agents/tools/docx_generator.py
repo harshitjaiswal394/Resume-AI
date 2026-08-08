@@ -62,11 +62,20 @@ def _add_bullet(doc: Any, text: str) -> None:
     p.paragraph_format.space_after = Pt(2)
 
 
+_NULL_PLACEHOLDERS = {"null", "none", "n/a", "undefined"}
+
+
 def _clean_text(value: Any) -> str:
-    """Coerce any value to a single-line string, dropping control chars."""
+    """Coerce any value to a single-line string, dropping control chars.
+
+    Treats LLM placeholder strings ("null", "None", "N/A", "undefined") as
+    empty so they never render into the generated DOCX.
+    """
     if value is None:
         return ""
     text = str(value).strip()
+    if text.lower() in _NULL_PLACEHOLDERS:
+        return ""
     return " ".join(text.split())
 
 
@@ -95,7 +104,7 @@ def build_tailored_docx(
         run.bold = True
         run.font.size = Pt(18)
         run.font.color.rgb = RGBColor(0x11, 0x16, 0x1E)
-        p.paragraph_format.space_after = Pt(6)
+        p.paragraph_format.space_after = Pt(2)
 
     contact = _clean_text(tailored.get("contact"))
     if not contact:
@@ -117,7 +126,7 @@ def build_tailored_docx(
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.add_run(contact)
-        p.paragraph_format.space_after = Pt(10)
+        p.paragraph_format.space_after = Pt(4)
 
     summary = _clean_text(tailored.get("summary"))
     if summary:

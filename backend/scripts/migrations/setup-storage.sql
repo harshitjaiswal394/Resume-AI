@@ -1,7 +1,10 @@
--- 1. Create the bucket if it doesn't exist (publicly accessible)
+-- 1. Create the bucket if it doesn't exist (PRIVATE — no public read/write)
+-- Raw resumes contain PII; only the owner may read or manage their own files.
+-- The backend AI service receives the file bytes directly via multipart upload
+-- (it never reads file_url), so no public read is required.
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('resumes', 'resumes', true)
-ON CONFLICT (id) DO UPDATE SET public = true;
+VALUES ('resumes', 'resumes', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
 
 -- 2. Clear existing policies on storage.objects for the 'resumes' bucket
 -- This prevents conflicts between multiple policies
@@ -18,32 +21,24 @@ END $$;
 -- 3. Enable RLS on storage.objects
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
--- 4. READ POLICY: Allow public (anon + authenticated) to read any resume
--- This is necessary so the backend AI service can fetch the PDF for analysis.
-CREATE POLICY "Allow public read access"
+-- 4. READ POLICY (Owner): Users may only read files inside their own folder.
+-- Folder path used by the app: resumes/{userId}/filename
+-- (the first folder segment is the bucket name, so the owner id is segment 2)
+CREATE POLICY "Allow owner read access"
 ON storage.objects FOR SELECT
-TO public
-USING (bucket_id = 'resumes');
+TO authenticated
+USING (bucket_id = 'resumes' AND (storage.foldername(name))[2] = auth.uid()::text);
 
--- 5. INSERT POLICY (Guest): Allow anonymous users to upload
--- Used during the initial guest onboarding flow.
-CREATE POLICY "Allow guest upload access"
-ON storage.objects FOR INSERT
-TO anon
-WITH CHECK (bucket_id = 'resumes');
-
--- 6. INSERT POLICY (Authenticated): Allow logged-in users to upload
--- Used for authenticated onboarding and dashboard 'Upload New'.
+-- 5. INSERT POLICY (Authenticated): Logged-in users may upload only into their
+-- own folder. Used for authenticated onboarding and dashboard 'Upload New'.
 CREATE POLICY "Allow authenticated upload access"
 ON storage.objects FOR INSERT
 TO authenticated
-WITH CHECK (bucket_id = 'resumes');
+WITH CHECK (bucket_id = 'resumes' AND (storage.foldername(name))[2] = auth.uid()::text);
 
--- 7. ALL ACCESS POLICY (Owner): Allow users to manage their own files
--- This allows authenticated users to update or delete files in their own folder.
--- Folder path assumed: resumes/{userId}/filename
+-- 6. ALL ACCESS POLICY (Owner): Allow users to update or delete their own files.
 CREATE POLICY "Allow users to manage own files"
 ON storage.objects FOR ALL
 TO authenticated
-USING (bucket_id = 'resumes' AND (storage.foldername(name))[1] = auth.uid()::text)
-WITH CHECK (bucket_id = 'resumes' AND (storage.foldername(name))[1] = auth.uid()::text);
+USING (bucket_id = 'resumes' AND (storage.foldername(name))[2] = auth.uid()::text)
+WITH CHECK (bucket_id = 'resumes' AND (storage.foldername(name))[2] = auth.uid()::text);
