@@ -37,6 +37,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { LoadingScreen } from '@/components/ui/loading';
 import { completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
+import { saveGuestFile, loadGuestFile, clearGuestFile } from '@/lib/guestFile';
 
 export default function LandingPage() {
   const GUEST_ONBOARDING_STATE_KEY = 'guestOnboardingState';
@@ -137,6 +138,7 @@ export default function LandingPage() {
     }
 
     fileRef.current = file;
+    saveGuestFile(file);
     setFileName(file.name);
     setIsAnalyzing(true);
     setUploadProgress(10);
@@ -252,11 +254,15 @@ export default function LandingPage() {
       let resumeId = activeResumeId;
 
       if (resumeId === 'guest') {
-        const file = fileRef.current;
+        let file = fileRef.current;
 
         // The original file may no longer be in memory (e.g. page was refreshed
-        // during the guest analysis). We cannot create a resume record without a
-        // real file, so ask the user to re-upload instead of silently skipping.
+        // or navigated during the guest analysis). Restore it from IndexedDB so
+        // the resume can be uploaded to storage instead of failing silently.
+        if (!file) {
+          file = await loadGuestFile();
+        }
+
         if (!file) {
           setFullAnalysisData(null);
           setActiveResumeId('guest');
@@ -290,6 +296,7 @@ export default function LandingPage() {
         resumeId = resumeData.id;
         setActiveResumeId(resumeId);
 
+        clearGuestFile();
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
       }
 

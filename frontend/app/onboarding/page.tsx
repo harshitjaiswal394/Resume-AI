@@ -29,6 +29,7 @@ import { AuthModal } from '@/components/common/AuthModal';
 import { extractTextFromFile } from '@/lib/pdf';
 import { startResumeAnalysis, completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
 import { generateJobLinks } from '@/lib/job-portals';
+import { saveGuestFile, loadGuestFile, clearGuestFile } from '@/lib/guestFile';
 
 type Step = 'upload' | 'analyzing' | 'personalize';
 
@@ -133,6 +134,7 @@ export default function OnboardingFlow() {
     }
 
     fileRef.current = file;
+    saveGuestFile(file);
     setFileName(file.name);
     setCurrentStep('analyzing');
     setUploadProgress(10);
@@ -301,16 +303,19 @@ export default function OnboardingFlow() {
       // If this was a guest analysis, we need to save it to the DB now for the new user
       if (resumeId === 'guest') {
         console.log('Saving guest analysis to new user record...');
-        const file = fileRef.current;
+        let file = fileRef.current;
         const storedState = typeof window !== 'undefined'
           ? sessionStorage.getItem(GUEST_ONBOARDING_STATE_KEY)
           : null;
         const guestState = storedState ? JSON.parse(storedState) : null;
 
         // The original file may no longer be in memory (e.g. page was refreshed
-        // during the guest analysis). We cannot create a resume record without a
-        // real file, so ask the user to re-upload instead of silently saving a
-        // record with an empty file_url.
+        // during the guest analysis). Restore it from IndexedDB so the resume
+        // can be uploaded to storage instead of failing.
+        if (!file) {
+          file = await loadGuestFile();
+        }
+
         if (!file) {
           sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
           setFullAnalysisData(null);
@@ -352,6 +357,7 @@ export default function OnboardingFlow() {
         // 3. Persist the analysis data received earlier as a guest
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
         sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+        clearGuestFile();
       }
 
       if (resumeId !== 'guest') {
