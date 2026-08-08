@@ -354,15 +354,31 @@ export default function OnboardingFlow() {
         resumeId = resumeData.id;
         setActiveResumeId(resumeId);
 
-        // 3. Persist the analysis data received earlier as a guest
+        // Persist the guest analysis immediately (fast DB write) so the
+        // migration always succeeds even if the tailor call fails below.
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
-        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
-        clearGuestFile();
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.id, resumeId, personalizeData, fullAnalysisData.parsed_data);
-        if (!result.success) throw new Error(result.error || 'Failed to tailor results');
+        // Run the tailor with the analysis already computed during the guest
+        // run, so the backend skips the expensive re-analysis. The guest
+        // analysis was already persisted above, so a tailor failure is
+        // non-fatal: the user still lands on the dashboard with their results.
+        const result = await tailorResume(
+          user.id,
+          resumeId,
+          personalizeData,
+          fullAnalysisData.parsed_data,
+          {
+            analysis: fullAnalysisData.analysis,
+            rawText: fullAnalysisData.raw_text,
+          }
+        );
+        if (!result.success) {
+          console.warn('Tailor step failed, but analysis is already persisted:', (result as any).error);
+        }
+        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+        clearGuestFile();
       }
 
       toast.success('Strategy optimized!');

@@ -295,14 +295,32 @@ export default function LandingPage() {
         if (resumeError) throw resumeError;
         resumeId = resumeData.id;
         setActiveResumeId(resumeId);
+      }
 
-        clearGuestFile();
+      // Persist the guest analysis immediately (fast DB write) so the migration
+      // always succeeds even if the tailor call fails below.
+      if (resumeId !== 'guest' && fullAnalysisData) {
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.id, resumeId, personalizeData, fullAnalysisData.parsed_data);
-        if (!result.success) throw new Error(result.error || 'Failed to tailor results');
+        // Single tailor call reusing the guest analysis so the backend skips
+        // the expensive re-analysis (no duplicate AI pass on migration).
+        const result = await tailorResume(
+          user.id,
+          resumeId,
+          personalizeData,
+          fullAnalysisData.parsed_data,
+          {
+            analysis: fullAnalysisData.analysis,
+            rawText: fullAnalysisData.raw_text,
+          }
+        );
+        if (!result.success) {
+          console.warn('Tailor step failed, but analysis is already persisted:', (result as any).error);
+        }
+        clearGuestFile();
+        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
       }
 
       toast.success('Strategy optimized!');

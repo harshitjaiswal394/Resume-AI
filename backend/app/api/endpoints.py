@@ -59,7 +59,11 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
         user_id = authed_user_id
     preferences = payload.get("preferences", {})
     parsed_data = payload.get("parsedData")
-    
+    # Optional: the analysis already produced for this resume (e.g. the guest run).
+    # When present we skip the expensive re-analysis and only refresh matches.
+    existing_analysis = payload.get("existingAnalysis")
+    existing_raw_text = payload.get("existingRawText") or ""
+
     if not preferences or not parsed_data:
         raise HTTPException(status_code=400, detail="Preferences and parsed data are required")
 
@@ -71,8 +75,7 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
     try:
         # Define roles for matching
         roles = [target_role]
-        
-        # 1 & 2. Run Analysis and Matching IN PARALLEL for max speed
+
         filters = {
             "domain": target_role,
             "experience_level": preferences.get("experience_level") or preferences.get("experienceLevel"),
@@ -80,13 +83,18 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
             "work_mode": preferences.get("work_mode") or preferences.get("workMode"),
             "days_old": preferences.get("days_old") or preferences.get("daysOld") or 25
         }
-        
-        logger.info(f"Triggering parallel AI pipeline for Resume: {resume_id}")
-        analysis_task = ai_service.analyze_resume(parsed_data)
-        matches_task = ai_service.generate_job_matches(parsed_data, roles, filters=filters)
-        
-        # Await both simultaneously
-        analysis, matches = await asyncio.gather(analysis_task, matches_task)
+
+        matches_task = asyncio.ensure_future(ai_service.generate_job_matches(parsed_data, roles, filters=filters))
+
+        if existing_analysis and isinstance(existing_analysis, dict):
+            logger.info(f"Reusing existing analysis (skipping expensive re-analysis) for Resume: {resume_id}")
+            analysis = existing_analysis
+            matches = await matches_task
+        else:
+            logger.info(f"Triggering parallel AI pipeline for Resume: {resume_id}")
+            analysis_task = asyncio.ensure_future(ai_service.analyze_resume(parsed_data))
+            # Await both simultaneously
+            analysis, matches = await asyncio.gather(analysis_task, matches_task)
         
         # Determine plan-based limit
         match_limit = 15
@@ -106,7 +114,7 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
                 "parsed_data": parsed_data,
                 "analysis": analysis,
                 "matches": matches,
-                "raw_text": ""
+                "raw_text": existing_raw_text
             })
 
         return {
