@@ -37,6 +37,7 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { jsPDF } from "jspdf";
 
 const REASON_LABELS: Record<string, string> = {
   keyword_match: "Keyword match",
@@ -416,7 +417,7 @@ function ResumePreview({ data, jdSkills }: { data: any; jdSkills: string[] }) {
         </div>
       </div>
       <p className="mt-3 text-[10px] text-slate-400">
-        This is a preview of the tailored resume document — download the DOCX for the final, ATS-formatted file.
+        This is a preview of the tailored resume document — download the PDF or DOCX for the final, ATS-formatted file.
       </p>
     </div>
   );
@@ -429,6 +430,382 @@ function PreviewSectionTitle({ children }: { children: React.ReactNode }) {
       <div className="h-px flex-1 bg-indigo-50" />
     </div>
   );
+}
+
+/* ── PDF generation ──────────────────────────────────────────────────────── */
+
+function cleanVal(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v.trim();
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (typeof v === "object") return bulletText(v as any);
+  return String(v).trim();
+}
+
+function cleanArr<T>(v: T[] | null | undefined): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function bulletText(b: any): string {
+  if (typeof b === "string") return b;
+  if (b && typeof b === "object") return cleanVal(b.text ?? b.value ?? b.content);
+  return "";
+}
+
+function entryBullets(entry: any): string[] {
+  const raw = entry?.bullets || entry?.description || [];
+  return cleanArr(raw)
+    .map(bulletText)
+    .map((b) => b.trim())
+    .filter(Boolean);
+}
+
+function downloadResumePdf(data: any, filename?: string) {
+  const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+
+  type PdfSettings = {
+    mx: number; my: number; bar: number; barGap: number;
+    name: number; contact: number; headerAfter: number;
+    section: number; ruleGap: number;
+    body: number; gap: number; sectionPad: number;
+    head: number; headLine: number; company: number; companyGap: number; itemPad: number;
+    bullet: number; bulletGap: number;
+  };
+
+  const layouts: Record<"normal" | "compact", PdfSettings> = {
+    normal: {
+      mx: 18, my: 16, bar: 3.5, barGap: 8,
+      name: 20, contact: 9, headerAfter: 6,
+      section: 10.5, ruleGap: 5,
+      body: 10, gap: 1.8, sectionPad: 4,
+      head: 11, headLine: 0.5, company: 9.5, companyGap: 4.5, itemPad: 2.5,
+      bullet: 9.5, bulletGap: 4,
+    },
+    compact: {
+      mx: 14, my: 11, bar: 2.5, barGap: 6,
+      name: 16, contact: 8, headerAfter: 4.5,
+      section: 9.5, ruleGap: 4,
+      body: 8.5, gap: 1.4, sectionPad: 2.5,
+      head: 10, headLine: 0.3, company: 8.5, companyGap: 3.6, itemPad: 1.8,
+      bullet: 8.5, bulletGap: 3.4,
+    },
+  };
+
+  // Renders the whole resume into `doc`. When `paint` is false it only simulates
+  // layout (identical math, no drawing) so we can measure page count.
+  const renderLayout = (doc: typeof pdf, st: PdfSettings, paint: boolean) => {
+    const contentW = pageW - st.mx * 2;
+    let y = st.my;
+    let pages = 1;
+
+    const ensure = (needed: number, keepAfter = 0) => {
+      if (y + needed + keepAfter > pageH - st.my) {
+        pages += 1;
+        y = st.my;
+        if (paint) doc.addPage();
+      }
+    };
+
+    const wrap = (text: string, size: number, width = contentW): string[] => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(size);
+      return doc.splitTextToSize(text, width) as string[];
+    };
+
+    const draw = (
+      lines: string | string[],
+      size: number,
+      color: [number, number, number],
+      style: "normal" | "bold" | "italic",
+      lineGap: number,
+      indent = 0,
+    ) => {
+      if (paint) {
+        doc.setFont("helvetica", style);
+        doc.setFontSize(size);
+        doc.setTextColor(color[0], color[1], color[2]);
+      }
+      const arr = Array.isArray(lines) ? lines : [lines];
+      arr.forEach((ln) => {
+        ensure(size * 0.35 + lineGap);
+        if (paint) doc.text(ln, st.mx + indent, y);
+        y += size * 0.35 + lineGap;
+      });
+    };
+
+    const sectionTitle = (title: string) => {
+      ensure(10, 16);
+      if (paint) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(st.section);
+        doc.setTextColor(79, 70, 229);
+        doc.text(title.toUpperCase(), st.mx, y);
+      }
+      y += 1.4;
+      if (paint) {
+        doc.setDrawColor(225, 228, 232);
+        doc.line(st.mx, y, pageW - st.mx, y);
+      }
+      y += st.ruleGap;
+    };
+
+    const bullets = (items: string[]) => {
+      items.forEach((b) => {
+        const lines = wrap(b, st.bullet, contentW - 6);
+        const h = lines.length * st.bulletGap;
+        ensure(h + 1);
+        lines.forEach((ln, li) => {
+          if (paint) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(st.bullet);
+            doc.setTextColor(71, 85, 105);
+            if (li === 0) doc.text("•", st.mx + 1, y);
+            doc.text(ln, st.mx + 5, y);
+          }
+          y += st.bulletGap;
+        });
+      });
+    };
+
+    // Accent bar
+    if (paint) {
+      doc.setFillColor(79, 70, 229);
+      doc.rect(0, 0, pageW, st.bar, "F");
+    }
+    y = st.my + st.bar + st.barGap;
+
+    // Header (only non-empty values)
+    const name = cleanVal(data.fullName || data.full_name);
+    if (name) {
+      ensure(12);
+      draw(name.toUpperCase(), st.name, [15, 23, 42], "bold", 2);
+      y += 3;
+    }
+    const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
+    if (contacts.length) {
+      ensure(8);
+      draw(contacts.join("   •   "), st.contact, [100, 116, 139], "bold", 2);
+      y += 2;
+    }
+    if (paint) {
+      doc.setDrawColor(241, 245, 249);
+      doc.line(st.mx, y, pageW - st.mx, y);
+    }
+    y += st.headerAfter;
+
+    const summary = cleanVal(data.summary);
+    if (summary) {
+      sectionTitle("Professional Summary");
+      draw(wrap(summary, st.body), st.body, [71, 85, 105], "normal", st.gap);
+      y += st.sectionPad;
+    }
+
+    const skills = cleanArr(data.skills).map(cleanVal).filter(Boolean);
+    if (skills.length) {
+      sectionTitle("Skills");
+      draw(wrap(skills.join("  •  "), st.body), st.body, [71, 85, 105], "normal", st.gap);
+      y += st.sectionPad;
+    }
+
+    const experience = cleanArr(data.experience).filter((e: any) => cleanVal(e?.title) || cleanVal(e?.company));
+    if (experience.length) {
+      sectionTitle("Experience");
+      experience.forEach((exp: any) => {
+        const title = cleanVal(exp.title);
+        const company = cleanVal(exp.company);
+        const duration = cleanVal(exp.duration);
+        const blist = entryBullets(exp);
+        const firstBulletH = blist.length ? Math.max(1, wrap(blist[0], st.bullet, contentW - 6).length) * st.bulletGap : 6;
+        ensure(10, Math.min(firstBulletH + 4, 18));
+        if (title) {
+          draw(title, st.head, [15, 23, 42], "bold", st.headLine);
+          y += st.itemPad;
+        }
+        if (company || duration) {
+          ensure(8);
+          if (paint) {
+            if (company) {
+              doc.setFont("helvetica", "italic");
+              doc.setFontSize(st.company);
+              doc.setTextColor(99, 102, 241);
+              doc.text(company, st.mx, y);
+            }
+            if (duration) {
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(st.company);
+              doc.setTextColor(100, 116, 139);
+              doc.text(duration, pageW - st.mx, y, { align: "right" });
+            }
+          }
+          y += st.companyGap;
+        }
+        bullets(blist);
+        y += st.itemPad;
+      });
+      y += 2;
+    }
+
+    const education = cleanArr(data.education).filter((e: any) => cleanVal(e?.degree));
+    if (education.length) {
+      sectionTitle("Education");
+      education.forEach((edu: any) => {
+        const degree = cleanVal(edu.degree);
+        const institution = cleanVal(edu.institution);
+        const year = cleanVal(edu.year);
+        ensure(8, 6);
+        if (degree) draw(degree, st.head - 0.5, [15, 23, 42], "bold", st.headLine);
+        if (institution || year) {
+          ensure(8);
+          if (paint) {
+            if (institution) {
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(st.body);
+              doc.setTextColor(71, 85, 105);
+              doc.text(institution, st.mx, y);
+            }
+            if (year) {
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(st.body - 0.5);
+              doc.setTextColor(100, 116, 139);
+              doc.text(year, pageW - st.mx, y, { align: "right" });
+            }
+          }
+          y += st.companyGap;
+        }
+        y += 1.5;
+      });
+      y += 2;
+    }
+
+    const projects = cleanArr(data.projects).filter((p: any) => cleanVal(p?.title));
+    if (projects.length) {
+      sectionTitle("Projects");
+      projects.forEach((proj: any) => {
+        const title = cleanVal(proj.title);
+        const desc = cleanVal(proj.description);
+        ensure(9, 8);
+        if (title) {
+          draw(title, st.head - 0.5, [15, 23, 42], "bold", st.headLine);
+          y += st.itemPad;
+        }
+        if (desc) {
+          draw(wrap(desc, st.body), st.body, [71, 85, 105], "normal", st.gap);
+          y += 2;
+        }
+        y += 2;
+      });
+      y += 2;
+    }
+
+    const certifications = cleanArr(data.certifications).filter((c: any) => cleanVal(c?.name));
+    if (certifications.length) {
+      sectionTitle("Certifications");
+      certifications.forEach((cert: any) => {
+        const cname = cleanVal(cert.name);
+        const year = cleanVal(cert.year);
+        ensure(8);
+        if (cname) {
+          draw(cname, st.head - 0.5, [15, 23, 42], "bold", st.headLine);
+          if (year) {
+            if (paint) {
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(st.body - 0.5);
+              doc.setTextColor(100, 116, 139);
+              doc.text(year, pageW - st.mx, y, { align: "right" });
+            }
+            y += 2;
+          }
+          y += 1.5;
+        }
+      });
+      y += 2;
+    }
+
+    const achievements = cleanArr(data.achievements).filter((a: any) => cleanVal(a?.title) || cleanVal(a?.description));
+    if (achievements.length) {
+      sectionTitle("Highlights");
+      achievements.forEach((ach: any) => {
+        const title = cleanVal(ach.title);
+        const desc = cleanVal(ach.description);
+        ensure(9, 8);
+        if (title) {
+          draw(title, st.head - 0.5, [15, 23, 42], "bold", st.headLine);
+          y += st.itemPad;
+        }
+        if (desc) {
+          draw(wrap(desc, st.body), st.body, [71, 85, 105], "normal", st.gap);
+          y += 2;
+        }
+        y += 1.5;
+      });
+      y += 2;
+    }
+
+    const languages = cleanArr(data.languages).filter((l: any) => cleanVal(l?.language));
+    if (languages.length) {
+      sectionTitle("Languages");
+      languages.forEach((lang: any) => {
+        const lname = cleanVal(lang.language);
+        const prof = cleanVal(lang.proficiency);
+        ensure(8);
+        draw(lname, st.head - 0.5, [15, 23, 42], "bold", st.headLine);
+        if (prof) {
+          if (paint) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(st.body - 0.5);
+            doc.setTextColor(79, 70, 229);
+            doc.text(`• ${prof}`, pageW - st.mx, y, { align: "right" });
+          }
+          y += 2;
+        }
+        y += 2;
+      });
+    }
+
+    return pages;
+  };
+
+  const probe = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+
+  // Scale every numeric layout setting by `s` so one pass can shrink the whole
+  // page proportionally (fonts, margins, spacing) to force a fit.
+  const scaleSettings = (base: PdfSettings, s: number): PdfSettings => {
+    const out = {} as PdfSettings;
+    (Object.keys(base) as (keyof PdfSettings)[]).forEach((k) => {
+      out[k] = base[k] * s;
+    });
+    return out;
+  };
+
+  const pageCount = (st: PdfSettings) => renderLayout(probe, st, false);
+
+  // Fit to exactly one page: try full-size layout first, then compact,
+  // then progressively shrink compact (down to ~0.72x) until it fits.
+  const chosen = (() => {
+    if (pageCount(layouts.normal) === 1) return layouts.normal;
+    if (pageCount(layouts.compact) === 1) return layouts.compact;
+    const MIN_SCALE = 0.72;
+    let lo = MIN_SCALE;
+    let hi = 1;
+    let best = layouts.compact;
+    for (let i = 0; i < 10; i += 1) {
+      const mid = (lo + hi) / 2;
+      const st = scaleSettings(layouts.compact, mid);
+      if (pageCount(st) === 1) {
+        best = st;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    return best;
+  })();
+
+  const name = cleanVal(data.fullName || data.full_name);
+  renderLayout(pdf, chosen, true);
+  pdf.save(filename || `${(name || "Tailored-Resume").replace(/[^a-z0-9]/gi, "_")}.pdf`);
 }
 
 export default function TailorPage() {
@@ -446,6 +823,7 @@ export default function TailorPage() {
   const [versions, setVersions] = useState<VersionRecord[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [building, setBuilding] = useState(false);
   const [deletingVersion, setDeletingVersion] = useState<string | null>(null);
 
@@ -688,6 +1066,37 @@ export default function TailorPage() {
     }
   };
 
+  const downloadPdf = async (versionId?: string | null) => {
+    const vid = versionId || result?.version_id;
+    let data = result?.tailored_data;
+    try {
+      if (vid && (!data || (versionId && versionId !== result?.version_id))) {
+        const token = await getToken();
+        const res = await fetch(`${backendUrl}/api/agents/resume/version/${vid}/data`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const body = await res.json();
+        if (body.success) data = body.parsed_data || null;
+      }
+    } catch (e) {
+      console.error("PDF version fetch failed:", e);
+    }
+    if (!data) {
+      toast.error("No tailored data available to export");
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      downloadResumePdf(data, vid ? `tailored-resume-${vid}.pdf` : "tailored-resume.pdf");
+      toast.success("PDF downloaded");
+    } catch (e: any) {
+      console.error("PDF Error:", e);
+      toast.error(e.message || "Export failed - please try one more time");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const openInBuilder = async (versionId?: string | null) => {
     const vid = versionId || result?.version_id;
     if (!vid) return;
@@ -869,8 +1278,10 @@ export default function TailorPage() {
                 scoreAfter={scoreAfter}
                 reasonChips={reasonChips}
                 downloading={downloading}
+                downloadingPdf={downloadingPdf}
                 building={building}
                 onDownload={() => downloadDocx()}
+                onDownloadPdf={() => downloadPdf()}
                 onOpenBuilder={() => openInBuilder()}
               />
             ) : isTailoring ? (
@@ -892,6 +1303,7 @@ export default function TailorPage() {
           versions={versions}
           loadingVersions={loadingVersions}
           downloading={downloading}
+          downloadingPdf={downloadingPdf}
           building={building}
           deletingVersion={deletingVersion}
           resultVersionId={result?.version_id || null}
@@ -903,6 +1315,7 @@ export default function TailorPage() {
           onRefresh={() => selectedResumeId && fetchVersions(selectedResumeId)}
           onView={viewVersion}
           onDownload={downloadDocx}
+          onDownloadPdf={downloadPdf}
           onOpenBuilder={openInBuilder}
           onDelete={handleDeleteVersion}
         />
@@ -920,8 +1333,10 @@ interface PremiumResultCardProps {
   scoreAfter?: number | null;
   reasonChips: string[];
   downloading: boolean;
+  downloadingPdf: boolean;
   building: boolean;
   onDownload: () => void;
+  onDownloadPdf: () => void;
   onOpenBuilder: () => void;
 }
 
@@ -932,8 +1347,10 @@ function PremiumResultCard({
   scoreAfter,
   reasonChips,
   downloading,
+  downloadingPdf,
   building,
   onDownload,
+  onDownloadPdf,
   onOpenBuilder,
 }: PremiumResultCardProps) {
   const [showDiff, setShowDiff] = useState(true);
@@ -1312,6 +1729,15 @@ function PremiumResultCard({
           <div className="flex flex-wrap gap-2.5 pt-1">
             <button
               type="button"
+              onClick={onDownloadPdf}
+              disabled={downloadingPdf}
+              className="inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:shadow-violet-200 hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
+            >
+              {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Download PDF
+            </button>
+            <button
+              type="button"
               onClick={onDownload}
               disabled={downloading}
               className="inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:shadow-violet-200 hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
@@ -1419,6 +1845,7 @@ function TailorHistory({
   versions,
   loadingVersions,
   downloading,
+  downloadingPdf,
   building,
   deletingVersion,
   resultVersionId,
@@ -1426,12 +1853,14 @@ function TailorHistory({
   onRefresh,
   onView,
   onDownload,
+  onDownloadPdf,
   onOpenBuilder,
   onDelete,
 }: {
   versions: VersionRecord[];
   loadingVersions: boolean;
   downloading: boolean;
+  downloadingPdf: boolean;
   building: boolean;
   deletingVersion: string | null;
   resultVersionId: string | null;
@@ -1439,6 +1868,7 @@ function TailorHistory({
   onRefresh: () => void;
   onView: (versionId: string) => void;
   onDownload: (versionId?: string | null) => void;
+  onDownloadPdf: (versionId?: string | null) => void;
   onOpenBuilder: (versionId?: string | null) => void;
   onDelete: (versionId: string) => void;
 }) {
@@ -1549,6 +1979,16 @@ function TailorHistory({
                           </div>
                         </button>
                         <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onDownloadPdf(v.version_id)}
+                            disabled={downloadingPdf}
+                            className="h-9 w-9 text-slate-400 hover:text-indigo-600"
+                            title="Download PDF"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
