@@ -24,7 +24,7 @@ router = APIRouter(tags=["agents"])
 # ── Request/Response Models ──────────────────────────────────────────────────
 
 class IntentRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=4000)
 
 class IntentResponse(BaseModel):
     intent: str
@@ -38,35 +38,35 @@ class ResumeParseRequest(BaseModel):
 
 class ResumeTailorRequest(BaseModel):
     resume_id: str
-    jd_text: str
-    jd_url: Optional[str] = None
+    jd_text: str = Field(..., min_length=1, max_length=20000)
+    jd_url: Optional[str] = Field(None, max_length=2000)
 
 class JDIngestRequest(BaseModel):
-    source: str
+    source: str = Field(..., min_length=1, max_length=20000)
     source_type: str = "auto"
 
 class ATSAnalysisRequest(BaseModel):
     resume_id: Optional[str] = None
     version_id: Optional[str] = None
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
 
 class InterviewStartRequest(BaseModel):
     resume_id: str
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
     interview_type: str = "mixed"
-    num_questions: int = 5
+    num_questions: int = Field(5, ge=1, le=20)
 
 class InterviewAnswerRequest(BaseModel):
     session_id: str
-    answer: str
+    answer: str = Field(..., min_length=1, max_length=8000)
 
 class RoadmapRequest(BaseModel):
     resume_id: str
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
 
 class CoachRequest(BaseModel):
     resume_id: Optional[str] = None
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
 
 
 # ── Helper: get user from JWT ───────────────────────────────────────────────
