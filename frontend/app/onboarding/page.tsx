@@ -357,6 +357,7 @@ export default function OnboardingFlow() {
         // Persist the guest analysis immediately (fast DB write) so the
         // migration always succeeds even if the tailor call fails below.
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
+        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
       }
 
       if (resumeId !== 'guest') {
