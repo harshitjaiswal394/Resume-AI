@@ -59,6 +59,26 @@ async def mark_failed_requests(request: Request, call_next):
         span.set_attribute("error.message", str(exc))
         raise
 
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Add baseline security headers on every response."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+    )
+    # HSTS only over HTTPS; the gateway terminates TLS so this is safe.
+    if os.getenv("ENABLE_HSTS", "true").lower() in {"1", "true", "yes", "on"}:
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
+        )
+    return response
+
 @app.on_event("startup")
 async def startup_event():
     # Start Scheduler
@@ -148,8 +168,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-Forwarded-For"],
+    max_age=600,
 )
 
 app.include_router(resume_router, prefix="/api/resume", tags=["resume"])

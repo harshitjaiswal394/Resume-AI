@@ -10,11 +10,74 @@ from typing import List, Dict, Any, Optional
 import logging
 import json
 import asyncio
+import os
+import re
+from pathlib import Path
 
 resume_router = APIRouter()
 logger = logging.getLogger("resumatch-api.endpoints")
 
 from app.db import persist_pipeline_results
+
+# ── Upload / payload validation limits ───────────────────────────────────────
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "10"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+ALLOWED_UPLOAD_MIME = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "application/octet-stream",  # browsers often send this for docx/pdf
+    "application/x-pdf",
+    "text/markdown",
+}
+MAX_AI_PAYLOAD_BYTES = int(os.getenv("MAX_AI_PAYLOAD_BYTES", str(2 * 1024 * 1024)))  # 2 MB
+MAX_QUERY_LEN = 100
+
+
+def _validate_upload(file: UploadFile) -> bytes:
+    """Reject unsupported/oversized/empty uploads before any processing."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext or 'unknown'}'. Allowed: {', '.join(sorted(ALLOWED_UPLOAD_EXTENSIONS))}",
+        )
+    if file.content_type and file.content_type not in ALLOWED_UPLOAD_MIME:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unexpected content type '{file.content_type}'",
+        )
+    content = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {MAX_UPLOAD_MB} MB",
+        )
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    return content
+
+
+def _validate_payload_bytes(payload: Dict[str, Any]) -> None:
+    """Reject oversized AI request bodies (parsedData / prompts)."""
+    size = len(json.dumps(payload, default=str))
+    if size > MAX_AI_PAYLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Request body too large ({size} bytes). Maximum allowed is {MAX_AI_PAYLOAD_BYTES} bytes",
+        )
+
+
+def _clean_query(q: str) -> str:
+    """Normalize autocomplete queries to prevent abuse / query bloat."""
+    cleaned = (q or "").strip()[:MAX_QUERY_LEN]
+    if not re.fullmatch(r"[A-Za-z0-9 ._\-/+,&()]*", cleaned):
+        raise HTTPException(status_code=400, detail="Invalid query characters")
+    return cleaned
 
 
 async def _optional_user_id(authorization: Optional[str]) -> Optional[str]:
@@ -35,9 +98,15 @@ async def _optional_user_id(authorization: Optional[str]) -> Optional[str]:
 
 async def _enforce_rate_limit(request: Request, user_id: Optional[str]) -> None:
     ip = await get_client_ip(request)
+    # Guests share a tighter per-IP bucket so anonymous AI usage cannot be
+    # abused for DoS / model-cost burning without an account.
+    is_guest = user_id in (None, "guest", "")
+    resource = "ai_request"
+    if is_guest:
+        resource = "ai_request_guest"
     result = rate_limiter.check(
-        "ai_request",
-        user_id=None if user_id in (None, "guest") else user_id,
+        resource,
+        user_id=None if is_guest else user_id,
         ip=ip,
     )
     if not result.allowed:
@@ -63,6 +132,8 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
     # When present we skip the expensive re-analysis and only refresh matches.
     existing_analysis = payload.get("existingAnalysis")
     existing_raw_text = payload.get("existingRawText") or ""
+
+    _validate_payload_bytes(payload)
 
     if not preferences or not parsed_data:
         raise HTTPException(status_code=400, detail="Preferences and parsed data are required")
@@ -135,6 +206,8 @@ async def generate_cover_letter(payload: Dict[str, Any] = Body(...), request: Re
     job_role = payload.get("jobRole") or payload.get("job_role", "Software Engineer")
     authed_user_id = await _optional_user_id(authorization)
     
+    _validate_payload_bytes(payload)
+
     if not resume_data:
         raise HTTPException(status_code=400, detail="Resume data is required")
 
@@ -152,6 +225,7 @@ async def get_domains(q: str = ""):
     """Returns distinct domains from the job_postings table for autocomplete."""
     from app.db import engine
     from sqlalchemy import text
+    q = _clean_query(q)
     try:
         with engine.connect() as conn:
             if q:
@@ -173,6 +247,7 @@ async def get_locations(q: str = ""):
     """Returns distinct locations from the job_postings table for autocomplete."""
     from app.db import engine
     from sqlalchemy import text
+    q = _clean_query(q)
     try:
         with engine.connect() as conn:
             if q:
@@ -304,11 +379,32 @@ async def save_analysis(payload: Dict[str, Any] = Body(...), request: Request = 
     if not user_id or not resume_id or not data:
         raise HTTPException(status_code=400, detail="Missing userId, resumeId, or data")
 
+    _validate_payload_bytes(payload)
+
     authed_user_id = await _optional_user_id(authorization)
     if authed_user_id:
         user_id = authed_user_id
 
     await _enforce_rate_limit(request, user_id)
+
+    # IDOR guard: when authenticated, only allow writing to resumes owned by the
+    # calling user. (Guest flow is trusted for the landing-page migration.)
+    if authed_user_id:
+        try:
+            from app.db import engine
+            from sqlalchemy import text as _text
+            with engine.connect() as conn:
+                owner = conn.execute(
+                    _text("SELECT user_id FROM resumes WHERE id = :rid"),
+                    {"rid": resume_id},
+                ).scalar()
+            if owner and owner != user_id:
+                logger.warning("IDOR_BLOCKED | user=%s tried to save analysis for resume=%s (owner=%s)", user_id, resume_id, owner)
+                raise HTTPException(status_code=403, detail="Forbidden: resume does not belong to this user")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Ownership check failed (continuing as best-effort): {str(e)}")
 
     try:
         success = persist_pipeline_results(user_id, resume_id, data)
@@ -352,7 +448,7 @@ async def process_resume_stream(
     if authed_user_id:
         user_id = authed_user_id
     await _enforce_rate_limit(request, user_id)
-    content = await file.read()
+    content = _validate_upload(file)
     return StreamingResponse(
         process_resume_stream_generator(content, file.filename, user_id, resume_id),
         media_type="text/event-stream",
@@ -379,7 +475,7 @@ async def process_resume(
         user_id = authed_user_id
     await _enforce_rate_limit(request, user_id)
     try:
-        content = await file.read()
+        content = _validate_upload(file)
         text = await resume_service.extract_text(content, file.filename)
         parsed_data = await ai_service.parse_resume(text)
         analysis = await ai_service.analyze_resume(parsed_data)

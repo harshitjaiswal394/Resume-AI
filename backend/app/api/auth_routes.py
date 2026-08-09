@@ -32,7 +32,19 @@ async def send_otp(request: Request, payload: Dict[str, Any] = Body(...)):
     Body: { "type": "email" | "phone", "email": "...", "phone": "+91..." }
     """
     otp_type = payload.get("type", "email")
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = await get_client_ip(request)
+
+    # Guard against OTP bombing / SMS+email cost abuse before touching the
+    # provider. Rate-limited per IP (shared across unauthenticated users).
+    otp_result = rate_limiter.check("auth", user_id=None, ip=client_ip)
+    if not otp_result.allowed:
+        audit_logger.log(
+            EventType.RATE_LIMITED,
+            ip_address=client_ip,
+            extra={"resource": "auth", "action": "send-otp", "retry_after_seconds": otp_result.retry_after_seconds},
+        )
+        logger.warning("RATE_LIMITED | resource=auth action=send-otp ip=%s", client_ip)
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
     if otp_type == "email":
         email = payload.get("email", "")
