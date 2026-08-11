@@ -3,8 +3,8 @@ import Link from "next/link";
 import { LegalPage, LegalSection, LegalP, LegalList } from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy | ResuMatch AI",
-  description: "Learn how ResuMatch AI uses cookies and similar technologies, what categories we use, and how you can control your preferences.",
+  title: "Cookie Policy | CareerAmp",
+  description: "Learn how CareerAmp uses cookies and similar technologies, what categories we use, and how you can control your preferences.",
 };
 
 export default function CookiePolicyPage() {
@@ -12,7 +12,7 @@ export default function CookiePolicyPage() {
     <LegalPage
       badge="Cookie Policy"
       title="Cookie Policy"
-      intro="This Cookie Policy explains what cookies and similar technologies ResuMatch AI uses, why we use them, and how you can control them. It works alongside our Privacy Policy and Terms of Service."
+      intro="This Cookie Policy explains what cookies and similar technologies CareerAmp uses, why we use them, and how you can control them. It works alongside our Privacy Policy and Terms of Service."
       updated="August 8, 2026"
       sections={[
         { id: "what-are-cookies", title: "What Are Cookies" },
@@ -237,10 +237,10 @@ export default function CookiePolicyPage() {
       <LegalSection id="contact" number="10" title="Contact Us">
         <LegalP>
           Questions about this Cookie Policy or your cookie choices? Email us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
-          . ResuMatch AI, Mumbai, Maharashtra, India.
+          . CareerAmp, Mumbai, Maharashtra, India.
         </LegalP>
       </LegalSection>
     </LegalPage>

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { LegalPage, LegalSection, LegalP, LegalList } from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | ResuMatch AI",
-  description: "Learn how ResuMatch AI collects, uses, stores, and protects your personal information, including your resume data.",
+  title: "Privacy Policy | CareerAmp",
+  description: "Learn how CareerAmp collects, uses, stores, and protects your personal information, including your resume data.",
 };
 
 export default function PrivacyPage() {
@@ -12,7 +12,7 @@ export default function PrivacyPage() {
     <LegalPage
       badge="Privacy Policy"
       title="Privacy Policy"
-      intro="This Privacy Policy explains how ResuMatch AI ('we', 'us', or 'our') collects, uses, stores, and protects your personal information when you use our Service. We are committed to keeping your resume data and personal information safe and secure."
+      intro="This Privacy Policy explains how CareerAmp ('we', 'us', or 'our') collects, uses, stores, and protects your personal information when you use our Service. We are committed to keeping your resume data and personal information safe and secure."
       updated="August 8, 2026"
       sections={[
         { id: "overview", title: "Overview" },
@@ -32,7 +32,7 @@ export default function PrivacyPage() {
     >
       <LegalSection id="overview" number="01" title="Overview">
         <LegalP>
-          ResuMatch AI is an AI-powered resume analysis and optimization service built for job seekers. Because your resume
+          CareerAmp is an AI-powered resume analysis and optimization service built for job seekers. Because your resume
           contains sensitive personal information, we design our systems around the principle of data minimization: we only
           collect what is needed to operate the Service, and we do not sell your personal information to anyone.
         </LegalP>
@@ -228,8 +228,8 @@ export default function PrivacyPage() {
         />
         <LegalP>
           To exercise any of these rights, contact us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
           . We will respond within the timeframes required by applicable law.
         </LegalP>
@@ -251,8 +251,8 @@ export default function PrivacyPage() {
         <LegalP>
           The Service is not directed to individuals under the age of 18, and we do not knowingly collect personal information
           from children. If you believe a child has provided us with personal information, please contact us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>{" "}
           and we will take steps to delete it.
         </LegalP>
@@ -284,10 +284,10 @@ export default function PrivacyPage() {
       <LegalSection id="contact" number="13" title="Contact Us">
         <LegalP>
           If you have questions, concerns, or requests regarding this Privacy Policy or your data, contact us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
-          . ResuMatch AI, Mumbai, Maharashtra, India.
+          . CareerAmp, Mumbai, Maharashtra, India.
         </LegalP>
       </LegalSection>
     </LegalPage>

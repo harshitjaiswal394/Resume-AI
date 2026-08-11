@@ -6,7 +6,7 @@ import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { Reveal } from "@/components/marketing/Reveal";
 
 export const metadata: Metadata = {
-  title: "Job Market Trends | ResuMatch AI",
+  title: "Job Market Trends | CareerAmp",
   description: "Live insights into the Indian job market: in-demand skills, salary benchmarks, and hiring trends from real job postings.",
 };
 

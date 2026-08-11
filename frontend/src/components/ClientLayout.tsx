@@ -16,9 +16,22 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const isOnboarding = pathname?.startsWith("/onboarding");
   const isChat = pathname === "/chat" || pathname?.startsWith("/chat/");
   const isLegal = ["/terms", "/privacy", "/cookies", "/gdpr", "/refund-policy"].some((r) => pathname?.startsWith(r));
-  const isMarketing = ["/features", "/how-it-works", "/pricing", "/resume-tips", "/interview-prep", "/blog", "/job-market-trends"].some(
-    (r) => pathname?.startsWith(r)
-  );
+  const isMarketing = [
+    "/features",
+    "/how-it-works",
+    "/pricing",
+    "/resume-tips",
+    "/interview-prep",
+    "/blog",
+    "/job-market-trends",
+    "/about",
+    "/careers",
+    "/affiliate",
+    "/bulk-processing",
+    "/student-tracking",
+    "/custom-integration",
+    "/help",
+  ].some((r) => pathname?.startsWith(r));
 
   // Only show the old global Navbar on routes that aren't the home page, onboarding, dashboard, chat, legal, or marketing pages.
   const showNavbar = !isHome && !isOnboarding && !isDashboard && !isChat && !isLegal && !isMarketing;

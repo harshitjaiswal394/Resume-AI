@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Target, TrendingUp, Search, Zap, Sparkles, FileText, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Target, TrendingUp, Search, Zap, Sparkles, FileText, CheckCircle2, Kanban, MessagesSquare, BookmarkCheck } from "lucide-react";
 import { MarketingShell } from "@/components/marketing/MarketingShell";
 import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { Reveal } from "@/components/marketing/Reveal";
 
 export const metadata: Metadata = {
-  title: "Features | ResuMatch AI",
-  description: "Explore ResuMatch AI features: ATS scoring, job matching, missing skills detection, AI bullet rewrites, and more.",
+  title: "Features | CareerAmp",
+  description: "Explore CareerAmp features: ATS scoring, job matching, missing skills detection, AI bullet rewrites, and more.",
 };
 
 const FEATURES = [
@@ -24,6 +24,13 @@ const FEATURES = [
     badge: "Free",
     icon: TrendingUp,
     color: "from-purple-500 to-purple-700",
+  },
+  {
+    title: "Live Job Search",
+    desc: "Search 2,500+ live postings with filters for city, salary, work mode, and recency — then save any role straight to your tracker.",
+    badge: "Free",
+    icon: BookmarkCheck,
+    color: "from-cyan-500 to-teal-700",
   },
   {
     title: "Missing Skills Detection",
@@ -52,6 +59,20 @@ const FEATURES = [
     badge: "Pro",
     icon: FileText,
     color: "from-emerald-500 to-green-700",
+  },
+  {
+    title: "Job Tracker Pipeline",
+    desc: "Drag applications through a Kanban board — Saved, Applied, Interview, Offer, Rejected. Never lose track of where you stand.",
+    badge: "Pro",
+    icon: Kanban,
+    color: "from-cyan-500 to-teal-700",
+  },
+  {
+    title: "AI Referral Messages",
+    desc: "Draft warm, personalized referral request messages for any contact or role — from LinkedIn cold outreach to alumni intros.",
+    badge: "Pro",
+    icon: MessagesSquare,
+    color: "from-brand-500 to-brand-800",
   },
 ];
 

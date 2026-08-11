@@ -1562,7 +1562,7 @@ function PremiumResultCard({
                   <p className="mt-1 text-xs leading-relaxed text-slate-600">
                     We compared this JD's required skills against your resume and made sure the ones you
                     already have are <span className="font-bold text-indigo-700">placed prominently</span> —
-                    highlighted in your skills section and woven into your experience bullets. ResuMatch
+                    highlighted in your skills section and woven into your experience bullets. CareerAmp
                     never invents skills.
                   </p>
                 </div>
@@ -1625,7 +1625,7 @@ function PremiumResultCard({
                     </h4>
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-amber-700">
-                    These JD skills don't appear anywhere in your resume yet. ResuMatch never invents
+                    These JD skills don't appear anywhere in your resume yet. CareerAmp never invents
                     skills — if you genuinely have them, add them to your resume and tailor again.
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">

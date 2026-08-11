@@ -24,7 +24,7 @@ const FEATURED = {
   category: "Job Market",
   readTime: "8 min read",
   date: "Aug 4, 2026",
-  author: "ResuMatch AI Team",
+  author: "CareerAmp Team",
   gradient: "from-brand-600 via-brand-700 to-brand-900",
 };
 
@@ -75,7 +75,7 @@ const POSTS: Post[] = [
     category: "Job Market",
     readTime: "5 min read",
     date: "Jul 12, 2026",
-    author: "ResuMatch AI Team",
+    author: "CareerAmp Team",
     emoji: "🤖",
     gradient: "from-sky-500 to-brand-700",
   },

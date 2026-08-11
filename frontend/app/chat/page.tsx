@@ -695,7 +695,7 @@ function MessageBubble({
     ? { icon: <User2 className="h-3.5 w-3.5 text-white" />, label: "You", badge: "bg-fuchsia-600/10 text-white border-white/10" }
     : msg.role === "tool"
       ? { icon: <Search className="h-3.5 w-3.5 text-slate-100" />, label: "Tool", badge: "bg-slate-800/80 text-slate-100 border-slate-700/80" }
-      : { icon: <Bot className="h-3.5 w-3.5 text-white" />, label: "ResuMatch", badge: "bg-slate-800/80 text-slate-100 border-white/10" };
+      : { icon: <Bot className="h-3.5 w-3.5 text-white" />, label: "CareerAmp", badge: "bg-slate-800/80 text-slate-100 border-white/10" };
   const agentLabel = msg.agentLabel ? msg.agentLabel.toUpperCase() : null;
   const providerLabel = msg.providerLabel ? msg.providerLabel.toUpperCase() : null;
 
@@ -887,7 +887,7 @@ function ChatSidebar({
           <div className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-indigo-900/40 group-hover:scale-105 transition-transform">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
-          <span className="text-[18px] font-black tracking-tight text-slate-50">ResuMatch AI</span>
+          <span className="text-[18px] font-black tracking-tight text-slate-50">CareerAmp</span>
         </Link>
 
         <button
@@ -1703,7 +1703,7 @@ export default function ChatPage() {
                 <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
                   <Sparkles className="h-4 w-4 text-white" />
                 </div>
-                <span className="text-sm font-bold text-[var(--text-primary)]">ResuMatch</span>
+                <span className="text-sm font-bold text-[var(--text-primary)]">CareerAmp</span>
               </Link>
             )}
 

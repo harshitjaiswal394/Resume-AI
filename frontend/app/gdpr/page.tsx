@@ -3,8 +3,8 @@ import Link from "next/link";
 import { LegalPage, LegalSection, LegalP, LegalList } from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "GDPR Compliance | ResuMatch AI",
-  description: "How ResuMatch AI complies with the EU General Data Protection Regulation (GDPR) — data we process, legal bases, your rights, and how to exercise them.",
+  title: "GDPR Compliance | CareerAmp",
+  description: "How CareerAmp complies with the EU General Data Protection Regulation (GDPR) — data we process, legal bases, your rights, and how to exercise them.",
 };
 
 export default function GdprPage() {
@@ -12,7 +12,7 @@ export default function GdprPage() {
     <LegalPage
       badge="GDPR Compliance"
       title="GDPR Compliance"
-      intro="The EU General Data Protection Regulation (GDPR) protects the personal data of individuals in the European Economic Area (EEA) and the UK. This page explains how ResuMatch AI processes personal data under the GDPR and the rights available to you."
+      intro="The EU General Data Protection Regulation (GDPR) protects the personal data of individuals in the European Economic Area (EEA) and the UK. This page explains how CareerAmp processes personal data under the GDPR and the rights available to you."
       updated="August 8, 2026"
       sections={[
         { id: "controller", title: "Data Controller" },
@@ -30,12 +30,12 @@ export default function GdprPage() {
     >
       <LegalSection id="controller" number="01" title="Data Controller">
         <LegalP>
-          ResuMatch AI is the data controller responsible for the personal data we process through the Service. For any GDPR
+          CareerAmp is the data controller responsible for the personal data we process through the Service. For any GDPR
           questions, you can contact us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
-          . ResuMatch AI, Mumbai, Maharashtra, India.
+          . CareerAmp, Mumbai, Maharashtra, India.
         </LegalP>
       </LegalSection>
 
@@ -145,8 +145,8 @@ export default function GdprPage() {
       <LegalSection id="exercising" number="05" title="How to Exercise Your Rights">
         <LegalP>
           To exercise any of these rights, email{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>{" "}
           with your request. We will respond within one month, as required by the GDPR. We may need to verify your identity before
           processing your request, and we may extend the response period by a further two months for complex requests, as
@@ -195,8 +195,8 @@ export default function GdprPage() {
           right to lodge a complaint with your local supervisory authority. You can find the contact details of your national data
           protection authority on the European Data Protection Board website. We would, however, appreciate the chance to address
           your concerns first — please contact us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
           .
         </LegalP>
@@ -205,10 +205,10 @@ export default function GdprPage() {
       <LegalSection id="contact" number="11" title="Contact Us">
         <LegalP>
           For any GDPR-related inquiries, including data subject requests, contact our team at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
-          . ResuMatch AI, Mumbai, Maharashtra, India.
+          . CareerAmp, Mumbai, Maharashtra, India.
         </LegalP>
       </LegalSection>
     </LegalPage>

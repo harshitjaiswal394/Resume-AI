@@ -91,7 +91,7 @@ export function LoadingScreen({
       {/* Text */}
       <div className="relative text-center">
         <p className={cn("text-sm font-bold tracking-tight", dark ? "text-white" : "text-[var(--text-primary)]")}>
-          ResuMatch <span className="bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 bg-clip-text text-transparent">AI</span>
+          CareerAmp <span className="bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 bg-clip-text text-transparent">AI</span>
         </p>
         <p className={cn("mt-2 flex items-center justify-center gap-2 text-sm font-medium", dark ? "text-slate-400" : "text-[var(--text-muted)]")}>
           <span className="flex items-center gap-1">

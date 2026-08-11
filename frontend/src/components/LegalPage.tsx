@@ -87,7 +87,7 @@ export function LegalPage({
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 shadow-lg shadow-brand-600/25 transition-transform duration-200 group-hover:-rotate-3 group-hover:scale-105">
               <Briefcase className="h-4 w-4 text-white" />
             </div>
-            <span className="text-[15px] font-bold tracking-tight text-[var(--text-primary)]">ResuMatch AI</span>
+            <span className="text-[15px] font-bold tracking-tight text-[var(--text-primary)]">CareerAmp</span>
             <span className="ml-1 hidden items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-brand-600 sm:inline-flex">
               <Scale className="h-3 w-3" />
               Legal
@@ -207,10 +207,10 @@ export function LegalPage({
                   Questions about this document? Email our team.
                 </p>
                 <a
-                  href="mailto:support@resumatch.ai"
+                  href="mailto:support@careeramp.ai"
                   className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-white hover:underline"
                 >
-                  support@resumatch.ai
+                  support@careeramp.ai
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </a>
               </div>
@@ -262,11 +262,11 @@ export function LegalPage({
             <p className="mt-1.5 text-[15px] text-[var(--text-muted)]">Our team responds within one business day.</p>
           </div>
           <Link
-            href="mailto:support@resumatch.ai"
+            href="mailto:support@careeramp.ai"
             className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-[14px] font-semibold text-white shadow-lg shadow-brand-600/20 transition-all hover:-translate-y-0.5 hover:bg-brand-800"
           >
             <Mail className="h-4 w-4" />
-            support@resumatch.ai
+            support@careeramp.ai
           </Link>
         </div>
       </div>

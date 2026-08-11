@@ -6,7 +6,7 @@ import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { Reveal } from "@/components/marketing/Reveal";
 
 export const metadata: Metadata = {
-  title: "Resume Tips | ResuMatch AI",
+  title: "Resume Tips | CareerAmp",
   description: "Practical, India-specific resume tips from ATS formatting to writing impact-driven bullet points that recruiters love.",
 };
 

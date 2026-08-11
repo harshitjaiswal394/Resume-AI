@@ -107,3 +107,8 @@
 /backend/htmlcov/
 /backend/.coverage
 /backend/.coverage.*
+
+# =========================
+# CIP (Python service - separate project)
+# =========================
+/cip/

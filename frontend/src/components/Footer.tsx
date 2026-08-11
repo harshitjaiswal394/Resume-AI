@@ -6,7 +6,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   ArrowUp,
-  Briefcase,
   Check,
   Github,
   Linkedin,
@@ -16,6 +15,7 @@ import {
   ShieldCheck,
   Twitter,
 } from "lucide-react";
+import { Logo } from "./brand/Logo";
 
 const PRODUCT_LINKS = [
   { href: "/features", label: "Features" },
@@ -29,13 +29,22 @@ const RESOURCE_LINKS = [
   { href: "/interview-prep", label: "Interview Prep" },
   { href: "/blog", label: "Career Blog" },
   { href: "/job-market-trends", label: "Job Market Trends" },
+  { href: "/help", label: "Help Center" },
+];
+
+const TEAM_LINKS = [
+  { href: "/bulk-processing", label: "Bulk Processing" },
+  { href: "/student-tracking", label: "Student Tracking" },
+  { href: "/custom-integration", label: "Custom Integration" },
+  { href: "/affiliate", label: "Affiliate Program" },
 ];
 
 const COMPANY_LINKS = [
-  { href: "/features", label: "About us" },
+  { href: "/about", label: "About us" },
+  { href: "/careers", label: "Careers" },
   { href: "/blog", label: "Newsroom" },
   { href: "/gdpr", label: "GDPR Compliance" },
-  { href: "mailto:support@resumatch.ai", label: "Support" },
+  { href: "mailto:support@careeramp.ai", label: "Support" },
 ];
 
 const LEGAL_LINKS = [
@@ -162,12 +171,7 @@ export default function Footer() {
         <div className="grid grid-cols-2 gap-x-8 gap-y-12 py-14 sm:grid-cols-2 md:grid-cols-12">
           {/* brand */}
           <div className="col-span-2 md:col-span-4">
-            <Link href="/" className="inline-flex items-center gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 shadow-lg shadow-brand-600/25">
-                <Briefcase className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-[18px] font-bold tracking-tight text-[var(--text-primary)]">ResuMatch AI</span>
-            </Link>
+            <Logo size={36} textClassName="text-[18px] font-bold tracking-tight" />
             <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-[var(--text-muted)]">
               Helping Indian job seekers land their dream roles with AI-powered resume analysis and job matching.
             </p>
@@ -194,6 +198,9 @@ export default function Footer() {
             <FooterColumn title="Resources" links={RESOURCE_LINKS} />
           </div>
           <div className="md:col-span-2">
+            <FooterColumn title="For Teams" links={TEAM_LINKS} />
+          </div>
+          <div className="md:col-span-2">
             <FooterColumn title="Company" links={COMPANY_LINKS} />
           </div>
         </div>
@@ -202,13 +209,13 @@ export default function Footer() {
         <div className="flex flex-col gap-4 border-t border-[var(--border-soft)] py-8 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 text-[13px] font-medium text-[var(--text-muted)] sm:flex-row sm:items-center sm:gap-6">
             <a
-              href="mailto:support@resumatch.ai"
+              href="mailto:support@careeramp.ai"
               className="inline-flex items-center gap-2 transition-colors hover:text-brand-600"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
                 <Mail className="h-3.5 w-3.5" />
               </span>
-              support@resumatch.ai
+              support@careeramp.ai
             </a>
             <span className="inline-flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
@@ -228,7 +235,7 @@ export default function Footer() {
 
         {/* legal bar */}
         <div className="flex flex-col items-center justify-between gap-4 border-t border-[var(--border-soft)] py-7 text-[12px] text-[var(--text-subtle)] md:flex-row">
-          <p>© 2026 ResuMatch AI. All rights reserved.</p>
+          <p>© 2026 CareerAmp. All rights reserved.</p>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             {LEGAL_LINKS.map((link) => (
               <Link key={link.label} href={link.href} className="transition-colors hover:text-brand-600">

@@ -4,16 +4,18 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowRight, Briefcase, Menu, X } from "lucide-react";
+import { ArrowRight, Menu, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { AuthModal } from "@/components/common/AuthModal";
 import Footer from "@/components/Footer";
+import { Logo } from "@/components/brand/Logo";
 
 export const MARKETING_NAV = [
   { href: "/features", label: "Features" },
   { href: "/how-it-works", label: "How it Works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/blog", label: "Blog" },
+  { href: "/affiliate", label: "Affiliate" },
 ];
 
 export function MarketingShell({ children }: { children: React.ReactNode }) {
@@ -41,12 +43,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 shadow-sm">
-              <Briefcase className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-[17px] font-bold tracking-tight">ResuMatch AI</span>
-          </Link>
+          <Logo size={34} textClassName="text-[17px] font-bold tracking-tight" />
 
           <div className="hidden items-center gap-1 md:flex">
             {MARKETING_NAV.map((link) => {

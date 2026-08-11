@@ -14,10 +14,13 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageSquare,
-  Wand2
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+  Wand2,
+  Kanban,
+  Handshake,
+  Search
+} from 'lucide-react';import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { BrandMark } from '@/components/brand/Logo';
 
 interface SidebarProps {
   activeTab: string;
@@ -51,11 +54,9 @@ export function PremiumSidebar({
       {/* Brand */}
       <div className={`p-6 ${effectiveCollapsed ? 'flex justify-center' : 'p-6 lg:p-8'}`}>
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">
-            <Sparkles className="h-6 w-6 text-white" />
-          </div>
+          <BrandMark size={40} />
           {!effectiveCollapsed && (
-            <span className="text-xl font-black tracking-tight text-slate-900 whitespace-nowrap">ResumeAI</span>
+            <span className="text-xl font-black tracking-tight text-slate-900 whitespace-nowrap">Career<span className="text-brand-600">Amp</span></span>
           )}
         </Link>
       </div>
@@ -67,6 +68,14 @@ export function PremiumSidebar({
           <NavItem isCollapsed={effectiveCollapsed} icon={<LayoutDashboard />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
           <NavItem isCollapsed={effectiveCollapsed} icon={<FileText />} label="My Resume" active={activeTab === 'resume'} onClick={() => setActiveTab('resume')} />
           <NavItem isCollapsed={effectiveCollapsed} icon={<Briefcase />} label="Job Matches" active={activeTab === 'jobs'} onClick={() => setActiveTab('jobs')} count={jobCount} />
+          <Link href="/dashboard/jobs" className={`
+            relative flex items-center w-full rounded-2xl transition-all duration-200
+            ${effectiveCollapsed ? 'justify-center py-3' : 'justify-start gap-3 px-4 py-3'}
+            text-slate-500 hover:bg-slate-50 hover:text-slate-900
+          `} title={effectiveCollapsed ? 'Job Search' : undefined}>
+            <Search className="h-[22px] w-[22px] shrink-0" />
+            {!effectiveCollapsed && <span className="text-[16px] whitespace-nowrap">Job Search</span>}
+          </Link>
           <NavItem isCollapsed={effectiveCollapsed} icon={<Sparkles />} label="AI Suggestions" active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} count={suggestionCount} />
           <Link href="/chat" className={`
             relative flex items-center w-full rounded-2xl transition-all duration-200
@@ -83,6 +92,22 @@ export function PremiumSidebar({
           `} title={effectiveCollapsed ? 'Tailor Resume' : undefined}>
             <Wand2 className="h-[22px] w-[22px] shrink-0" />
             {!effectiveCollapsed && <span className="text-[16px] whitespace-nowrap">Tailor Resume</span>}
+          </Link>
+          <Link href="/dashboard/tracker" className={`
+            relative flex items-center w-full rounded-2xl transition-all duration-200
+            ${effectiveCollapsed ? 'justify-center py-3' : 'justify-start gap-3 px-4 py-3'}
+            text-slate-500 hover:bg-slate-50 hover:text-slate-900
+          `} title={effectiveCollapsed ? 'Job Tracker' : undefined}>
+            <Kanban className="h-[22px] w-[22px] shrink-0" />
+            {!effectiveCollapsed && <span className="text-[16px] whitespace-nowrap">Job Tracker</span>}
+          </Link>
+          <Link href="/dashboard/referrals" className={`
+            relative flex items-center w-full rounded-2xl transition-all duration-200
+            ${effectiveCollapsed ? 'justify-center py-3' : 'justify-start gap-3 px-4 py-3'}
+            text-slate-500 hover:bg-slate-50 hover:text-slate-900
+          `} title={effectiveCollapsed ? 'AI Referrals' : undefined}>
+            <Handshake className="h-[22px] w-[22px] shrink-0" />
+            {!effectiveCollapsed && <span className="text-[16px] whitespace-nowrap">AI Referrals</span>}
           </Link>
           <NavItem isCollapsed={effectiveCollapsed} icon={<Settings />} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>

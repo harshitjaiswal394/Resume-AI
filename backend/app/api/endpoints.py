@@ -17,7 +17,7 @@ from pathlib import Path
 resume_router = APIRouter()
 logger = logging.getLogger("resumatch-api.endpoints")
 
-from app.db import persist_pipeline_results
+from app.db import persist_pipeline_results, execute_vector_search, execute_keyword_search
 
 # ── Upload / payload validation limits ───────────────────────────────────────
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "10"))
@@ -220,6 +220,28 @@ async def generate_cover_letter(payload: Dict[str, Any] = Body(...), request: Re
         logger.error(f"Cover letter generation failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@resume_router.post("/referral")
+async def generate_referral_message(payload: Dict[str, Any] = Body(...), request: Request = None, authorization: Optional[str] = Header(None)):
+    """Generate a personalized referral request message (LinkedIn DM / email)."""
+    resume_data = payload.get("resume") or payload.get("resumeData") or {}
+    referral_details = payload.get("referralDetails") or {}
+    authed_user_id = await _optional_user_id(authorization)
+
+    _validate_payload_bytes(payload)
+
+    if not referral_details.get("targetRole") and not referral_details.get("targetCompany"):
+        raise HTTPException(status_code=400, detail="Target role or company is required")
+
+    await _enforce_rate_limit(request, authed_user_id)
+
+    try:
+        content = await ai_service.generate_referral_message(resume_data, referral_details)
+        return {"success": True, "content": content}
+    except Exception as e:
+        logger.error(f"Referral generation failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @resume_router.get("/domains")
 async def get_domains(q: str = ""):
     """Returns distinct domains from the job_postings table for autocomplete."""
@@ -263,6 +285,96 @@ async def get_locations(q: str = ""):
     except Exception as e:
         logger.error(f"Failed to fetch locations: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch locations")
+
+@resume_router.get("/search-jobs")
+async def search_jobs(
+    q: str = "",
+    location: str = "",
+    work_mode: str = "",
+    experience_level: str = "",
+    days_old: int = 30,
+    salary_min: float = 0,
+    limit: int = 20,
+    offset: int = 0,
+):
+    """
+    Search and filter live job postings with pagination.
+    When a query text is provided the results are ranked by embedding similarity
+    (falling back to keyword matching if the embedding service is unavailable).
+    """
+    from app.db import engine
+    q = (q or "").strip()[:MAX_QUERY_LEN]
+    limit = max(1, min(int(limit), 50))
+    offset = max(0, int(offset))
+    # 0 = "any time"; avoid the 25-day default by using a far window.
+    days = max(1, min(int(days_old), 3650)) if days_old else 3650
+
+    filters = {
+        "q": q,
+        "location": (location or "").strip() or None,
+        "work_mode": (work_mode or "").strip() or None,
+        "experience_level": (experience_level or "").strip() or None,
+        "days_old": days,
+        "salary_min": float(salary_min) if salary_min else None,
+    }
+
+    jobs = []
+    total = 0
+    used_ai = False
+
+    if q:
+        try:
+            from app.services.nvidia_service import nvidia_service
+            # Only Vertex embeddings match the stored job vectors (gemini-2048).
+            # NVIDIA/nemotron vectors are a different space and would rank
+            # garbage; when Vertex isn't ready we go straight to keyword search.
+            if nvidia_service.vertex_embedding_ready():
+                embedding = await nvidia_service.generate_embedding(q)
+                if (
+                    embedding and any(v != 0.0 for v in embedding)
+                    and nvidia_service.last_embedding_provider == "vertex"
+                ):
+                    results = execute_vector_search(embedding, limit=limit, filters=filters, offset=offset, with_total=True)
+                    if results:
+                        total = results[0].get("total", 0)
+                        for j in results:
+                            j.pop("total", None)
+                            try:
+                                j["similarity"] = float(j.get("similarity", 0))
+                            except (TypeError, ValueError):
+                                j["similarity"] = 0.0
+                        jobs = results
+                        used_ai = True
+                else:
+                    logger.info("Search skipped vector ranking: provider=%s (Vertex ready but embedding unavailable)",
+                                nvidia_service.last_embedding_provider)
+            else:
+                logger.info("Search skipped vector ranking: Vertex not ready")
+        except Exception as e:
+            logger.warning(f"Vector search failed, falling back to keyword search: {str(e)}")
+
+    if not jobs:
+        jobs, total = execute_keyword_search(filters, limit=limit, offset=offset)
+
+    # Enrich postings without a direct apply URL with portal search links.
+    for job in jobs:
+        if isinstance(job, dict) and not job.get("apply_url"):
+            job["apply_links"] = job_portal_service.generate_links(
+                job.get("title") or job.get("domain") or "Software Engineer",
+                job.get("skills") or [],
+                job.get("location") or "India",
+            )
+
+    return {
+        "success": True,
+        "data": {
+            "jobs": jobs,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "ai_ranked": used_ai,
+        },
+    }
 
 async def process_resume_stream_generator(content: bytes, filename: str, user_id: str, resume_id: str):
     """

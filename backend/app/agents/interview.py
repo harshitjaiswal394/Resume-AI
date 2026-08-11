@@ -119,14 +119,15 @@ class InterviewAgent:
         self,
         session_id: str,
         answer_text: str,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Submit an answer and get the next question (or summary).
 
         Returns next question, feedback, or summary.
         """
-        # Load session
-        session = self._load_session(session_id)
+        # Load session (scoped to the owning user when provided)
+        session = self._load_session(session_id, user_id)
         if not session:
             return {"status": "error", "message": "Session not found"}
 
@@ -168,9 +169,9 @@ class InterviewAgent:
             "question": next_q,
         }
 
-    async def get_status(self, session_id: str) -> Dict[str, Any]:
+    async def get_status(self, session_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Get current interview status."""
-        session = self._load_session(session_id)
+        session = self._load_session(session_id, user_id)
         if not session:
             return {"status": "error", "message": "Session not found"}
         return {
@@ -251,12 +252,17 @@ Respond with JSON:
         except (json.JSONDecodeError, ValueError):
             return {"overall_score": 5.0, "strengths": [], "areas_to_improve": ["Could not parse summary"]}
 
-    def _load_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Load interview session from DB."""
+    def _load_session(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Load interview session from DB, optionally scoped to the owning user."""
+        query = "SELECT * FROM interview_sessions WHERE id = :id"
+        params: Dict[str, Any] = {"id": session_id}
+        if user_id:
+            query += " AND user_id = :uid"
+            params["uid"] = user_id
         with engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM interview_sessions WHERE id = :id"),
-                {"id": session_id},
+                text(query),
+                params,
             ).fetchone()
         if not row:
             return None

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { LegalPage, LegalSection, LegalP, LegalList } from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Refund & Cancellation Policy | ResuMatch AI",
-  description: "Understand ResuMatch AI subscription billing, how to cancel, refund eligibility, and how to request a refund.",
+  title: "Refund & Cancellation Policy | CareerAmp",
+  description: "Understand CareerAmp subscription billing, how to cancel, refund eligibility, and how to request a refund.",
 };
 
 export default function RefundPolicyPage() {
@@ -12,7 +12,7 @@ export default function RefundPolicyPage() {
     <LegalPage
       badge="Refund & Cancellation Policy"
       title="Refund & Cancellation Policy"
-      intro="This policy explains how billing works on ResuMatch AI, how to cancel your subscription, and when refunds are available. It forms part of our Terms of Service."
+      intro="This policy explains how billing works on CareerAmp, how to cancel your subscription, and when refunds are available. It forms part of our Terms of Service."
       updated="August 8, 2026"
       sections={[
         { id: "overview", title: "Overview" },
@@ -81,8 +81,8 @@ export default function RefundPolicyPage() {
               content: (
                 <>
                   You can cancel your subscription at any time by contacting support at{" "}
-                  <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-                    support@resumatch.ai
+                  <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+                    support@careeramp.ai
                   </Link>
                   .
                 </>
@@ -147,8 +147,8 @@ export default function RefundPolicyPage() {
       <LegalSection id="how-to-request" number="05" title="How to Request a Refund">
         <LegalP>
           To request a refund, email{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>{" "}
           within 14 days of the charge, with your account email and the reason for your request. We will review it and respond
           within a reasonable time. Approved refunds are processed to the original payment method and may take a few business days
@@ -168,8 +168,8 @@ export default function RefundPolicyPage() {
         <LegalP>
           If you dispute a charge with your bank or payment provider instead of contacting us first, it may delay resolution. We
           encourage you to reach out to{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>{" "}
           before initiating a chargeback so we can resolve the issue quickly. We may contest chargebacks made without reasonable
           cause, and accounts associated with repeated chargebacks may be suspended.
@@ -179,10 +179,10 @@ export default function RefundPolicyPage() {
       <LegalSection id="contact" number="08" title="Contact Us">
         <LegalP>
           Billing and refund questions? Contact{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
-          . ResuMatch AI, Mumbai, Maharashtra, India.
+          . CareerAmp, Mumbai, Maharashtra, India.
         </LegalP>
       </LegalSection>
     </LegalPage>

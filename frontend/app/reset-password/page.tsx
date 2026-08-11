@@ -61,15 +61,20 @@ export default function ResetPasswordPage() {
 
   if (isSuccess) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-3xl shadow-xl p-10 max-w-md w-full text-center space-y-6">
-          <div className="h-16 w-16 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto">
-            <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+      <div className="relative min-h-screen overflow-hidden bg-slate-50 flex items-center justify-center p-6">
+        <div className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-brand-100/70 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-amber-100/60 blur-3xl" />
+        <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white p-10 text-center shadow-2xl shadow-brand-900/5 ring-1 ring-slate-100">
+          <div className="h-1.5 w-full bg-gradient-to-r from-brand-500 via-brand-700 to-amber-400" />
+          <div className="relative mx-auto mt-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-white shadow-lg shadow-brand-600/25 ring-1 ring-white/20">
+            <CheckCircle2 className="h-8 w-8" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900">Password Updated</h1>
-          <p className="text-sm text-slate-500">Your password has been successfully changed.</p>
-          <Link href="/dashboard">
-            <Button className="w-full h-12 rounded-xl text-base font-bold">Go to Dashboard</Button>
+          <h1 className="mt-6 text-2xl font-black tracking-tight text-slate-900">Password Updated</h1>
+          <p className="mt-2 text-sm text-slate-500">Your password has been successfully changed.</p>
+          <Link href="/dashboard" className="mt-8 block">
+            <Button className="w-full h-12 rounded-xl text-base font-bold bg-brand-600 hover:bg-brand-800 shadow-lg shadow-brand-600/25">
+              Go to Dashboard
+            </Button>
           </Link>
         </div>
       </div>
@@ -77,13 +82,19 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="bg-white rounded-3xl shadow-xl p-10 max-w-md w-full space-y-6">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50">
-          <Sparkles className="h-6 w-6 text-indigo-600" />
+    <div className="relative min-h-screen overflow-hidden bg-slate-50 flex items-center justify-center p-6">
+      <div className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-brand-100/70 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-amber-100/60 blur-3xl" />
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white p-10 shadow-2xl shadow-brand-900/5 ring-1 ring-slate-100 space-y-6">
+        <div className="h-1.5 w-full bg-gradient-to-r from-brand-500 via-brand-700 to-amber-400" />
+        <div className="relative mt-2 flex h-12 w-12 items-center justify-center">
+          <div className="pointer-events-none absolute -inset-3 rounded-3xl bg-brand-100/60 blur-2xl" />
+          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-white shadow-lg shadow-brand-600/30 ring-1 ring-white/20">
+            <Sparkles className="h-6 w-6" />
+          </div>
         </div>
         <div>
-          <h1 className="text-2xl font-black text-slate-900 mb-1">Set new password</h1>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-1">Set new password</h1>
           <p className="text-sm text-slate-500">Choose a strong password for your account.</p>
         </div>
 
@@ -98,17 +109,17 @@ export default function ResetPasswordPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+          <div className="relative group">
+            <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
             <input type="password" placeholder="New password" required value={password} onChange={e => setPassword(e.target.value)}
-              className="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" />
+              className="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-slate-50/80 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white outline-none transition-all" />
           </div>
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+          <div className="relative group">
+            <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
             <input type="password" placeholder="Confirm new password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-              className="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" />
+              className="w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-slate-50/80 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white outline-none transition-all" />
           </div>
-          <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold shadow-lg shadow-indigo-500/20">
+          <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-brand-600 hover:bg-brand-800 shadow-lg shadow-brand-600/25">
             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Update Password'}
           </Button>
         </form>

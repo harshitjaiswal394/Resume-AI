@@ -32,7 +32,7 @@ from app.services.knowledge_base_seeder import job_seeder
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.tracing import instrument_app
 
-app = FastAPI(title="ResuMatch AI API")
+app = FastAPI(title="CareerAmp AI API")
 instrument_app(app)
 
 
@@ -123,6 +123,15 @@ async def startup_event():
     # Automatic seeding disabled as requested.
     # Use 'python scripts/seed_kb.py' to run it manually.
     logger.info("Backend started. Automatic Knowledge Base seeding is DISABLED.")
+
+    # Warm the Vertex embedding client in the background so the ~40s one-time
+    # OAuth/token setup doesn't hit the first job-search query.
+    try:
+        from app.services.nvidia_service import nvidia_service
+        asyncio.create_task(nvidia_service.warm_vertex_client())
+        logger.info("Vertex embedding client warm-up scheduled.")
+    except Exception as e:
+        logger.warning("Vertex warm-up could not be scheduled: %s", e)
 
 @app.on_event("shutdown")
 def shutdown_event():
