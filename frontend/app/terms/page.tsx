@@ -13,7 +13,7 @@ export default function TermsPage() {
       badge="Terms of Service"
       title="Terms of Service"
       intro="These Terms of Service govern your access to and use of CareerAmp. By signing up, uploading a resume, or otherwise using the Service, you agree to these terms. If you don't agree, please don't use the Service."
-      updated="August 8, 2026"
+      updated="August 13, 2026"
       sections={[
         { id: "acceptance", title: "Acceptance of Terms" },
         { id: "service", title: "About the Service" },
@@ -243,10 +243,19 @@ export default function TermsPage() {
 
       <LegalSection id="termination" number="13" title="Termination">
         <LegalP>
-          You may stop using the Service at any time and may delete your account by contacting us. We may suspend or terminate
-          your access to the Service, in whole or in part, at our discretion, including if you violate these Terms. Upon
-          termination, your right to use the Service ceases, and we may delete or retain your data in accordance with our Privacy
-          Policy and applicable law.
+          You may stop using the Service at any time. If you are signed in, you can delete your account directly from the{" "}
+          <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+            Privacy Settings
+          </Link>{" "}
+          page. Deletion begins a{" "}
+          <strong className="font-semibold text-[var(--text-primary)]">30-day grace period</strong> during which you can change
+          your mind and cancel the request; after it lapses, your data is permanently purged. You can also contact us to request
+          deletion at any time.
+        </LegalP>
+        <LegalP>
+          We may suspend or terminate your access to the Service, in whole or in part, at our discretion, including if you
+          violate these Terms. Upon termination, your right to use the Service ceases, and we may delete or retain your data in
+          accordance with our Privacy Policy and applicable law.
         </LegalP>
       </LegalSection>
 

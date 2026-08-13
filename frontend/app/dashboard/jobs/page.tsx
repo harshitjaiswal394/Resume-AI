@@ -60,6 +60,7 @@ type Job = {
   posted_at: string | null;
   similarity?: number;
   apply_links?: Record<string, string>;
+  similar_roles?: { role: string; score?: number }[];
 };
 
 type Filters = {
@@ -69,9 +70,10 @@ type Filters = {
   experience_level: string;
   days_old: number;
   salary_min: number;
+  country: string;
 };
 
-const DEFAULT_FILTERS: Filters = { q: "", location: "", work_mode: "", experience_level: "", days_old: 30, salary_min: 0 };
+const DEFAULT_FILTERS: Filters = { q: "", location: "", work_mode: "", experience_level: "", days_old: 30, salary_min: 0, country: "" };
 
 function parseSalary(text: string | null): { min?: string; max?: string; currency?: string } | null {
   if (!text) return null;
@@ -152,6 +154,7 @@ export default function JobsPage() {
       if (active.experience_level) params.set("experience_level", active.experience_level);
       if (active.days_old) params.set("days_old", String(active.days_old));
       if (active.salary_min) params.set("salary_min", String(active.salary_min));
+      if (active.country) params.set("country", active.country);
       params.set("limit", String(limit));
       params.set("offset", String(newOffset));
       try {
@@ -330,6 +333,14 @@ export default function JobsPage() {
                 </option>
               ))}
             </select>
+            <select
+              value={filters.country}
+              onChange={(e) => setFilters({ ...filters, country: e.target.value })}
+              className="h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[14px] font-medium outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">All countries</option>
+              <option value="India">🇮🇳 India (all cities)</option>
+            </select>
           </div>
           <div className="mt-3 flex items-center justify-between gap-2">
             <button
@@ -474,6 +485,26 @@ export default function JobsPage() {
                         {job.skills.length > 6 && (
                           <span className="px-1 py-1 text-[11px] font-bold text-slate-400">+{job.skills.length - 6}</span>
                         )}
+                      </div>
+                    )}
+
+                    {Array.isArray(job.similar_roles) && job.similar_roles.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Similar roles</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {job.similar_roles.map((r) => (
+                            <button
+                              key={r.role}
+                              onClick={() => handleChip(r.role)}
+                              className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
+                            >
+                              {r.role}
+                              {typeof r.score === "number" && r.score > 0 && (
+                                <span className="ml-1 text-indigo-400">{Math.round(r.score * 100)}%</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
 

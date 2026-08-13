@@ -13,7 +13,7 @@ export default function PrivacyPage() {
       badge="Privacy Policy"
       title="Privacy Policy"
       intro="This Privacy Policy explains how CareerAmp ('we', 'us', or 'our') collects, uses, stores, and protects your personal information when you use our Service. We are committed to keeping your resume data and personal information safe and secure."
-      updated="August 8, 2026"
+      updated="August 13, 2026"
       sections={[
         { id: "overview", title: "Overview" },
         { id: "collect", title: "Information We Collect" },
@@ -35,6 +35,16 @@ export default function PrivacyPage() {
           CareerAmp is an AI-powered resume analysis and optimization service built for job seekers. Because your resume
           contains sensitive personal information, we design our systems around the principle of data minimization: we only
           collect what is needed to operate the Service, and we do not sell your personal information to anyone.
+        </LegalP>
+        <LegalP>
+          We operate in line with the{" "}
+          <strong className="font-semibold text-[var(--text-primary)]">Digital Personal Data Protection (DPDP) Act, 2025</strong>{" "}
+          (India). This means you get clear, granular control over your data through in-product tools: a{" "}
+          <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+            Privacy Settings
+          </Link>{" "}
+          page where you can manage consent per category, download a portable copy of your data, and request deletion of your
+          account.
         </LegalP>
       </LegalSection>
 
@@ -205,45 +215,84 @@ export default function PrivacyPage() {
 
       <LegalSection id="retention" number="06" title="Data Retention">
         <LegalP>
-          We retain your account information and resume data for as long as your account is active or as needed to provide the
-          Service. If you delete a resume from the Service, we remove it from active storage. If you request account deletion, we
-          delete your account data, including stored resumes and analyses, unless we are required by law to retain certain records.
-          Backups and logs may persist for a limited additional period for security and recovery purposes.
+          We retain your account information and resume data only as long as your account is active or as long as needed to
+          provide the Service and to fulfill the purpose for which the data was collected (DPDP §5 — purpose limitation). If you
+          delete a resume from the Service, we remove it from active storage.
+        </LegalP>
+        <LegalP>
+          When you request account deletion, your account enters a{" "}
+          <strong className="font-semibold text-[var(--text-primary)]">30-day grace period</strong> during which you can change
+          your mind and cancel the request. Once the grace period lapses, your data — including resumes, analyses, chats, job
+          matches, consents, and audit events — is permanently purged by our nightly retention sweep. Backups and security logs
+          may persist for a limited additional period for recovery and incident-response purposes.
         </LegalP>
       </LegalSection>
 
       <LegalSection id="rights" number="07" title="Your Rights & Choices">
         <LegalP>
-          Depending on your location, you may have rights under applicable data protection laws, including the Digital Personal
-          Data Protection Act (India) and, where applicable, the GDPR. These may include the right to:
+          Depending on your location, you may have rights under applicable data protection laws, including the{" "}
+          <strong className="font-semibold text-[var(--text-primary)]">Digital Personal Data Protection Act, 2025 (India)</strong>{" "}
+          and, where applicable, the GDPR. These include the right to:
         </LegalP>
         <LegalList
           items={[
             { id: "rights-access", content: <>Access the personal information we hold about you.</> },
             { id: "rights-correct", content: <>Correct inaccurate or incomplete information.</> },
-            { id: "rights-delete", content: <>Request deletion of your account and associated data.</> },
-            { id: "rights-consent", content: <>Withdraw consent where processing is based on consent.</> },
-            { id: "rights-port", content: <>Receive a copy of your data in a portable format.</> },
+            {
+              id: "rights-delete",
+              content: (
+                <>
+                  Request deletion of your account and associated data, subject to a 30-day reversal window before permanent
+                  erasure.
+                </>
+              ),
+            },
+            {
+              id: "rights-consent",
+              content: (
+                <>
+                  Withdraw consent where processing is based on consent, at any time, across the four consent categories
+                  (Essential, Analytics, Marketing, Preferences).
+                </>
+              ),
+            },
+            { id: "rights-port", content: <>Receive a copy of your data in a portable format (JSON or CSV).</> },
           ]}
         />
         <LegalP>
-          To exercise any of these rights, contact us at{" "}
+          Signed-in users can exercise these rights directly from the{" "}
+          <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+            Privacy Settings
+          </Link>{" "}
+          page in their dashboard: grant or withdraw consent per category, download a copy of all personal data we hold, and
+          request account deletion with a clear grace period. Consent changes take effect immediately and are logged with the
+          notice version, language, and time of your choice.
+        </LegalP>
+        <LegalP>
+          You can also contact us at{" "}
           <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
             support@careeramp.ai
-          </Link>
-          . We will respond within the timeframes required by applicable law.
+          </Link>{" "}
+          to exercise any of these rights. We will respond within the timeframes required by applicable law.
         </LegalP>
       </LegalSection>
 
       <LegalSection id="cookies" number="08" title="Cookies & Similar Technologies">
         <LegalP>
           We use cookies and similar technologies, including browser local storage, to keep you signed in, remember your
-          preferences, and store temporary state such as in-progress resume drafts. These are necessary for the Service to
-          function.
+          preferences, and store temporary state such as in-progress resume drafts. These are grouped into four consent
+          categories —{" "}
+          <strong className="font-semibold text-[var(--text-primary)]">Essential, Analytics, Marketing, and Preferences</strong>{" "}
+          — and for signed-in users your choices are recorded on your account (with the notice version and language), so they
+          apply consistently and can be audited.
         </LegalP>
         <LegalP>
-          You can control or delete cookies through your browser settings. Please note that disabling cookies or local storage may
-          prevent some parts of the Service from working correctly.
+          You can review or change your cookie and consent choices at any time on the{" "}
+          <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+            Privacy Settings
+          </Link>{" "}
+          page or through the cookie consent banner. Essential cookies are always active; please note that disabling other
+          categories or clearing local storage may prevent some parts of the Service from working correctly.
         </LegalP>
       </LegalSection>
 

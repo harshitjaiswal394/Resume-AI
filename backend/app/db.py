@@ -84,7 +84,7 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
             "COUNT(*) OVER() AS total, "
             if with_total
             else ""
-        ) + """id, title, company, location, description, skills, salary_range,
+        ) + """id, title, company, location, location_country, description, skills, salary_range,
                domain, source, work_mode, experience_level, education, apply_url, posted_at,
                1 - (embedding <=> CAST(:embedding AS vector)) as similarity"""
 
@@ -123,6 +123,7 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
         add_filter("work_mode", "work_mode", filters.get("work_mode"))
         add_filter("experience_level", "exp", filters.get("experience_level"))
         add_filter("location", "loc", filters.get("location"))
+        add_filter("location_country", "country", filters.get("country"))
 
         if filters.get("days_old"):
             base_query += " AND posted_at >= NOW() - INTERVAL '1 day' * :days "
@@ -210,6 +211,7 @@ def execute_keyword_search(filters: dict = None, limit: int = 20, offset: int = 
         params["work_mode"] = str(filters["work_mode"]).strip()
     add_filter("experience_level", "exp", filters.get("experience_level"))
     add_filter("location", "loc", filters.get("location"))
+    add_filter("location_country", "country", filters.get("country"))
 
     if filters.get("days_old"):
         base_query += " AND posted_at >= NOW() - INTERVAL '1 day' * :days "

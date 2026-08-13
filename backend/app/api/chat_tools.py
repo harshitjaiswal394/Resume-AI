@@ -6,9 +6,10 @@ from typing import Dict, List, Optional
 
 from sqlalchemy import text
 
-from app.db import engine, execute_vector_search
+from app.db import engine, execute_vector_search, execute_keyword_search
 from app.services.ai_gateway import AgentTool
 from app.services.nvidia_service import nvidia_service
+from app.services.role_matcher import similar_roles_keyword
 
 logger = logging.getLogger("resumatch-api.chat_tools")
 
@@ -44,11 +45,15 @@ SEARCH_JOBS_PARAMETERS = {
     "properties": {
         "query": {
             "type": "string",
-            "description": "Natural language description of the job (e.g. 'Software Engineer python').",
+            "description": "Natural language description of the job (e.g. 'Software Engineer python' or 'senior data engineer with PySpark').",
         },
         "location": {
             "type": "string",
             "description": "Optional location filter (e.g. 'Remote', 'London', 'Bangalore').",
+        },
+        "country": {
+            "type": "string",
+            "description": "Optional country filter matching the mapped location_country column (e.g. 'India'). Use this to find jobs across every city of a country.",
         },
         "experience_level": {
             "type": "string",
@@ -61,52 +66,86 @@ SEARCH_JOBS_PARAMETERS = {
 
 
 def _build_search_jobs(user_id: str):
-    async def search_jobs(query: str, location: str = None, experience_level: str = None) -> str:
+    async def search_jobs(query: str, location: str = None, country: str = None, experience_level: str = None) -> str:
         """Searches the job database for positions matching the user's query."""
         start = time.monotonic()
         logger.info(
-            "TOOL_CALL_START | tool=search_jobs user=%s query=%r location=%s exp=%s",
-            user_id, query, location, experience_level
+            "TOOL_CALL_START | tool=search_jobs user=%s query=%r location=%s country=%s exp=%s",
+            user_id, query, location, country, experience_level
         )
         with _span("chat_tool.search_jobs") as span:
             span.set_attribute("tool.name", "search_jobs")
             span.set_attribute("tool.user_id", user_id)
             span.set_attribute("tool.query", query or "")
             if location: span.set_attribute("tool.location", location)
+            if country: span.set_attribute("tool.country", country)
             if experience_level: span.set_attribute("tool.experience_level", experience_level)
             try:
-                embedding = await nvidia_service.generate_embedding(query)
-                filters = {}
+                filters = {"q": (query or "").strip() or None}
                 if location: filters["location"] = location
+                if country: filters["country"] = country
                 if experience_level: filters["experience_level"] = experience_level
 
-                # execute_vector_search is synchronous — run in thread pool
-                loop = asyncio.get_event_loop()
-                candidates = await loop.run_in_executor(
-                    None, execute_vector_search, embedding, 5, filters
-                )
+                candidates = None
+                used_ai = False
+                # Only Vertex embeddings match the stored job vectors (gemini-2048).
+                # NVIDIA/nemotron vectors live in a different space and would rank
+                # garbage; when Vertex isn't ready we go straight to keyword search.
+                if nvidia_service.vertex_embedding_ready():
+                    embedding = await nvidia_service.generate_embedding(query)
+                    if (
+                        embedding and any(v != 0.0 for v in embedding)
+                        and nvidia_service.last_embedding_provider == "vertex"
+                    ):
+                        # execute_vector_search is synchronous — run in thread pool
+                        loop = asyncio.get_event_loop()
+                        candidates = await loop.run_in_executor(
+                            None, execute_vector_search, embedding, 6, filters
+                        )
+                        used_ai = True
+                    else:
+                        logger.info(
+                            "search_jobs skipped vector ranking: provider=%s (Vertex ready but embedding unavailable)",
+                            nvidia_service.last_embedding_provider,
+                        )
+                else:
+                    logger.info("search_jobs skipped vector ranking: Vertex not ready")
+
+                if not candidates:
+                    loop = asyncio.get_event_loop()
+                    results_keyword, _ = await loop.run_in_executor(
+                        None, execute_keyword_search, filters, 6
+                    )
+                    candidates = results_keyword
 
                 latency = (time.monotonic() - start) * 1000
                 logger.info(
-                    "TOOL_CALL_SUCCESS | tool=search_jobs user=%s results=%d latency_ms=%.1f",
-                    user_id, len(candidates), latency
+                    "TOOL_CALL_SUCCESS | tool=search_jobs user=%s results=%d ai=%s latency_ms=%.1f",
+                    user_id, len(candidates), used_ai, latency
                 )
                 span.set_attribute("tool.result_count", len(candidates))
+                span.set_attribute("tool.ai_ranked", used_ai)
 
                 if not candidates:
                     return json.dumps({"status": "no_results", "message": "No jobs found matching those criteria."})
 
-                results = [
-                    {
+                results = []
+                for c in candidates:
+                    roles = similar_roles_keyword(
+                        c.get("title") or "", c.get("description") or "", c.get("skills") or []
+                    )
+                    results.append({
                         "title": c.get("title"),
                         "company": c.get("company"),
                         "location": c.get("location"),
+                        "location_country": c.get("location_country"),
                         "salary_range": c.get("salary_range"),
+                        "experience_level": c.get("experience_level"),
                         "apply_url": c.get("apply_url"),
-                    }
-                    for c in candidates
-                ]
-                return json.dumps({"status": "success", "count": len(results), "jobs": results})
+                        "description_preview": (c.get("description") or "")[:600],
+                        "similar_roles": [r["role"] for r in roles],
+                    })
+                return json.dumps({"status": "success", "count": len(results), "ai_ranked": used_ai, "jobs": results})
 
             except Exception as e:
                 latency = (time.monotonic() - start) * 1000
@@ -533,8 +572,10 @@ def build_agent_tools(user_id: str, allowed_tool_names: Optional[List[str]] = No
         "search_jobs": AgentTool(
             name="search_jobs",
             description=(
-                "Searches the job database for positions matching the user's query, "
-                "optionally filtered by location and experience level."
+                "Searches the job database for positions matching the user's query (semantic "
+                "ranking, keyword fallback), optionally filtered by location, country (e.g. "
+                "'India'), and experience level. Returns title, company, location, salary, "
+                "experience level, a short description preview, and similar-role labels."
             ),
             parameters=SEARCH_JOBS_PARAMETERS,
             function=_build_search_jobs(user_id),

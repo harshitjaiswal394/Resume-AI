@@ -13,7 +13,7 @@ export default function GdprPage() {
       badge="GDPR Compliance"
       title="GDPR Compliance"
       intro="The EU General Data Protection Regulation (GDPR) protects the personal data of individuals in the European Economic Area (EEA) and the UK. This page explains how CareerAmp processes personal data under the GDPR and the rights available to you."
-      updated="August 8, 2026"
+      updated="August 13, 2026"
       sections={[
         { id: "controller", title: "Data Controller" },
         { id: "data-we-process", title: "Personal Data We Process" },
@@ -98,7 +98,9 @@ export default function GdprPage() {
               content: (
                 <>
                   <strong className="font-semibold text-[var(--text-primary)]">Consent.</strong> For non-essential cookies and any
-                  optional communications. You can withdraw consent at any time.
+                  optional communications. Consent is collected per category (Essential, Analytics, Marketing, Preferences), and
+                  for signed-in users it is recorded on your account along with the notice version, language, and timestamp. You
+                  can withdraw consent at any time.
                 </>
               ),
             },
@@ -144,13 +146,52 @@ export default function GdprPage() {
 
       <LegalSection id="exercising" number="05" title="How to Exercise Your Rights">
         <LegalP>
-          To exercise any of these rights, email{" "}
+          Many of your rights can be exercised directly, without contacting us. If you are signed in, the{" "}
+          <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+            Privacy Settings
+          </Link>{" "}
+          page in your dashboard lets you:
+        </LegalP>
+        <LegalList
+          items={[
+            {
+              id: "exercise-consent",
+              content: (
+                <>
+                  <strong className="font-semibold text-[var(--text-primary)]">Withdraw consent</strong> per category — changes
+                  take effect immediately and are logged with the notice version, language, and time.
+                </>
+              ),
+            },
+            {
+              id: "exercise-port",
+              content: (
+                <>
+                  <strong className="font-semibold text-[var(--text-primary)]">Data portability</strong> — download a copy of the
+                  personal data we hold about you in JSON or CSV format.
+                </>
+              ),
+            },
+            {
+              id: "exercise-erase",
+              content: (
+                <>
+                  <strong className="font-semibold text-[var(--text-primary)]">Erasure</strong> — request account deletion, which
+                  enters a 30-day grace period before your data is permanently purged. You can cancel the request during this
+                  period.
+                </>
+              ),
+            },
+          ]}
+        />
+        <LegalP>
+          For any other request — including rectification, restriction, or objection — email{" "}
           <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
             support@careeramp.ai
           </Link>{" "}
           with your request. We will respond within one month, as required by the GDPR. We may need to verify your identity before
           processing your request, and we may extend the response period by a further two months for complex requests, as
-          permitted by law. Account deletion is also available by contacting us.
+          permitted by law.
         </LegalP>
       </LegalSection>
 
@@ -174,9 +215,10 @@ export default function GdprPage() {
 
       <LegalSection id="retention" number="08" title="Data Retention">
         <LegalP>
-          We retain personal data only as long as needed to provide the Service or as required by law. Account and resume data are
-          deleted when you request account deletion, subject to statutory retention periods for records such as billing invoices.
-          Our retention practices are described in our Privacy Policy.
+          We retain personal data only as long as needed to provide the Service or as required by law. When you request account
+          deletion, your account enters a 30-day grace period during which you can change your mind; after it lapses, your data is
+          permanently purged by our nightly retention sweep across every user-scoped table. Statutory retention periods for
+          records such as billing invoices still apply. Our retention practices are described in our Privacy Policy.
         </LegalP>
       </LegalSection>
 

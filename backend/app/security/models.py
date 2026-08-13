@@ -62,6 +62,13 @@ class EventType(str, enum.Enum):
     PROVIDER_FALLBACK = "provider_fallback"
     PROVIDER_FAILURE = "provider_failure"
 
+    # DPDP Act (India) data-rights events.
+    CONSENT_UPDATED = "consent_updated"
+    DATA_EXPORT = "data_export"
+    ERASURE_REQUESTED = "erasure_requested"
+    ERASURE_CANCELLED = "erasure_cancelled"
+    DATA_PURGED = "data_purged"
+
 
 @dataclass(frozen=True)
 class Finding:

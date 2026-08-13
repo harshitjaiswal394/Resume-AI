@@ -294,6 +294,7 @@ async def search_jobs(
     experience_level: str = "",
     days_old: int = 30,
     salary_min: float = 0,
+    country: str = "",
     limit: int = 20,
     offset: int = 0,
 ):
@@ -301,6 +302,8 @@ async def search_jobs(
     Search and filter live job postings with pagination.
     When a query text is provided the results are ranked by embedding similarity
     (falling back to keyword matching if the embedding service is unavailable).
+    `country` filters on the mapped location_country column (e.g. "India")
+    so a single filter catches every Indian city.
     """
     from app.db import engine
     q = (q or "").strip()[:MAX_QUERY_LEN]
@@ -316,6 +319,7 @@ async def search_jobs(
         "experience_level": (experience_level or "").strip() or None,
         "days_old": days,
         "salary_min": float(salary_min) if salary_min else None,
+        "country": (country or "").strip() or None,
     }
 
     jobs = []
@@ -364,6 +368,45 @@ async def search_jobs(
                 job.get("skills") or [],
                 job.get("location") or "India",
             )
+
+    # Map each job to its similar roles (keyword/title authoritative, semantic
+    # widening when vectors are available) so the frontend can show role siblings.
+    from app.services.role_matcher import similar_roles_semantic, similar_roles_keyword, load_prototypes
+    ids = [j.get("id") for j in jobs if isinstance(j, dict) and j.get("id")]
+    embeddings_by_id: dict = {}
+    prototypes = None
+    if ids and used_ai:
+        try:
+            import ast
+            from app.db import engine
+            rows = engine.connect().execute(
+                text("SELECT id, embedding::text FROM job_postings WHERE id::text = ANY(:ids)"),
+                {"ids": ids},
+            ).fetchall()
+            for rid, emb_text in rows:
+                try:
+                    embeddings_by_id[str(rid)] = ast.literal_eval(emb_text)
+                except (ValueError, SyntaxError):
+                    embeddings_by_id[str(rid)] = None
+            prototypes = await load_prototypes()
+        except Exception as exc:
+            logger.warning(f"Similar-role embedding fetch failed: {exc}")
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        roles = similar_roles_keyword(
+            job.get("title") or "", job.get("description") or "", job.get("skills") or []
+        )
+        if len(roles) < 2:
+            emb = embeddings_by_id.get(str(job.get("id")))
+            if emb:
+                sem = similar_roles_semantic(emb, prototypes, top_n=4)
+                for s in sem:
+                    if s["role"] not in {r["role"] for r in roles}:
+                        roles.append(s)
+                        if len(roles) >= 4:
+                            break
+        job["similar_roles"] = roles
 
     return {
         "success": True,

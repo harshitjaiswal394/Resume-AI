@@ -28,6 +28,7 @@ from app.api.builder import router as builder_router
 from app.api.cover_letters import router as cover_letters_router
 from app.api.chat_routes import chat_router
 from app.api.agent_routes import router as agent_router
+from app.api.privacy_routes import privacy_router
 from app.services.knowledge_base_seeder import job_seeder
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.tracing import instrument_app
@@ -66,6 +67,39 @@ async def startup_event():
     if not scheduler.running:
         scheduler.start()
         logger.info("Background scheduler started.")
+
+    # DPDP retention purge: nightly hard-delete of accounts past their grace period.
+    try:
+        from app.services.privacy_service import prune_deletion_queue
+        from app.security import EventType, audit_logger
+
+        def _dpdp_purge_job():
+            try:
+                result = prune_deletion_queue()
+                if result.get("purged"):
+                    audit_logger.log(
+                        EventType.DATA_PURGED,
+                        extra={"purged": result.get("purged", 0), "failed": result.get("failed", [])},
+                    )
+                    logger.info("DPDP_NIGHTLY_PURGE | purged=%d failed=%d",
+                                result.get("purged", 0), len(result.get("failed", [])))
+            except Exception as exc:  # never let a purge failure take the app down
+                logger.error("DPDP_NIGHTLY_PURGE_FAILED | error=%s", exc, exc_info=True)
+
+        scheduler.add_job(
+            _dpdp_purge_job,
+            "cron",
+            hour=int(os.getenv("DPDP_PURGE_HOUR", "3")),
+            minute=int(os.getenv("DPDP_PURGE_MINUTE", "0")),
+            id="dpdp_retention_purge",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
+        logger.info("DPDP nightly purge scheduled at %s:%s.",
+                    os.getenv("DPDP_PURGE_HOUR", "3"), os.getenv("DPDP_PURGE_MINUTE", "0"))
+    except Exception as e:
+        logger.error("DPDP purge job scheduling failed: %s", e, exc_info=True)
 
     # Ensure additive DB schema (resume_versions.jd_skills etc.) is present
     try:
@@ -170,6 +204,7 @@ app.include_router(builder_router, prefix="/api/builder", tags=["builder"])
 app.include_router(cover_letters_router, prefix="/api/cover-letter", tags=["cover-letter"])
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
 app.include_router(agent_router, prefix="/api/agents", tags=["agents"])
+app.include_router(privacy_router, prefix="/api/v1/users", tags=["privacy"])
 
 from app.security.metrics import metrics_enabled
 from fastapi.responses import PlainTextResponse

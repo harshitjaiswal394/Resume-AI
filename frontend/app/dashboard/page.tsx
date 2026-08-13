@@ -38,7 +38,8 @@ import {
   Phone,
   GraduationCap,
   Award,
-  Wand2
+  Wand2,
+  ShieldCheck
 } from 'lucide-react';
 import { AuthModal } from '@/components/common/AuthModal';
 import { ScoreGauge } from '@/components/resume/ScoreGauge';
@@ -1100,7 +1101,15 @@ export default function Dashboard() {
             <section className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-50">
               <h3 className="text-xl font-black text-slate-900 mb-6">Account Settings</h3>
               <p className="text-slate-500">Logged in as {user.email}</p>
-              <Button onClick={handleLogout} variant="danger" className="mt-4 rounded-xl">Sign Out</Button>
+              <div className="flex flex-wrap gap-3 mt-4">
+                <Link
+                  href="/dashboard/privacy"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm px-5 hover:border-indigo-200 hover:text-indigo-600 transition-all"
+                >
+                  <ShieldCheck className="h-4 w-4" /> Privacy Settings
+                </Link>
+                <Button onClick={handleLogout} variant="danger" className="rounded-xl">Sign Out</Button>
+              </div>
             </section>
           )}
         </div>
