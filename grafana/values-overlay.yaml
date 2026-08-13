@@ -1,0 +1,27 @@
+# =============================================================================
+# Resume-AI Grafana provisioning overlay for kube-prometheus-stack
+# -----------------------------------------------------------------------------
+# Usage:  helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+#           -n monitoring -f kubernetes/persistent.yaml -f grafana/values-overlay.yaml
+#
+# - Grafana sidecar picks up dashboards (label grafana_dashboard) and the
+#   Prometheus datasource (label grafana_datasource) from ConfigMaps.
+# - The alerting provisioning bundle is mounted straight into
+#   /etc/grafana/provisioning/alerting (alert rules + email template).
+# =============================================================================
+grafana:
+  # Replace the stack's default "Prometheus" datasource with ours so the alert
+  # rules can rely on the stable UID `resumatch-prom` (see datasources.yaml).
+  defaultDatasourceEnabled: false
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+    datasources:
+      enabled: true
+      label: grafana_datasource
+  extraConfigmapMounts:
+    - name: grafana-resumatch-alerting
+      mountPath: /etc/grafana/provisioning/alerting
+      configMap: grafana-resumatch-alerting
+      readOnly: true

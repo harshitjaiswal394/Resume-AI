@@ -1,0 +1,28 @@
+# =============================================================================
+# Resume-AI Grafana datasource provisioning
+# -----------------------------------------------------------------------------
+# Registers the Prometheus datasource with a STABLE uid (`resumatch-prom`),
+# which the alert rules in alerting.yaml reference via datasourceUid.
+# Dashboards use a `$datasource` template variable, so they work regardless
+# of UID — only the alert rules need a fixed UID.
+#
+# Apply: mount this file at /etc/grafana/provisioning/datasources/datasources.yaml
+# and restart Grafana (or rely on the standard sidecar).
+# =============================================================================
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: resumatch-prom
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
+      manageAlerts: false
+      prometheusType: Prometheus
+      prometheusVersion: 2.52.0

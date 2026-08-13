@@ -1,0 +1,65 @@
+# =============================================================================
+# Resume-AI — notification policies (how alerts are routed)
+# Top-level routes match the `team` label on every alert rule, sending each
+# team's alerts to its own email contact point. Inside each team route, the
+# severity sub-routes control cadence: critical repeats every 30m, high 4h,
+# low 24h.
+# =============================================================================
+apiVersion: 1
+
+notificationPolicies:
+  - orgId: 1
+    receiver: email-platform
+    group_by: ["alertname", "severity"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - matcher: team="platform"
+        receiver: email-platform
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+        routes:
+          - matcher: severity="critical"
+            receiver: email-platform
+            group_wait: 10s
+            group_interval: 1m
+            repeat_interval: 30m
+            continue: false
+          - matcher: severity="high"
+            receiver: email-platform
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 4h
+            continue: false
+          - matcher: severity="low"
+            receiver: email-platform
+            group_wait: 2m
+            group_interval: 15m
+            repeat_interval: 24h
+            continue: false
+      - matcher: team="security"
+        receiver: email-security
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+        routes:
+          - matcher: severity="critical"
+            receiver: email-security
+            group_wait: 10s
+            group_interval: 1m
+            repeat_interval: 30m
+            continue: false
+          - matcher: severity="high"
+            receiver: email-security
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 4h
+            continue: false
+          - matcher: severity="low"
+            receiver: email-security
+            group_wait: 2m
+            group_interval: 15m
+            repeat_interval: 24h
+            continue: false

@@ -2876,6 +2876,110 @@ template variables).
 - **Target shows `dropped`** — service label/port mismatch (see above); re-apply the Service labels.
 - **401 on scrape in production** — `METRICS_TOKEN` unset/mismatched between the ServiceMonitor `bearerTokenSecret` and the backend env.
 - **New series (tokens, provider failures, tool calls, http) missing** — backend image predates the metric wiring; rebuild + `kubectl rollout restart deploy/backend -n resumatch-ai`.
+- **ALL panels show "No data"** — the `$job` template variable is empty because its query referenced a metric that does not exist yet. Use `label_values({__name__=~"resumatch_ai_.*"}, job)` (matches any `resumatch_ai_*` series). Fix in Dashboard → Settings → Variables → `job` → Query.
+
+### 9. Grafana dashboards
+
+Three dashboard JSONs are provided:
+
+| File | Audience | Panels |
+|---|---|---|
+| `grafana/backend-dashboard.json` | Engineering | 18 — Traffic (req/s, HTTP p95/p99, chat latency, errors), AI & Security, Providers & Tools, Runtime (Python) |
+| `grafana/backend-dashboard-summary.json` | Stakeholders | 17 — Service health, AI usage (last hour), Security (last hour), Trends |
+| `grafana/app-overview-dashboard.json` | Engineering | 16 — Live service state, HTTP traffic, chat latency, AI tokens, security & rate-limiting |
+
+Import: Grafana → Dashboards → New → Import → upload JSON → select the Prometheus
+datasource (all use `$datasource` + `$job` template variables).
+
+Stakeholder-friendly labels avoid jargon: "ops/s" → "Requests handled / second",
+"p95" → "Slowest 5% of requests". Threshold colors (green/orange/red) make health
+glanceable for non-technical reviewers.
+
+### 9b. Alerting & notifications (Unified Alerting)
+
+`grafana/` ships a provisioning bundle that registers a **stable Prometheus
+datasource UID** and a **13-rule severity-tiered alert set** delivered by email:
+
+| File | Purpose |
+|---|---|
+| `grafana/datasources.yaml` | Prometheus datasource with fixed UID `resumatch-prom` (rules depend on it) |
+| `grafana/alerting/alerting.yaml` | Single-file bundle: contact point + notification policies + all 13 rules |
+| `grafana/alerting/templates/resumatch_email.tmpl` | Enterprise email subject/body template |
+| `grafana/values-overlay.yaml` | kube-prometheus-stack values enabling the Grafana sidecars + alerting mount |
+| `grafana/deploy.sh` | One-shot: creates ConfigMaps and runs the helm upgrade |
+| `grafana/alerting/team-based/` | **Optional** per-team split (Platform/Security emails + routing) — not deployed yet |
+
+Deploy (one command, idempotent — no manual API calls):
+
+```bash
+# 1. set the email recipient (alerting.yaml -> addresses), then
+bash grafana/deploy.sh
+# creates: grafana-resumatch-alerting, grafana-resumatch-datasources,
+#          grafana-backend-dashboard, grafana-backend-dashboard-summary,
+#          grafana-app-overview-dashboard (ConfigMaps, monitoring ns)
+# then:    helm upgrade prometheus ... --reuse-values (applies the overlay)
+```
+
+What it does: ConfigMaps are labeled for the Grafana sidecars
+(`grafana_dashboard`, `grafana_datasource`) so the dashboards and the
+Prometheus datasource auto-load; the alerting bundle is mounted into
+`/etc/grafana/provisioning/alerting`. The overlay also disables the stack's
+default Prometheus datasource so our stable UID is the only one.
+
+Before enabling, set the recipient in `grafana/alerting/alerting.yaml`
+(`contactPoints[].receivers[].settings.addresses`) and confirm SMTP in
+`grafana.ini` (`[smtp]` → `host`, `user`, `password`). Verify with
+Alerting → Contact points → email → "Test".
+
+**Testing order:** 1) datasources.yaml → 2) dashboards → 3) alerting single-file
+bundle. Only after all three pass, swap the alerting ConfigMap to the
+`team-based/` files (edit `deploy.sh` to mount those instead and rerun).
+
+### 10. Operational gotchas (incident log)
+
+**A. `/api/*` returns 503 after the Service port rename (NGINX Gateway Fabric)**
+
+- Renaming the `backend-service` port (e.g. adding `name: http` for the ServiceMonitor) can leave the NGINX Gateway Fabric upstream with **only the 503 fallback socket** — no real endpoints — so every `/api/*` request returns 503 even though the backend is healthy.
+- Verify the upstream:
+  ```bash
+  kubectl exec deploy/resumatch-gateway-nginx -n resumatch-ai -c nginx -- \
+    grep -A6 'upstream resumatch-ai_backend-service_8090' /etc/nginx/conf.d/http.conf
+  # healthy:  server 10.52.130.29:8090;
+  # broken:   server unix:/var/run/nginx/nginx-503-server.sock;
+  ```
+- Fix: regenerate the config from current EndpointSlices:
+  ```bash
+  kubectl rollout restart deploy/ngf-nginx-gateway-fabric -n nginx-gateway
+  kubectl rollout status deploy/ngf-nginx-gateway-fabric -n nginx-gateway
+  ```
+- Retest through the gateway (expect 200):
+  ```bash
+  curl -k -s -o /dev/null -w "%{http_code}\n" -X OPTIONS \
+    "https://www.jaiswal.shop/api/chat/resumes" \
+    --resolve "www.jaiswal.shop:443:34.139.197.149" \
+    -H "Origin: https://www.jaiswal.shop" -H "Access-Control-Request-Method: GET"
+  ```
+
+**B. Token usage / provider failures / tool calls show "No data" (multi-worker gotcha)**
+
+- `prometheus_client` counters are in-memory **per process**. With gunicorn `-w 2`, the worker serving the chat request increments its own copy; the worker that Prometheus scrapes shows never-incremented counters → no samples.
+- Symptom: security/HTTP counters (incremented on every request, including the scrape itself) show data, but token/provider/tool metrics never do.
+- Fix: run a single worker (`-w 1` in the Dockerfile CMD) — an async FastAPI app keeps high concurrency on one event loop — OR enable prometheus_client multiprocess mode (`PROMETHEUS_MULTIPROC_DIR` + `MultiProcessCollector` on a dedicated registry + gunicorn `worker_exit` hook calling `multiprocess.mark_process_dead(pid)`).
+
+**C. Counters only appear after their first increment**
+
+- A Prometheus counter renders **no sample lines** until `.inc()` is first called. Token usage / provider failures / tool calls stay "No data" until real AI traffic (a chat turn or agent tool call) flows. Send one test chat message to verify.
+
+**D. New metric code not live**
+
+- Panels for `resumatch_ai_http_requests_total` / `_http_request_duration_seconds` stay empty until the image with the middleware is rebuilt and rolled out:
+  ```bash
+  cd backend
+  docker build -t us-east1-docker.pkg.dev/resumeai-503317/resumatches-official/backend:latest .
+  docker push us-east1-docker.pkg.dev/resumeai-503317/resumatches-official/backend:latest
+  kubectl rollout restart deploy/backend -n resumatch-ai
+  kubectl rollout status deploy/backend -n resumatch-ai
+  ```
 
 ---
 

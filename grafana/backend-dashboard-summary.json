@@ -1,0 +1,354 @@
+{
+  "uid": "resumatch-backend-summary",
+  "title": "Resume-AI Backend - Overview",
+  "tags": ["resumatch", "ai", "stakeholder"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "job",
+        "label": "job",
+        "type": "query",
+        "query": { "query": "label_values({__name__=~\"resumatch_ai_.*\"}, job)" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "current": { "selected": true, "text": ["backend"], "value": ["backend"] },
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Service health",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Backend is running",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "up{job=~\"$job\"}", "legendFormat": "status", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 4, "x": 0, "y": 1 }
+    },
+    {
+      "type": "stat",
+      "title": "Requests handled / second",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(rate(resumatch_ai_http_requests_total{job=~\"$job\"}[5m]))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 5, "x": 4, "y": 1 }
+    },
+    {
+      "type": "stat",
+      "title": "Typical response time",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_http_request_duration_seconds_sum{job=~\"$job\"}[5m])) / sum(rate(resumatch_ai_http_request_duration_seconds_count{job=~\"$job\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 5, "x": 9, "y": 1 }
+    },
+    {
+      "type": "stat",
+      "title": "Slowest 5% of requests",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(resumatch_ai_http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 2 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 5, "x": 14, "y": 1 }
+    },
+    {
+      "type": "stat",
+      "title": "Failed requests / second",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_http_requests_total{job=~\"$job\",status=~\"5..\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.01 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 5, "x": 19, "y": 1 }
+    },
+    {
+      "type": "row",
+      "title": "AI usage (last hour)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Chats / AI tasks (last hour)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(increase(resumatch_ai_chat_latency_seconds_count{job=~\"$job\"}[1h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [ { "color": "blue", "value": null } ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 5 }
+    },
+    {
+      "type": "stat",
+      "title": "AI tokens used (last hour)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(increase(resumatch_ai_tokens_total{job=~\"$job\"}[1h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [ { "color": "purple", "value": null } ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 5 }
+    },
+    {
+      "type": "bargauge",
+      "title": "AI model used",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(increase(resumatch_ai_tokens_total{job=~\"$job\"}[1h])) by (provider)",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [ { "color": "purple", "value": null } ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 5 }
+    },
+    {
+      "type": "bargauge",
+      "title": "Tools used by the AI",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(increase(resumatch_ai_tool_calls_total{job=~\"$job\"}[1h])) by (tool)",
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [ { "color": "green", "value": null } ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 5 }
+    },
+    {
+      "type": "row",
+      "title": "Security (last hour)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Threats blocked (last hour)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(increase(resumatch_ai_prompt_injections_total{job=~\"$job\"}[1h])) + sum(increase(resumatch_ai_output_rejected_total{job=~\"$job\"}[1h]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 10 }
+    },
+    {
+      "type": "bargauge",
+      "title": "Security decisions",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(increase(resumatch_ai_security_decisions_total{job=~\"$job\"}[1h])) by (decision)",
+          "legendFormat": "{{decision}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [ { "color": "orange", "value": null } ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 16, "x": 8, "y": 10 }
+    },
+    {
+      "type": "row",
+      "title": "Trends (last 6 hours)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests over time",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_http_requests_total{job=~\"$job\"}[5m])) by (status)",
+          "legendFormat": "HTTP {{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Response time (slowest 5%) over time",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(resumatch_ai_http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le))",
+          "legendFormat": "p95 response time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 }
+    }
+  ]
+}

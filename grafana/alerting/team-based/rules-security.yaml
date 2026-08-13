@@ -1,0 +1,44 @@
+# =============================================================================
+# Resume-AI — Security team alert rules
+# Currently: prompt-injection / AI-security detections. Add more security
+# rules here; they are routed to the email-security contact point by
+# notification-policies.yaml via the team=security label.
+# =============================================================================
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: "Resume-AI Security"
+    folder: "Resume-AI"
+    interval: 1m
+    rules:
+      - uid: resumatch-security-threats
+        title: "Prompt-injection attack spike"
+        for: "5m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: resumatch-prom
+            model:
+              expr: 'sum(increase(resumatch_ai_prompt_injections_total{job="backend"}[15m]))'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              thresholds: [{ value: 10, color: red }]
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: high, team: security }
+        annotations:
+          summary: "Prompt-injection detections spiking"
+          description: "More than 10 prompt-injection blocks in 15 minutes. Possible targeted attack on the AI chat."

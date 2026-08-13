@@ -1,0 +1,33 @@
+# =============================================================================
+# Resume-AI — contact points (who receives alerts)
+# One email contact point per team. Fill the `addresses` fields with your
+# team distribution lists (e.g. Google Groups), not the SMTP sender.
+# =============================================================================
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: email-platform
+    receivers:
+      - uid: email-platform-receiver
+        type: email
+        settings:
+          addresses: "CHANGE_ME_PLATFORM_GROUP@googlegroups.com"
+          subject: '{{ template "resumatch_email.subject" . }}'
+          message: '{{ template "resumatch_email.message" . }}'
+        disableResolveMessage: false
+
+  - orgId: 1
+    name: email-security
+    receivers:
+      - uid: email-security-receiver
+        type: email
+        settings:
+          addresses: "CHANGE_ME_SECURITY_GROUP@googlegroups.com"
+          subject: '{{ template "resumatch_email.subject" . }}'
+          message: '{{ template "resumatch_email.message" . }}'
+        disableResolveMessage: false
+
+templateFiles:
+  - name: resumatch_email.tmpl
+    file: templates/resumatch_email.tmpl
