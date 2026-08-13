@@ -17,18 +17,18 @@ groups:
         condition: "C"
         data:
           - refId: "A"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus
             model:
               expr: 'up{job="backend"}'
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -56,11 +56,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -80,18 +80,18 @@ groups:
         condition: "C"
         data:
           - refId: "A"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus
             model:
               expr: 'up{job="prometheus-kube-prometheus-prometheus"}'
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -119,11 +119,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -155,11 +155,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -186,11 +186,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -217,11 +217,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -248,11 +248,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -284,11 +284,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -315,11 +315,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -346,11 +346,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
@@ -370,18 +370,18 @@ groups:
         condition: "C"
         data:
           - refId: "A"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus
             model:
               expr: 'up{job="prometheus-grafana"}'
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold

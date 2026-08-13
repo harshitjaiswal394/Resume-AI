@@ -25,11 +25,11 @@ groups:
               instant: true
               refId: "A"
           - refId: "B"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model: { type: reduce, expression: "A", reducer: last, refId: "B" }
           - refId: "C"
-            relativeTimeRange: { from: 0, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: __expr__
             model:
               type: threshold
