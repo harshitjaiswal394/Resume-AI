@@ -35,16 +35,18 @@ echo "==> Created grafana-resumatch-alerting"
 # 2. Prometheus datasource -> ConfigMap tagged for the datasource sidecar
 kubectl -n "$NS" create configmap grafana-resumatch-datasources \
   --from-file="${HERE}/datasources.yaml" \
-  --labels="grafana_datasource=1" \
   --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+kubectl -n "$NS" label configmap grafana-resumatch-datasources \
+  "grafana_datasource=1" --overwrite >/dev/null
 echo "==> Created grafana-resumatch-datasources"
 
 # 3. Dashboards -> one ConfigMap per dashboard, tagged for the dashboards sidecar
 for f in backend-dashboard backend-dashboard-summary app-overview-dashboard; do
   kubectl -n "$NS" create configmap "grafana-${f}" \
     --from-file="${f}.json=${HERE}/${f}.json" \
-    --labels="grafana_dashboard=1" \
     --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+  kubectl -n "$NS" label configmap "grafana-${f}" \
+    "grafana_dashboard=1" --overwrite >/dev/null
   echo "==> Created grafana-${f}"
 done
 
