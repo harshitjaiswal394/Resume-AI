@@ -9,6 +9,7 @@ load_dotenv("../.env") # checks root .env
 import logging
 import asyncio
 import secrets
+import time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
