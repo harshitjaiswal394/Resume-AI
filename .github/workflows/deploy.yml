@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
   push:
-    branches: [ "redesign/builder-premium-ui" ]
+    branches: [ "redesign/builder-premium-ui-2" ]
   workflow_dispatch:
 
 env:
