@@ -16,6 +16,11 @@
 # relativeTimeRange (from > to). `from: 0, to: 0` is rejected at startup
 # with `invalid relative time range` even on __expr__ reduce/threshold
 # queries (grafana/grafana#121527), so all queries use from: 600 (10m).
+#
+# The threshold expression node uses `conditions[].evaluator`
+# ({type: lt|gt, params: [value]}), NOT the legacy panel `thresholds`
+# array — the latter fails evaluation with "threshold expression requires
+# exactly one condition".
 # =============================================================================
 apiVersion: 1
 
@@ -93,8 +98,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              options: { isLowerThan: true }
-              thresholds: [{ value: 1, color: red }]
+              conditions:
+                - evaluator: { type: lt, params: [1] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error
@@ -125,7 +130,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 0.5, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [0.5] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -156,8 +162,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              options: { isLowerThan: true }
-              thresholds: [{ value: 1, color: red }]
+              conditions:
+                - evaluator: { type: lt, params: [1] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error
@@ -188,7 +194,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 0, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [0] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error
@@ -227,7 +234,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 3, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [3] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -258,7 +266,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 2, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [2] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -289,7 +298,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 2, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [2] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -320,7 +330,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 10, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [10] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -351,7 +362,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 10, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [10] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -390,7 +402,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 85, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [85] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -421,7 +434,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 90, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [90] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -452,7 +466,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 100, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [100] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -483,8 +498,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              options: { isLowerThan: true }
-              thresholds: [{ value: 1, color: red }]
+              conditions:
+                - evaluator: { type: lt, params: [1] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error

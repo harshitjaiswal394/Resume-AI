@@ -33,8 +33,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              options: { isLowerThan: true }
-              thresholds: [{ value: 1, color: red }]
+              conditions:
+                - evaluator: { type: lt, params: [1] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error
@@ -65,7 +65,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 0.5, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [0.5] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -96,8 +97,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              options: { isLowerThan: true }
-              thresholds: [{ value: 1, color: red }]
+              conditions:
+                - evaluator: { type: lt, params: [1] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error
@@ -128,7 +129,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 0, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [0] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error
@@ -164,7 +166,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 3, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [3] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -195,7 +198,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 2, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [2] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -226,7 +230,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 2, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [2] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -257,7 +262,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 10, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [10] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -293,7 +299,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 85, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [85] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -324,7 +331,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 90, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [90] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -355,7 +363,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 100, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [100] }
               refId: "C"
         noDataState: OK
         execErrState: Error
@@ -386,8 +395,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              options: { isLowerThan: true }
-              thresholds: [{ value: 1, color: red }]
+              conditions:
+                - evaluator: { type: lt, params: [1] }
               refId: "C"
         noDataState: Alerting
         execErrState: Error

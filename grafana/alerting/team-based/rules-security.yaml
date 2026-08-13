@@ -34,7 +34,8 @@ groups:
             model:
               type: threshold
               expression: "B"
-              thresholds: [{ value: 10, color: red }]
+              conditions:
+                - evaluator: { type: gt, params: [10] }
               refId: "C"
         noDataState: OK
         execErrState: Error
