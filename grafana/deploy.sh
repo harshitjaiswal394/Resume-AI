@@ -5,8 +5,11 @@
 # Creates the ConfigMaps the Grafana sidecars watch, then applies the
 # values-overlay via helm so Grafana picks up:
 #   - dashboards  (label grafana_dashboard,  JSON files)
-#   - datasource  (label grafana_datasource, datasources.yaml)
 #   - alerting    (mounted into /etc/grafana/provisioning/alerting)
+#
+# NOTE: no datasource ConfigMap is created. Grafana uses the stack's built-in
+# Prometheus datasource (uid `prometheus`), which the datasource sidecar
+# provisions from the chart's own ConfigMap. Alert rules reference that UID.
 #
 # Prereqs: kubectl + helm authenticated to the cluster, release `prometheus`
 #          installed in namespace `monitoring`.
@@ -32,15 +35,7 @@ kubectl -n "$NS" create configmap grafana-resumatch-alerting \
   --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
 echo "==> Created grafana-resumatch-alerting"
 
-# 2. Prometheus datasource -> ConfigMap tagged for the datasource sidecar
-kubectl -n "$NS" create configmap grafana-resumatch-datasources \
-  --from-file="${HERE}/datasources.yaml" \
-  --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
-kubectl -n "$NS" label configmap grafana-resumatch-datasources \
-  "grafana_datasource=1" --overwrite >/dev/null
-echo "==> Created grafana-resumatch-datasources"
-
-# 3. Dashboards -> one ConfigMap per dashboard, tagged for the dashboards sidecar
+# 2. Dashboards -> one ConfigMap per dashboard, tagged for the dashboards sidecar
 for f in backend-dashboard backend-dashboard-summary app-overview-dashboard; do
   kubectl -n "$NS" create configmap "grafana-${f}" \
     --from-file="${f}.json=${HERE}/${f}.json" \
@@ -49,6 +44,13 @@ for f in backend-dashboard backend-dashboard-summary app-overview-dashboard; do
     "grafana_dashboard=1" --overwrite >/dev/null
   echo "==> Created grafana-${f}"
 done
+
+# 3. Drop the stale datasource ConfigMap from earlier revisions (if present).
+#    The datasource is now the stack's built-in `prometheus` one, provisioned
+#    by the chart; leaving this ConfigMap mounted would re-introduce the
+#    duplicate-datasource provisioning failure.
+kubectl -n "$NS" delete configmap grafana-resumatch-datasources --ignore-not-found >/dev/null 2>&1 || true
+echo "==> Removed stale grafana-resumatch-datasources (if present)"
 
 # 4. Apply the values overlay (idempotent helm upgrade, preserves existing values)
 helm upgrade "$RELEASE" prometheus-community/kube-prometheus-stack \

@@ -18,7 +18,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 0, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'up{job="backend"}'
               instant: true
@@ -50,7 +50,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'sum(rate(resumatch_ai_http_requests_total{job="backend",status=~"5.."}[5m]))'
               instant: true
@@ -81,7 +81,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 0, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'up{job="prometheus-kube-prometheus-prometheus"}'
               instant: true
@@ -113,7 +113,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'count(up{job="node-exporter"} == 0)'
               instant: true
@@ -149,7 +149,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'histogram_quantile(0.95, sum(rate(resumatch_ai_http_request_duration_seconds_bucket{job="backend"}[5m])) by (le))'
               instant: true
@@ -180,7 +180,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'sum(rate(resumatch_ai_http_requests_total{job="backend",status=~"4.."}[5m]))'
               instant: true
@@ -211,7 +211,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 900, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'sum(increase(kube_pod_container_status_restarts_total{namespace="resumatch-ai",pod=~"backend-.*"}[15m]))'
               instant: true
@@ -242,7 +242,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 900, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'sum(increase(resumatch_ai_provider_failures_total{job="backend"}[15m]))'
               instant: true
@@ -278,7 +278,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 900, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'max((1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100)'
               instant: true
@@ -309,7 +309,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 900, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'max((1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)'
               instant: true
@@ -340,7 +340,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 3600, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'sum(increase(resumatch_ai_rate_limited_total{job="backend"}[1h]))'
               instant: true
@@ -371,7 +371,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 0, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'up{job="prometheus-grafana"}'
               instant: true

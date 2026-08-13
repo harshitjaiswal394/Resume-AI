@@ -2897,13 +2897,13 @@ glanceable for non-technical reviewers.
 
 ### 9b. Alerting & notifications (Unified Alerting)
 
-`grafana/` ships a provisioning bundle that registers a **stable Prometheus
-datasource UID** and a **13-rule severity-tiered alert set** delivered by email:
+`grafana/` ships a provisioning bundle that relies on the **stack's built-in
+Prometheus datasource (uid `prometheus`)** and delivers a **13-rule
+severity-tiered alert set** by email:
 
 | File | Purpose |
 |---|---|
-| `grafana/datasources.yaml` | Prometheus datasource with fixed UID `resumatch-prom` (rules depend on it) |
-| `grafana/alerting/alerting.yaml` | Single-file bundle: contact point + notification policies + all 13 rules |
+| `grafana/alerting/alerting.yaml` | Single-file bundle: contact point + notification policies + all 13 rules (query the `prometheus` datasource uid) |
 | `grafana/alerting/templates/resumatch_email.tmpl` | Enterprise email subject/body template (mounted as `resumatch_email.tmpl`) |
 | `grafana/values-overlay.yaml` | kube-prometheus-stack values enabling the Grafana sidecars + alerting mount |
 | `grafana/deploy.sh` | One-shot: creates ConfigMaps and runs the helm upgrade |
@@ -2932,15 +2932,17 @@ bash grafana/deploy.sh
 
 This is idempotent and:
 1. Creates ConfigMaps in `monitoring`: `grafana-resumatch-alerting`,
-   `grafana-resumatch-datasources`, `grafana-backend-dashboard`,
+   `grafana-backend-dashboard`,
    `grafana-backend-dashboard-summary`, `grafana-app-overview-dashboard`
+   (a stale `grafana-resumatch-datasources` ConfigMap from earlier revisions is
+   deleted, if present)
 2. Runs `helm upgrade prometheus prometheus-community/kube-prometheus-stack \
    -f grafana/values-overlay.yaml --reuse-values`
 
-The overlay enables the Grafana sidecars (`grafana_dashboard`,
-`grafana_datasource` labels), mounts the alerting bundle into
-`/etc/grafana/provisioning/alerting`, and disables the stack's default
-Prometheus datasource so our stable UID is the only one.
+The overlay keeps the stack's default `Prometheus` datasource (uid `prometheus`)
+as the single datasource, enables the dashboards sidecar (`grafana_dashboard`
+label), and mounts the alerting bundle into
+`/etc/grafana/provisioning/alerting`.
 
 **Step 4 — wait for the rollout**
 
@@ -2951,7 +2953,7 @@ kubectl -n monitoring get configmap | grep grafana-resumatch   # 5 ConfigMaps
 
 **Step 5 — verify in Grafana UI** (https://grafana.jaiswal.shop)
 
-1. Connections → Data sources → `Prometheus` (uid `resumatch-prom`) → **Save & test** → green
+1. Connections → Data sources → `Prometheus` (uid `prometheus`) → **Save & test** → green
 2. Dashboards → folder `Resume-AI` → 3 dashboards with live data
 3. Alerting → Contact points → `email-enterprise` → **Test** → email arrives
 4. Alerting → Alert rules → 13 rules under folder `Resume-AI`
@@ -2984,7 +2986,7 @@ kubectl -n monitoring port-forward deploy/alertmanager 9093  # http://localhost:
 
 #### Testing order
 
-1) datasources.yaml → 2) dashboards → 3) alerting single-file bundle → 4) real
+1) dashboards → 2) alerting single-file bundle → 3) real
 alert fire/resolve. Only after all pass, swap the alerting ConfigMap to the
 `team-based/` files (edit `deploy.sh` step 1 to mount those instead, rerun).
 

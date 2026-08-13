@@ -19,7 +19,7 @@ groups:
         data:
           - refId: "A"
             relativeTimeRange: { from: 900, to: 0 }
-            datasourceUid: resumatch-prom
+            datasourceUid: prometheus
             model:
               expr: 'sum(increase(resumatch_ai_prompt_injections_total{job="backend"}[15m]))'
               instant: true
