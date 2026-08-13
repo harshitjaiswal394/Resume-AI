@@ -10,9 +10,12 @@
 #   /etc/grafana/provisioning/alerting (alert rules + email template).
 # =============================================================================
 grafana:
-  # Replace the stack's default "Prometheus" datasource with ours so the alert
-  # rules can rely on the stable UID `resumatch-prom` (see datasources.yaml).
-  defaultDatasourceEnabled: false
+  # NOTE: the stack provisions its own "Prometheus" datasource marked
+  # default. Ours (datasources.yaml) uses a stable UID `resumatch-prom` that
+  # the alert rules reference; it is intentionally NOT marked default to avoid
+  # the "only one datasource can be default" startup error. If you want ours
+  # default instead, keep defaultDatasourceEnabled: false AND remove the
+  # stack's datasource ConfigMap (see runbook).
   sidecar:
     dashboards:
       enabled: true
