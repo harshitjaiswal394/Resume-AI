@@ -2764,6 +2764,119 @@ Expected:
 - All targets UP
 - No scrape failures
 
+## Backend (`/metrics`) Scraping Setup
+
+The FastAPI backend exposes its application + AI-security metrics on `/metrics`
+via `prometheus-client` (`backend/app/security/metrics.py`). Scraping is wired
+with a `ServiceMonitor` + a labeled Service so kube-prometheus-stack discovers it.
+
+### 1. Prerequisites
+
+- `prometheus-client` installed in the backend image (`prometheus-client>=0.20.0` is in `backend/requirements.txt`). Without it `/metrics` returns a placeholder (no `resumatch_ai_*` series).
+- The backend runs in the `resumatch-ai` namespace behind `backend-service` (ClusterIP, port 8090).
+- The `release` label below must match your Prometheus `serviceMonitorSelector`:
+  ```bash
+  kubectl get prometheus -n monitoring -o jsonpath='{.spec.serviceMonitorSelector}'
+  # this cluster: {"matchLabels":{"release":"prometheus"}}
+  ```
+
+### 2. Manifests
+
+`kubernetes/servicemonitor.yaml`:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: resumatch-backend
+  namespace: resumatch-ai
+  labels:
+    app: backend
+    release: prometheus          # must match serviceMonitorSelector
+spec:
+  jobLabel: app                  # -> job label becomes "backend"
+  endpoints:
+  - port: http                   # named port on backend-service
+    path: /metrics
+    interval: 30s
+    # bearerTokenSecret:         # enable once ENVIRONMENT=production + METRICS_TOKEN set
+    #   name: resumatch-secrets
+    #   key: METRICS_TOKEN
+  namespaceSelector:
+    matchNames: [resumatch-ai]
+  selector:
+    matchLabels: {app: backend}  # must match backend-service labels
+```
+
+`backend-service` must carry the label `app: backend` and a named `http` port
+(see `kubernetes/backend.yaml` Service).
+
+### 3. Apply
+
+```bash
+kubectl apply -f kubernetes/servicemonitor.yaml
+kubectl apply -f kubernetes/backend.yaml      # if not already applied
+kubectl get servicemonitor -n resumatch-ai
+```
+
+Helm equivalent: `helm/resumatch` chart — set
+`prometheus.serviceMonitor.enabled=true` (+ `release: prometheus` default) and
+`backend.secrets.METRICS_TOKEN`.
+
+### 4. METRICS_TOKEN gate
+
+- `ENVIRONMENT=development|staging`: `/metrics` and `/api/security/status` are open (dashboard still works).
+- `ENVIRONMENT=production`: both require `Authorization: Bearer $METRICS_TOKEN`. Set `METRICS_TOKEN` in `resumatch-secrets` and either enable the ServiceMonitor `bearerTokenSecret` above or configure Prometheus `scrape_configs` with the same token. An empty/unset token returns 401.
+
+### 5. Metrics exposed
+
+Prefix `resumatch_ai_` (counters unless noted):
+
+| Metric | Labels |
+|---|---|
+| `http_requests_total` | method, path (templated), status |
+| `http_request_duration_seconds` (histogram) | method, path |
+| `chat_latency_seconds` (histogram) | – |
+| `tokens_total` (estimated) | provider |
+| `provider_failures_total` | provider, outcome |
+| `tool_calls_total` / `tool_denied_total` | tool, outcome / tool, reason |
+| `security_decisions_total` | engine, decision |
+| `prompt_injections_total` | risk |
+| `pii_detections_total` / `pii_masked_total` | kind / – |
+| `rate_limited_total` | scope |
+| `output_rejected_total` | rule |
+
+Plus the standard `python_*`/`process_*` series. Counters only appear after their
+first increment, so a fresh scrape looks nearly empty until traffic flows.
+
+### 6. Verify scraping
+
+```bash
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+# Targets:
+curl -s "http://localhost:9090/api/v1/targets" | grep -A2 resumatch
+# Series present:
+curl -s "http://localhost:9090/api/v1/query?query=count({__name__=~\"resumatch_ai_.*\"})"
+```
+
+Expected: target `serviceMonitor/resumatch-ai/resumatch-backend/0` → `up`, and the
+query returns an increasing series count as traffic flows.
+
+### 7. Grafana dashboard
+
+`grafana/backend-dashboard.json` — 18 panels (traffic, HTTP + chat latency, AI &
+security, providers/tools, runtime). Import: Grafana → Dashboards → Import →
+upload JSON → select the Prometheus datasource (uses `$datasource` + `$job`
+template variables).
+
+### 8. Troubleshooting
+
+- **Target missing from Targets page** — ServiceMonitor label `release` doesn't match `serviceMonitorSelector`, or the Service is missing the `app: backend` label / named `http` port.
+- **Target shows `down`** — backend unreachable on 8090, or `prometheus-client` not installed (endpoint still returns 200 with placeholder body, so check series, not just `up`).
+- **Target shows `dropped`** — service label/port mismatch (see above); re-apply the Service labels.
+- **401 on scrape in production** — `METRICS_TOKEN` unset/mismatched between the ServiceMonitor `bearerTokenSecret` and the backend env.
+- **New series (tokens, provider failures, tool calls, http) missing** — backend image predates the metric wiring; rebuild + `kubectl rollout restart deploy/backend -n resumatch-ai`.
+
 ---
 
 # 4. Logging Architecture

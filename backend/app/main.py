@@ -8,6 +8,7 @@ load_dotenv("../.env") # checks root .env
 
 import logging
 import asyncio
+import secrets
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
@@ -33,12 +34,37 @@ from app.services.knowledge_base_seeder import job_seeder
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.tracing import instrument_app
 
-app = FastAPI(title="CareerAmp AI API")
+_env = os.getenv("ENVIRONMENT", "development").strip().lower()
+_docs_enabled = _env in ("development", "staging")
+app = FastAPI(
+    title="CareerAmp AI API",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 instrument_app(app)
 
 
 # Setup Background Scheduler
 scheduler = BackgroundScheduler()
+
+from app.security.metrics import HTTP_REQUESTS, HTTP_REQUEST_DURATION
+
+
+@app.middleware("http")
+async def prometheus_http_metrics(request: Request, call_next):
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        raise
+    finally:
+        route = request.scope.get("route")
+        path = getattr(route, "path", None) or request.url.path
+        HTTP_REQUEST_DURATION.labels(method=request.method, path=path).observe(time.monotonic() - start)
+    HTTP_REQUESTS.labels(method=request.method, path=path, status=str(response.status_code)).inc()
+    return response
+
 
 @app.middleware("http")
 async def mark_failed_requests(request: Request, call_next):
@@ -211,8 +237,13 @@ from fastapi.responses import PlainTextResponse
 
 
 @app.get("/metrics")
-async def metrics_endpoint():
-    """Prometheus metrics. Returns a placeholder when the client is absent."""
+async def metrics_endpoint(request: Request):
+    """Prometheus metrics. Bearer METRICS_TOKEN required outside dev/staging."""
+    if _env not in ("development", "staging"):
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        expected = os.getenv("METRICS_TOKEN", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
     if not metrics_enabled():
         return PlainTextResponse("# prometheus_client not installed; metrics disabled\n", media_type="text/plain")
     from prometheus_client import generate_latest
@@ -220,8 +251,17 @@ async def metrics_endpoint():
 
 
 @app.get("/api/security/status")
-async def security_status():
-    """Liveness of the AI security core (kill-switch aware)."""
+async def security_status(request: Request):
+    """Liveness of the AI security core (kill-switch aware).
+
+    Open in dev/staging; requires a METRICS_TOKEN bearer in production so
+    the enabled-engines map and policy thresholds stay internal.
+    """
+    if _env not in ("development", "staging"):
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        expected = os.getenv("METRICS_TOKEN", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
     from app.security import get_config
 
     cfg = get_config()
