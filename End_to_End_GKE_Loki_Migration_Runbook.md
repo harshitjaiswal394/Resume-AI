@@ -2904,36 +2904,89 @@ datasource UID** and a **13-rule severity-tiered alert set** delivered by email:
 |---|---|
 | `grafana/datasources.yaml` | Prometheus datasource with fixed UID `resumatch-prom` (rules depend on it) |
 | `grafana/alerting/alerting.yaml` | Single-file bundle: contact point + notification policies + all 13 rules |
-| `grafana/alerting/templates/resumatch_email.tmpl` | Enterprise email subject/body template |
+| `grafana/alerting/templates/resumatch_email.tmpl` | Enterprise email subject/body template (mounted as `resumatch_email.tmpl`) |
 | `grafana/values-overlay.yaml` | kube-prometheus-stack values enabling the Grafana sidecars + alerting mount |
 | `grafana/deploy.sh` | One-shot: creates ConfigMaps and runs the helm upgrade |
 | `grafana/alerting/team-based/` | **Optional** per-team split (Platform/Security emails + routing) — not deployed yet |
 
-Deploy (one command, idempotent — no manual API calls):
+#### Deploy — step by step
+
+**Step 1 — set the alert recipient**
+
+In `grafana/alerting/alerting.yaml` → `contactPoints[].receivers[].settings.addresses`
+replace `CHANGE_ME_TO_YOUR_EMAIL@gmail.com` with the real recipient (your email
+or a distribution list / Google Group).
+
+**Step 2 — configure SMTP (the account that *sends* the emails)**
+
+`kubernetes/persistent.yaml` → `grafana.env` now has the SMTP block. Fill in the
+three `REPLACE_ME_*` values (your Gmail + an **App Password** from
+https://myaccount.google.com/apppasswords — not your login password). Do not
+commit the real password; set it in CI/secret or edit it after apply.
+
+**Step 3 — deploy**
 
 ```bash
-# 1. set the email recipient (alerting.yaml -> addresses), then
 bash grafana/deploy.sh
-# creates: grafana-resumatch-alerting, grafana-resumatch-datasources,
-#          grafana-backend-dashboard, grafana-backend-dashboard-summary,
-#          grafana-app-overview-dashboard (ConfigMaps, monitoring ns)
-# then:    helm upgrade prometheus ... --reuse-values (applies the overlay)
 ```
 
-What it does: ConfigMaps are labeled for the Grafana sidecars
-(`grafana_dashboard`, `grafana_datasource`) so the dashboards and the
-Prometheus datasource auto-load; the alerting bundle is mounted into
-`/etc/grafana/provisioning/alerting`. The overlay also disables the stack's
-default Prometheus datasource so our stable UID is the only one.
+This is idempotent and:
+1. Creates ConfigMaps in `monitoring`: `grafana-resumatch-alerting`,
+   `grafana-resumatch-datasources`, `grafana-backend-dashboard`,
+   `grafana-backend-dashboard-summary`, `grafana-app-overview-dashboard`
+2. Runs `helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+   -f grafana/values-overlay.yaml --reuse-values`
 
-Before enabling, set the recipient in `grafana/alerting/alerting.yaml`
-(`contactPoints[].receivers[].settings.addresses`) and confirm SMTP in
-`grafana.ini` (`[smtp]` → `host`, `user`, `password`). Verify with
-Alerting → Contact points → email → "Test".
+The overlay enables the Grafana sidecars (`grafana_dashboard`,
+`grafana_datasource` labels), mounts the alerting bundle into
+`/etc/grafana/provisioning/alerting`, and disables the stack's default
+Prometheus datasource so our stable UID is the only one.
 
-**Testing order:** 1) datasources.yaml → 2) dashboards → 3) alerting single-file
-bundle. Only after all three pass, swap the alerting ConfigMap to the
-`team-based/` files (edit `deploy.sh` to mount those instead and rerun).
+**Step 4 — wait for the rollout**
+
+```bash
+kubectl -n monitoring rollout status deploy/prometheus-grafana
+kubectl -n monitoring get configmap | grep grafana-resumatch   # 5 ConfigMaps
+```
+
+**Step 5 — verify in Grafana UI** (https://grafana.jaiswal.shop)
+
+1. Connections → Data sources → `Prometheus` (uid `resumatch-prom`) → **Save & test** → green
+2. Dashboards → folder `Resume-AI` → 3 dashboards with live data
+3. Alerting → Contact points → `email-enterprise` → **Test** → email arrives
+4. Alerting → Alert rules → 13 rules under folder `Resume-AI`
+
+#### Test — verify a real alert fires end-to-end
+
+The rules depend on backend metrics. Send a couple of chat messages first so the
+`resumatch_ai_*` series exist (counters only appear after their first increment),
+then trigger a real failure:
+
+```bash
+# 1. force the backend down (rule fires after 2m)
+kubectl -n resumatch-ai scale deploy/backend --replicas=0
+sleep 180
+# 2. expect an email: "Resume-AI backend is down" (Critical -> repeats every 30m)
+#    Grafana -> Alerting -> Alert rules -> resumatch-backend-down = Firing
+# 3. recover
+kubectl -n resumatch-ai scale deploy/backend --replicas=1
+sleep 180
+# 4. expect a "resolved" email; rule returns to Normal
+```
+
+Quick rule-state check without waiting for email:
+
+```bash
+# Alertmanager UI (or via kubectl):
+kubectl -n monitoring get pod -l app.kubernetes.io/name=alertmanager -o name
+kubectl -n monitoring port-forward deploy/alertmanager 9093  # http://localhost:9093
+```
+
+#### Testing order
+
+1) datasources.yaml → 2) dashboards → 3) alerting single-file bundle → 4) real
+alert fire/resolve. Only after all pass, swap the alerting ConfigMap to the
+`team-based/` files (edit `deploy.sh` step 1 to mount those instead, rerun).
 
 ### 10. Operational gotchas (incident log)
 

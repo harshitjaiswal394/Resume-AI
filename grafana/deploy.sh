@@ -23,11 +23,12 @@ echo "==> Deploying Resume-AI Grafana provisioning to release '${RELEASE}' in '$
 #    Deploys the single-file alerting.yaml + template (the bundle under test).
 #    The team-based split lives in grafana/alerting/team-based/ and is NOT
 #    mounted here; switch to it once the single-file setup is verified.
-#    --from-file=key=path keeps the `templates/` prefix so Grafana's
-#    templateFiles.file: templates/resumatch_email.tmpl resolves correctly.
+#    Note: ConfigMap keys cannot contain '/', and the mount is flat, so the
+#    template sits next to alerting.yaml and templateFiles.file references
+#    it by plain filename.
 kubectl -n "$NS" create configmap grafana-resumatch-alerting \
   --from-file=alerting.yaml="${HERE}/alerting/alerting.yaml" \
-  --from-file=templates/resumatch_email.tmpl="${HERE}/alerting/templates/resumatch_email.tmpl" \
+  --from-file=resumatch_email.tmpl="${HERE}/alerting/templates/resumatch_email.tmpl" \
   --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
 echo "==> Created grafana-resumatch-alerting"
 

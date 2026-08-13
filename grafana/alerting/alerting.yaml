@@ -55,7 +55,7 @@ notificationPolicies:
 
 templateFiles:
   - name: resumatch_email.tmpl
-    file: templates/resumatch_email.tmpl
+    file: resumatch_email.tmpl
 
 groups:
   # =========================================================================
