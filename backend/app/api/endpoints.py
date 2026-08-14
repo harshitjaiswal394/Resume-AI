@@ -116,37 +116,6 @@ async def _enforce_rate_limit(request: Request, user_id: Optional[str]) -> None:
         )
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
 
-
-async def _optional_user_id(authorization: Optional[str]) -> Optional[str]:
-    """Resolve user id from a Bearer token if present and valid, else None.
-
-    Lets authenticated callers be identified (and their body-supplied user_id
-    overridden) without breaking the guest landing-page flow, which sends no
-    token at all.
-    """
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    from app.services.auth_service import auth_service
-    result = await auth_service.get_user(authorization.replace("Bearer ", ""))
-    if result.get("success"):
-        return result["user"]["id"]
-    return None
-
-
-async def _enforce_rate_limit(request: Request, user_id: Optional[str]) -> None:
-    ip = await get_client_ip(request)
-    result = rate_limiter.check(
-        "ai_request",
-        user_id=None if user_id in (None, "guest") else user_id,
-        ip=ip,
-    )
-    if not result.allowed:
-        logger.warning(
-            "RATE_LIMITED | endpoint=%s user=%s ip=%s",
-            request.url.path, user_id, ip,
-        )
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
-
 @resume_router.post("/tailor")
 async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = None, authorization: Optional[str] = Header(None)):
     """
