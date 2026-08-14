@@ -5,7 +5,10 @@ export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, value, ...props }, ref) => {
+    const hasValueProp = Object.prototype.hasOwnProperty.call(props, "value") || value !== undefined
+    const normalizedValue = value ?? ""
+
     return (
       <input
         type={type}
@@ -15,6 +18,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         )}
         ref={ref}
         {...props}
+        {...(hasValueProp ? { value: normalizedValue } : {})}
       />
     )
   }

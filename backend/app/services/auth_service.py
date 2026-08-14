@@ -156,6 +156,8 @@ class AuthService:
     async def reset_password(self, email: str) -> Dict[str, Any]:
         if not self._validate_email(email):
             return {"success": False, "error": "Invalid email format"}
+        if _check_rate_limit(f"reset_email:{email}"):
+            return {"success": False, "error": "Too many reset requests. Please wait 5 minutes."}
         if not self.ready:
             return {"success": False, "error": "Auth service not configured"}
 

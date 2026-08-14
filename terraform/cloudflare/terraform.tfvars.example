@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+project_id = "resumeai-503317"
+region     = "us-east1"
+domain_name = "jaiswal.shop"
+
+database_url            = "postgresql://USER:PASS@HOST:5432/DB?sslmode=require"
+nvidia_api_key_reasoning = ""
+nvidia_api_key_parsing   = ""
+nvidia_api_key_embedding = ""
+nvidia_api_key_reranking = ""
+supabase_url             = ""
+supabase_service_role_key = ""
+
+image_tag = "latest"

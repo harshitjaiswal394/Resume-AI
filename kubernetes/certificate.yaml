@@ -9,6 +9,8 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-  - "resumatches.com"
-  - "prometheus.resumatches.com"
-  - "grafana.resumatches.com"
+  - "jaiswal.shop"
+  - "www.jaiswal.shop"
+  - "prometheus.jaiswal.shop"
+  - "grafana.jaiswal.shop"
+  - "jaeger.jaiswal.shop"

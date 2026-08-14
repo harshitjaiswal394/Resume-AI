@@ -1,0 +1,289 @@
+{
+  "uid": "resumatch-backend",
+  "title": "Resume-AI Backend",
+  "tags": ["resumatch", "ai"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "job",
+        "label": "job",
+        "type": "query",
+        "query": { "query": "label_values({__name__=~\"resumatch_ai_.*\"}, job)" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "current": { "selected": true, "text": ["backend"], "value": ["backend"] },
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Traffic",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Requests /s by status",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_http_requests_total{job=~\"$job\"}[5m])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 1 }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Latency (p95 / p99) by path",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(resumatch_ai_http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, path))",
+          "legendFormat": "p95 {{path}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(resumatch_ai_http_request_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, path))",
+          "legendFormat": "p99 {{path}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 1 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Chat / agent turn latency",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(resumatch_ai_chat_latency_seconds_bucket{job=~\"$job\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "sum(rate(resumatch_ai_chat_latency_seconds_sum{job=~\"$job\"}[5m])) / sum(rate(resumatch_ai_chat_latency_seconds_count{job=~\"$job\"}[5m]))",
+          "legendFormat": "avg"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 7 }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Errors /s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_http_requests_total{job=~\"$job\",status=~\"5..\"}[5m]))",
+          "legendFormat": "5xx"
+        },
+        {
+          "expr": "sum(rate(resumatch_ai_http_requests_total{job=~\"$job\",status=~\"4..\"}[5m]))",
+          "legendFormat": "4xx"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 7 }
+    },
+    {
+      "type": "row",
+      "title": "AI & Security",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Prompt injections by risk",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_prompt_injections_total{job=~\"$job\"}[5m])) by (risk)",
+          "legendFormat": "{{risk}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 14 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Security decisions",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_security_decisions_total{job=~\"$job\"}[5m])) by (decision)",
+          "legendFormat": "{{decision}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 14 }
+    },
+    {
+      "type": "timeseries",
+      "title": "PII detections by kind / masked",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_pii_detections_total{job=~\"$job\"}[5m])) by (kind)",
+          "legendFormat": "detect {{kind}}"
+        },
+        {
+          "expr": "sum(rate(resumatch_ai_pii_masked_total{job=~\"$job\"}[5m]))",
+          "legendFormat": "masked"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 14 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate limited by scope",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_rate_limited_total{job=~\"$job\"}[5m])) by (scope)",
+          "legendFormat": "{{scope}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 20 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Output validation rejections",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_output_rejected_total{job=~\"$job\"}[5m])) by (rule)",
+          "legendFormat": "{{rule}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 20 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool denials by reason",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_tool_denied_total{job=~\"$job\"}[5m])) by (reason)",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 20 }
+    },
+    {
+      "type": "row",
+      "title": "Providers & Tools",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Token usage by provider",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_tokens_total{job=~\"$job\"}[5m])) by (provider)",
+          "legendFormat": "{{provider}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 27 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider failures",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_provider_failures_total{job=~\"$job\"}[5m])) by (provider, outcome)",
+          "legendFormat": "{{provider}} {{outcome}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 27 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool calls by outcome",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(resumatch_ai_tool_calls_total{job=~\"$job\"}[5m])) by (tool, outcome)",
+          "legendFormat": "{{tool}} {{outcome}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 27 }
+    },
+    {
+      "type": "stat",
+      "title": "Backend up",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "up{job=~\"$job\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 33 }
+    },
+    {
+      "type": "row",
+      "title": "Runtime (Python)",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Python GC objects collected",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum(rate(python_gc_objects_collected_total{job=~\"$job\"}[5m])) by (generation)",
+              "legendFormat": "gen{{generation}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+          "gridPos": { "h": 6, "w": 12, "x": 0, "y": 37 }
+        },
+        {
+          "type": "timeseries",
+          "title": "Python GC collections",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "targets": [
+            {
+              "expr": "sum(rate(python_gc_collections_total{job=~\"$job\"}[5m])) by (generation)",
+              "legendFormat": "gen{{generation}}"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+          "gridPos": { "h": 6, "w": 12, "x": 12, "y": 37 }
+        }
+      ]
+    }
+  ]
+}

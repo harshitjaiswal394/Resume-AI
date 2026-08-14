@@ -6,6 +6,24 @@
 **/.env.*
 !**/.env.example
 
+# GCP CLI credentials (contains credentials.db / access_tokens.db)
+.gcloud/
+
+# =========================
+# TERRAFORM
+# =========================
+# Local variable files with secrets (keep *.tfvars.example committed)
+**/*.tfvars
+**/.terraform/
+**/crash.log
+**/terraform.tfstate*
+
+
+# Logs (may contain URLs/endpoints/sensitive request data)
+*.log
+**/*.err.log
+**/logs/
+
 # OS / Misc
 **/.DS_Store
 **/.DS_Store?
@@ -79,6 +97,7 @@
 /backend/MANIFEST
 
 # Virtual environments
+/backend/.venv/
 /backend/venv/
 /backend/env/
 /backend/ENV/
@@ -98,3 +117,8 @@
 /backend/htmlcov/
 /backend/.coverage
 /backend/.coverage.*
+
+# =========================
+# CIP (Python service - separate project)
+# =========================
+/cip/

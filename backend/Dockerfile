@@ -42,10 +42,12 @@ COPY . .
 EXPOSE 8090
 
 # High-concurrency production command
-# Using Gunicorn as manager and UvicornWorker for ASGI (FastAPI) compatibility
+# Using Gunicorn as manager and UvicornWorker for ASGI (FastAPI) compatibility.
+# NOTE: keep "-w 1" -- prometheus_client counters are per-process; multiple
+# workers produce inconsistent /metrics scrapes (samples missing on some workers).
 CMD ["gunicorn", "app.main:app", \
      "-b", "0.0.0.0:8090", \
-     "-w", "2", \
+     "-w", "1", \
      "-k", "uvicorn.workers.UvicornWorker", \
      "--worker-connections", "1000", \
      "--timeout", "600", \

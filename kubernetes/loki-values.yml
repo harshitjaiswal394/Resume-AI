@@ -1,0 +1,78 @@
+#cat > loki-values.yaml <<'EOF'
+loki:
+  auth_enabled: false
+
+  useTestSchema: false
+
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: gcs
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  storage:
+    type: gcs
+    bucketNames:
+      chunks: resumatch-gke-loki-storage #change this to your GCS bucket name
+      ruler: resumatch-gke-loki-storage #change this to your GCS bucket name
+      admin: resumatch-gke-loki-storage #change this to your GCS bucket name
+
+    gcs:
+      bucket_name: resumatch-gke-loki-storage # change this to your GCS bucket name
+
+  limits_config:
+    retention_period: 720h
+
+  compactor:
+    retention_enabled: true
+    delete_request_store: gcs
+
+deploymentMode: SimpleScalable
+
+backend:
+  replicas: 3
+
+read:
+  replicas: 3
+
+write:
+  replicas: 3
+
+gateway:
+  enabled: true
+
+chunksCache:
+  enabled: true
+  allocatedMemory: 1024 #change this to your desired cache size in MB
+#EOF
+
+# helm repo update
+
+# helm install loki grafana/loki \
+#   -n monitoring \
+#   -f loki-values.yaml
+
+
+# helm upgrade loki grafana/loki \
+#   -n monitoring \
+#   -f loki-values.yaml
+
+# Reduce the oversized cache request
+# Your cache pod is pending because it requests almost 10 GB RAM.
+# Update it:
+
+# helm upgrade loki grafana/loki \
+#   -n monitoring \
+#   --reuse-values \
+#   --set chunksCache.allocatedMemory=1024
+
+# or disable it temporarily:
+
+#   helm upgrade loki grafana/loki \
+#   -n monitoring \
+#   --reuse-values \
+#   --set chunksCache.enabled=false

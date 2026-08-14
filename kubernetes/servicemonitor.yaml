@@ -1,0 +1,33 @@
+# ServiceMonitor for Prometheus (kube-prometheus-stack / prometheus-operator).
+#
+# Apply:  kubectl apply -f kubernetes/servicemonitor.yaml
+# Requires:
+#   - backend-service to carry the label app: backend (see backend.yaml Service)
+#   - the backend /metrics endpoint (prometheus-client installed in the image)
+#   - the `release` label below must match your Prometheus' serviceMonitorSelector
+#     (check: kubectl get prometheus -n monitoring -o jsonpath='{.spec.serviceMonitorSelector}')
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: resumatch-backend
+  namespace: resumatch-ai
+  labels:
+    app: backend
+    release: prometheus
+spec:
+  jobLabel: app
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    # Enable this once the backend runs with ENVIRONMENT=production and
+    # METRICS_TOKEN set — Prometheus will then authenticate with the token:
+    # bearerTokenSecret:
+    #   name: resumatch-secrets
+    #   key: METRICS_TOKEN
+  namespaceSelector:
+    matchNames:
+    - resumatch-ai
+  selector:
+    matchLabels:
+      app: backend

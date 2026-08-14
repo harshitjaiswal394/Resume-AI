@@ -1,0 +1,30 @@
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: resumatch-backend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backend
+    release: {{ .Values.prometheus.serviceMonitor.release | default "prometheus" }}
+    {{- with .Values.prometheus.serviceMonitor.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  jobLabel: app
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: {{ .Values.prometheus.serviceMonitor.interval | default "30s" }}
+    {{- if .Values.prometheus.serviceMonitor.bearerToken }}
+    bearerTokenSecret:
+      name: resumatch-secrets
+      key: METRICS_TOKEN
+    {{- end }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.global.namespace }}
+  selector:
+    matchLabels:
+      app: backend
+{{- end }}

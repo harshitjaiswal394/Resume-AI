@@ -26,3 +26,15 @@ services:
     env_file:
       - ./backend/.env
     restart: unless-stopped
+
+  cip:
+    # Opt-in via: docker compose --profile cip up
+    profiles: ["cip"]
+    build:
+      context: ./cip
+      dockerfile: Dockerfile
+    ports:
+      - "8095:8095"
+    env_file:
+      - ./cip/.env
+    restart: unless-stopped

@@ -42,13 +42,20 @@ export async function completeResumeAnalysis(userId: string, resumeId: string, d
   }
 }
 
-export async function tailorResume(userId: string, resumeId: string, preferences: any, parsedData: any) {
+export async function tailorResume(userId: string, resumeId: string, preferences: any, parsedData: any, existingData?: { analysis?: any; rawText?: string }) {
   try {
     const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
     const response = await fetch(`${backendUrl}/api/resume/tailor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resumeId, userId, preferences, parsedData }),
+      body: JSON.stringify({
+        resumeId,
+        userId,
+        preferences,
+        parsedData,
+        existingAnalysis: existingData?.analysis || null,
+        existingRawText: existingData?.rawText || '',
+      }),
     });
 
     if (!response.ok) throw new Error('Tailoring failed');

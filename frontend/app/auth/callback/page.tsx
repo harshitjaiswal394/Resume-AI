@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Loader2 } from 'lucide-react';
+import { LoadingScreen } from '@/components/ui/loading';
 import { toast } from 'sonner';
 
 export default function AuthCallback() {
@@ -57,9 +57,8 @@ export default function AuthCallback() {
   }, [router]);
 
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background">
-      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      <p className="text-muted-foreground font-medium">Completing authentication...</p>
+    <div className="bg-background">
+      <LoadingScreen label="Completing authentication…" sublabel="Securely signing you in" />
     </div>
   );
 }

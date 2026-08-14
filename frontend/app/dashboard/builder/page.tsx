@@ -14,10 +14,12 @@ import {
   Upload,
   FileText,
   ChevronRight,
-  Target
+  Target,
+  Wand2
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
+import { secureGet } from '@/lib/secureStorage';
 
 export default function BuilderDiscovery() {
   const router = useRouter();
@@ -28,17 +30,19 @@ export default function BuilderDiscovery() {
   const [hasDraft, setHasDraft] = useState(false);
 
   React.useEffect(() => {
-    const localDraft = localStorage.getItem('resumatch_builder_data');
-    if (localDraft) {
-      try {
-        const parsed = JSON.parse(localDraft);
-        // Look for data in both new structure { data: {...} } and old flat structure
-        const d = parsed.data || parsed;
-        if (d.fullName || d.summary || d.experience?.length > 1) {
-          setHasDraft(true);
-        }
-      } catch (e) {}
-    }
+    (async () => {
+      const localDraft = await secureGet(localStorage, 'resumatch_builder_data');
+      if (localDraft) {
+        try {
+          const parsed = typeof localDraft === 'string' ? JSON.parse(localDraft) : localDraft;
+          // Look for data in both new structure { data: {...} } and old flat structure
+          const d = parsed.data || parsed;
+          if (d.fullName || d.summary || d.experience?.length > 1) {
+            setHasDraft(true);
+          }
+        } catch (e) {}
+      }
+    })();
   }, []);
 
   const handleStart = () => {
@@ -58,15 +62,25 @@ export default function BuilderDiscovery() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 lg:p-12 flex items-center justify-center">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#eef4fb] via-[var(--bg-base)] to-[var(--bg-base)] p-6 lg:p-12 flex items-center justify-center">
+      <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-indigo-100/50 blur-3xl" />
+      <div className="pointer-events-none absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-accent-50/70 blur-3xl" />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-30"
+        style={{
+          backgroundImage: "radial-gradient(circle at 1px 1px, var(--border-soft) 1px, transparent 0)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-xl w-full"
+        className="relative w-full max-w-xl"
       >
-        <Card className="border-none shadow-2xl shadow-indigo-100/50 bg-white/80 backdrop-blur-xl rounded-[2.5rem] overflow-hidden">
+        <Card className="border-none shadow-2xl shadow-indigo-900/10 bg-white/85 backdrop-blur-xl rounded-[2.5rem] overflow-hidden">
           <CardHeader className="p-8 pb-0 text-center">
-            <div className="mx-auto w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-indigo-200">
+            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-800 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-indigo-600/25">
               <Sparkles className="h-8 w-8 text-white" />
             </div>
             <CardTitle className="text-3xl font-bold text-slate-900 mb-2">
@@ -107,9 +121,10 @@ export default function BuilderDiscovery() {
 
             <Button 
               onClick={handleStart}
-              className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-semibold shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-800 text-white text-lg font-semibold shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
-              Start New Resume
+              <Wand2 className="mr-2 h-5 w-5" />
+              Build New Resume
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
 

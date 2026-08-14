@@ -65,7 +65,8 @@ class AIService:
                     messages.append({"role": "system", "content": system_prompt})
                 messages.append({"role": "user", "content": prompt})
                 
-                response = nvidia_service.client.chat.completions.create(
+                response = await asyncio.to_thread(
+                    nvidia_service.client.chat.completions.create,
                     model=model,
                     messages=messages,
                     temperature=temperature,
@@ -112,7 +113,8 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
                 messages=[
                     {"role": "system", "content": "You are a professional ATS resume analyzer. Output only valid JSON."},
@@ -187,7 +189,7 @@ class AIService:
         embedding = await nvidia_service.generate_embedding(profile_text)
         
         # 2. Vector Similarity Search from Knowledge Base (Top 50)
-        candidates = execute_vector_search(embedding, limit=50, filters=filters)
+        candidates = await asyncio.to_thread(execute_vector_search, embedding, limit=50, filters=filters)
         
         if not candidates:
             logger.warning("No job candidates found in Knowledge Base.")
@@ -235,7 +237,8 @@ class AIService:
         try:
             from app.services.nvidia_service import nvidia_service
             prompt = f"Create a cover letter for {job_role} based on: {json.dumps(resume_data)}"
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2048
@@ -283,7 +286,8 @@ class AIService:
         try:
             start_time = time.time()
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-8b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -309,6 +313,72 @@ class AIService:
             return content or "Professional Cover Letter: [Generation error fallback]"
 
 
+    async def generate_referral_message(self, candidate_data: Dict[str, Any], referral_details: Dict[str, Any]) -> str:
+        """Generates a warm, personalized referral request message (LinkedIn DM / email)."""
+        pruned = {
+            "fullName": candidate_data.get("fullName", "Candidate"),
+            "summary": candidate_data.get("summary", ""),
+            "skills": (candidate_data.get("skills") or [])[:12],
+            "experience": [
+                {
+                    "title": exp.get("title", ""),
+                    "company": exp.get("company", ""),
+                } for exp in (candidate_data.get("experience") or [])[:3]
+            ],
+            "achievements": (candidate_data.get("achievements") or [])[:3],
+        }
+
+        system_prompt = (
+            "You are an expert at writing warm, human referral-request messages for LinkedIn and email. "
+            "Your goal is to return ONLY the final message text. Absolutely no preamble, no quotes around the message, "
+            "no explanations, and no subject line unless asked. Write like a real person, not a template."
+        )
+
+        user_prompt = f"""
+        Write a personalized referral request message using the details below.
+
+        CANDIDATE:
+        {json.dumps(pruned)}
+
+        REFERRAL CONTEXT:
+        {json.dumps(referral_details)}
+
+        Rules:
+        - Be warm and specific: reference the recipient's own work/connection where possible.
+        - Show the candidate respects the recipient's time: keep it short unless a longer message was requested.
+        - Highlight 1-2 concrete, relevant strengths or achievements, not a full resume dump.
+        - Always end with a low-friction ask (e.g., "Would you be open to a quick intro?").
+        - Match the requested tone and platform.
+        - Output ONLY the message body.
+        """
+
+        try:
+            start_time = time.time()
+            from app.services.nvidia_service import nvidia_service
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
+                model="meta/llama-3.1-8b-instruct",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.4,
+                max_tokens=800
+            )
+            content = self._get_completion_content(response)
+            latency = time.time() - start_time
+
+            if content:
+                logger.info(f"AI_REFERRAL_SUCCESS - Latency: {latency:.2f}s")
+                return content.strip().strip('"').strip('`').strip()
+
+            content = await self._call_ai_with_fallback(user_prompt, system_prompt=system_prompt, temperature=0.4)
+            return content or "Referral Message: [Generation error]"
+        except Exception as e:
+            logger.warning(f"AI_REFERRAL_FAST_FAIL - Error: {str(e)}. Falling back...")
+            content = await self._call_ai_with_fallback(user_prompt, system_prompt=system_prompt, temperature=0.4)
+            return content or "Referral Message: [Generation error fallback]"
+
     async def clean_job_description(self, raw_text: str) -> str:
         """
         Uses AI to strip away irrelevant noise (headers, footers, ads) from scraped JD text.
@@ -327,7 +397,8 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-8b-instruct",
                 messages=[
                     {"role": "system", "content": "You are a professional recruiting assistant specialized in JD cleaning. Extract core details only."},
@@ -392,7 +463,8 @@ class AIService:
         
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-70b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -428,7 +500,8 @@ class AIService:
         """
         try:
             from app.services.nvidia_service import nvidia_service
-            response = nvidia_service.client.chat.completions.create(
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-8b-instruct",
                 messages=[{"role": "system", "content": "You are a job data extraction API. Output ONLY JSON."},
                          {"role": "user", "content": prompt}],

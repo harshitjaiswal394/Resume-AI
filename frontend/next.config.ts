@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: 'standalone',
   transpilePackages: ['pdfjs-dist'],
+  // The `instrumentationHook` option was removed in newer Next.js versions.
+  // Remove the experimental block to avoid type errors.
   images: {
     remotePatterns: [
       {

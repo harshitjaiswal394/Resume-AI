@@ -3,7 +3,6 @@
 import React from 'react';
 import { 
   Menu, 
-  Sparkles,
   LayoutDashboard,
   FileText,
   Briefcase,
@@ -19,6 +18,7 @@ import {
   SheetTrigger 
 } from '@/components/ui/sheet';
 import { PremiumSidebar } from './PremiumSidebar';
+import { BrandMark } from '@/components/brand/Logo';
 import Link from 'next/link';
 
 interface MobileNavProps {
@@ -35,10 +35,8 @@ export function MobileNav(props: MobileNavProps) {
   return (
     <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
       <Link href="/" className="flex items-center gap-2 group">
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-100 group-hover:scale-105 transition-transform">
-          <Sparkles className="h-5 w-5 text-white" />
-        </div>
-        <span className="text-lg font-black tracking-tight text-slate-900">ResumeAI</span>
+        <BrandMark size={32} />
+        <span className="text-lg font-black tracking-tight text-slate-900">Career<span className="text-brand-600">Amp</span></span>
       </Link>
 
       <Sheet>

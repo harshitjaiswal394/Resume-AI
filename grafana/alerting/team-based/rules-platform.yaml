@@ -1,0 +1,406 @@
+# =============================================================================
+# Resume-AI — Platform team alert rules (infra availability & performance)
+# All rules carry team=platform and are routed to the email-platform contact
+# point by notification-policies.yaml.
+# =============================================================================
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: "Resume-AI Critical"
+    folder: "Resume-AI"
+    interval: 1m
+    rules:
+      - uid: resumatch-backend-down
+        title: "Resume-AI backend is down"
+        for: "2m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'up{job="backend"}'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: "C"
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: critical, team: platform }
+        annotations:
+          summary: "Backend service is unreachable"
+          description: "Prometheus cannot scrape backend (up=0) for 2 minutes. All API traffic will fail."
+
+      - uid: resumatch-backend-high-5xx
+        title: "Resume-AI backend error rate is critical"
+        for: "3m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(rate(resumatch_ai_http_requests_total{job="backend",status=~"5.."}[5m]))'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [0.5] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical, team: platform }
+        annotations:
+          summary: "Backend returning 5xx errors at scale"
+          description: "5xx error rate exceeded 0.5 req/s for 3 minutes. Likely an outage or a code-level failure."
+
+      - uid: resumatch-prometheus-down
+        title: "Prometheus is down"
+        for: "2m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'up{job="prometheus-kube-prometheus-prometheus"}'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: "C"
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: critical, team: platform }
+        annotations:
+          summary: "Prometheus monitoring is unavailable"
+          description: "Prometheus (job prometheus-kube-prometheus-prometheus) is down — all dashboards and alerting may be impacted."
+
+      - uid: resumatch-node-down
+        title: "A cluster node is down"
+        for: "5m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'count(up{job="node-exporter"} == 0)'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+              refId: "C"
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: critical, team: platform }
+        annotations:
+          summary: "A Kubernetes node is down"
+          description: "At least one node-exporter target is unreachable for 5 minutes. Workloads on that node may be affected."
+
+  - orgId: 1
+    name: "Resume-AI High"
+    folder: "Resume-AI"
+    interval: 1m
+    rules:
+      - uid: resumatch-backend-high-latency
+        title: "Backend response time is very slow"
+        for: "10m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'histogram_quantile(0.95, sum(rate(resumatch_ai_http_request_duration_seconds_bucket{job="backend"}[5m])) by (le))'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [3] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: high, team: platform }
+        annotations:
+          summary: "Backend p95 latency above 3 seconds"
+          description: "95% of requests take longer than 3s for 10 minutes. Users are experiencing a slow service."
+
+      - uid: resumatch-backend-high-4xx
+        title: "Backend client-error rate is elevated"
+        for: "10m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(rate(resumatch_ai_http_requests_total{job="backend",status=~"4.."}[5m]))'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: high, team: platform }
+        annotations:
+          summary: "Elevated 4xx responses"
+          description: "4xx rate above 2 req/s for 10 minutes — possible client integration problem or abuse."
+
+      - uid: resumatch-backend-restarts
+        title: "Backend pod is restarting repeatedly"
+        for: "5m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(increase(kube_pod_container_status_restarts_total{namespace="resumatch-ai",pod=~"backend-.*"}[15m]))'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: high, team: platform }
+        annotations:
+          summary: "Backend pod crash-looping"
+          description: "Backend container restarted more than twice in 15 minutes — check logs for crashes."
+
+      - uid: resumatch-provider-failures
+        title: "AI provider failures spiking"
+        for: "5m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(increase(resumatch_ai_provider_failures_total{job="backend"}[15m]))'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [10] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: high, team: platform }
+        annotations:
+          summary: "AI provider calls failing"
+          description: "More than 10 provider failures (Vertex/NVIDIA) in 15 minutes. Check API keys and quotas."
+
+  - orgId: 1
+    name: "Resume-AI Low"
+    folder: "Resume-AI"
+    interval: 1m
+    rules:
+      - uid: resumatch-node-disk
+        title: "Node disk usage high"
+        for: "15m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'max((1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100)'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: low, team: platform }
+        annotations:
+          summary: "Cluster node disk above 85%"
+          description: "Root filesystem usage above 85% for 15 minutes. Plan capacity or clean up images/logs."
+
+      - uid: resumatch-node-memory
+        title: "Node memory usage high"
+        for: "15m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'max((1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: low, team: platform }
+        annotations:
+          summary: "Cluster node memory above 90%"
+          description: "Node memory usage above 90% for 15 minutes. Risk of OOM evictions."
+
+      - uid: resumatch-rate-limited
+        title: "Users being rate-limited heavily"
+        for: "10m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(increase(resumatch_ai_rate_limited_total{job="backend"}[1h]))'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: gt, params: [100] }
+              refId: "C"
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: low, team: platform }
+        annotations:
+          summary: "Heavy rate-limiting activity"
+          description: "More than 100 rate-limited requests in the last hour. Possible scraping or aggressive clients."
+
+      - uid: resumatch-grafana-down
+        title: "Grafana is down"
+        for: "5m"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: 'up{job="prometheus-grafana"}'
+              instant: true
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model: { type: reduce, expression: "A", reducer: last, refId: "B" }
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: "B"
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: "C"
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severity: low, team: platform }
+        annotations:
+          summary: "Grafana is unreachable"
+          description: "Grafana target is down for 5 minutes. Monitoring UI unavailable."

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, boolean, timestamp, jsonb, vector, index, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, boolean, timestamp, jsonb, vector, index, pgEnum, numeric } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 
 // ── ENUMS ────────────────────────────────────
@@ -98,6 +98,35 @@ export const coverLetters = pgTable('cover_letters', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+// ── TABLE: job_applications (Job Tracker) ─────
+export const jobApplications = pgTable('job_applications', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  userId: text('user_id').notNull(), // mirrors auth.users.id as text
+  jobPostingId: text('job_posting_id'),
+  resumeId: text('resume_id'),
+  source: text('source').default('manual'),
+  company: text('company'),
+  title: text('title'),
+  location: text('location'),
+  applyUrl: text('apply_url'),
+  salaryRange: jsonb('salary_range'), // { min, max, currency }
+  status: text('status').default('saved').notNull(), // saved|applied|interview|offer|rejected
+  notes: text('notes'),
+  coverLetterId: text('cover_letter_id'),
+  tailoredVersionId: text('tailored_version_id'),
+  interviewAt: timestamp('interview_at', { withTimezone: true }),
+  offerAmount: numeric('offer_amount'),
+  offerCurrency: text('offer_currency').default('USD'),
+  offerAt: timestamp('offer_at', { withTimezone: true }),
+  outcome: text('outcome'),
+  appliedAt: timestamp('applied_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (t) => ({
+  userIdx: index('idx_job_applications_user').on(t.userId),
+  statusIdx: index('idx_job_applications_status').on(t.status),
+}));
+
 // ── TABLE: subscriptions ──────────────────────
 export const subscriptions = pgTable('subscriptions', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -154,3 +183,40 @@ export const resumesRelations = relations(resumes, ({ one, many }) => ({
   embeddings: many(resumeEmbeddings),
   matches: many(jobMatches),
 }));
+
+// ── CHAT SCHEMAS ──────────────────────────────
+export const messageRoleEnum = pgEnum('message_role', ['user', 'agent', 'system', 'tool']);
+
+export const conversations = pgTable('conversations', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  userIdx: index('conversations_user_idx').on(t.userId),
+}));
+
+export const messages = pgTable('messages', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: messageRoleEnum('role').notNull(),
+  content: text('content').notNull(),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (t) => ({
+  conversationIdx: index('messages_conversation_idx').on(t.conversationId),
+  userIdx: index('messages_user_idx').on(t.userId),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  user: one(users, { fields: [conversations.userId], references: [users.id] }),
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
+  user: one(users, { fields: [messages.userId], references: [users.id] }),
+}));
+

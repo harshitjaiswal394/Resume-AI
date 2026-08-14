@@ -6,17 +6,37 @@ import { AuthProvider } from "./AuthProvider";
 import { Toaster } from "./ui/sonner";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
+import { ChatWidget } from "./ChatWidget";
+import { CookieConsent } from "./compliance/CookieConsent";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const isDashboard = pathname?.startsWith("/dashboard");
   const isOnboarding = pathname?.startsWith("/onboarding");
+  const isChat = pathname === "/chat" || pathname?.startsWith("/chat/");
+  const isLegal = ["/terms", "/privacy", "/cookies", "/gdpr", "/refund-policy"].some((r) => pathname?.startsWith(r));
+  const isMarketing = [
+    "/features",
+    "/how-it-works",
+    "/pricing",
+    "/resume-tips",
+    "/interview-prep",
+    "/blog",
+    "/job-market-trends",
+    "/about",
+    "/careers",
+    "/affiliate",
+    "/bulk-processing",
+    "/student-tracking",
+    "/custom-integration",
+    "/help",
+  ].some((r) => pathname?.startsWith(r));
 
-  // Only show the old global Navbar on routes that aren't the home page, onboarding, or dashboard.
-  const showNavbar = !isHome && !isOnboarding && !isDashboard;
-  // Prevent duplicate footers on the home page and dashboard.
-  const showFooter = !isHome && !isDashboard;
+  // Only show the old global Navbar on routes that aren't the home page, onboarding, dashboard, chat, legal, or marketing pages.
+  const showNavbar = !isHome && !isOnboarding && !isDashboard && !isChat && !isLegal && !isMarketing;
+  // Prevent duplicate footers on the home page, dashboard, chat, and legal/marketing pages (which render their own).
+  const showFooter = !isHome && !isDashboard && !isChat && !isLegal && !isMarketing;
 
   return (
     <AuthProvider>
@@ -25,6 +45,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-grow">{children}</main>
         {showFooter && <Footer />}
         <Toaster />
+        <ChatWidget />
+        <CookieConsent />
       </div>
     </AuthProvider>
   );

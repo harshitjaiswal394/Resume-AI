@@ -1,0 +1,34 @@
+# =============================================================================
+# Resume-AI enterprise email notification template
+# Used by the email contact point in alerting.yaml (templateFiles).
+# Supports Go template / Prometheus-style notification templating.
+# =============================================================================
+
+{{ define "resumatch_email.subject" -}}
+[Resume-AI] {{ len .Alerts.Firing }} firing / {{ len .Alerts.Resolved }} resolved
+{{- end }}
+
+{{ define "resumatch_email.message" -}}
+Resume-AI :: Alert Summary
+=========================
+Status   : {{ .Status | toUpper }}
+Firing   : {{ len .Alerts.Firing }}
+Resolved : {{ len .Alerts.Resolved }}
+Received : {{ now }}
+
+---- FIRING ----
+{{ range .Alerts.Firing }}[{{ .Labels.severity | default "info" | toUpper }}] {{ .Labels.alertname }}
+  Started : {{ .StartsAt }}
+  Summary : {{ .Annotations.summary | default "no summary" }}
+  Details : {{ .Annotations.description | default "no description" }}
+  Values  :
+{{ range $k, $v := .Values }}    {{ $k }} = {{ $v }}
+{{ end }}  Graph   : {{ .GeneratorURL }}
+{{ end }}
+
+---- RESOLVED ----
+{{ range .Alerts.Resolved }}[OK] {{ .Labels.alertname }} resolved at {{ .EndsAt }}
+{{ end }}
+
+Open in Grafana: {{ .ExternalURL }}
+{{ end }}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -18,34 +18,40 @@ import {
   SheetTrigger
 } from '@/components/ui/sheet';
 import {
-  Sparkles,
-  Plus,
-  Trash2,
-  Save,
-  Download,
+  ArrowLeft,
+  Check,
+  Briefcase,
   ChevronLeft,
   ChevronRight,
-  User,
-  List,
-  Briefcase,
-  GraduationCap,
+  Copy,
+  Download,
   Eye,
   FileDown,
-  Wand2,
+  FilePlus2,
+  FileText,
+  GraduationCap,
+  List,
   Loader2,
-  Upload,
+  Lock,
   Mail,
-  Phone,
-  Copy,
-  RefreshCw,
   MoreVertical,
-  Settings
+  Phone,
+  Plus,
+  RefreshCw,
+  Save,
+  Settings,
+  Sparkles,
+  Target,
+  Trash2,
+  Upload,
+  User,
+  Wand2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/lib/supabase';
+import { secureGet, secureSet, secureRemove } from '@/lib/secureStorage';
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 
 // --- Types ---
 interface Experience {
@@ -91,6 +97,11 @@ interface Achievement {
   description: string;
 }
 
+interface CustomSection {
+  title: string;
+  items: string[];
+}
+
 interface ResumeData {
   fullName: string;
   email: string;
@@ -104,6 +115,7 @@ interface ResumeData {
   languages: Language[];
   internships: Internship[];
   achievements: Achievement[];
+  customSections: CustomSection[];
   sectionOrder: string[];
 }
 
@@ -120,7 +132,8 @@ const INITIAL_DATA: ResumeData = {
   languages: [],
   internships: [],
   achievements: [],
-  sectionOrder: ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'languages', 'achievements', 'internships']
+  customSections: [],
+  sectionOrder: ['summary', 'skills', 'experience', 'education', 'projects', 'certifications', 'languages', 'achievements', 'internships', 'custom']
 };
 
 export default function AIResumeBuilder() {
@@ -140,6 +153,131 @@ export default function AIResumeBuilder() {
   const [currentScore, setCurrentScore] = useState<number>(0);
   const lastSavedRef = useRef<string>(""); // For dirty checking
 
+  const [activeMode, setActiveMode] = useState<'default' | 'tailored'>('default');
+  const [tailoredVersionId, setTailoredVersionId] = useState<string | null>(null);
+  const [isLoadingTailored, setIsLoadingTailored] = useState(false);
+
+  // Map a tailored version's parsed_data into the builder's ResumeData shape.
+  const mapTailoredToResumeData = (parsed: any): ResumeData => {
+    const src = parsed && typeof parsed === 'object' ? parsed : {};
+    const mapExp = (list: any[]): Experience[] => (list || []).map((e) => ({
+      title: e?.title || '',
+      company: e?.company || '',
+      duration: e?.duration || e?.location || '',
+      description: Array.isArray(e?.bullets)
+        ? e.bullets.map((b: any) => (typeof b === 'string' ? b : b?.text || b?.original_bullet || '')).filter(Boolean)
+        : Array.isArray(e?.description) ? e.description : [],
+    }));
+    const mapCert = (list: any[]): Certification[] => (list || []).map((c) =>
+      typeof c === 'string' ? { name: c, issuer: '', year: '' } : { name: c?.name || '', issuer: c?.issuer || '', year: c?.year || '' }
+    );
+    const mapLang = (list: any[]): Language[] => (list || []).map((l) =>
+      typeof l === 'string' ? { language: l, proficiency: '' } : { language: l?.language || '', proficiency: l?.proficiency || '' }
+    );
+    return {
+      ...INITIAL_DATA,
+      fullName: src.fullName || src.full_name || '',
+      email: src.email || '',
+      phone: src.phone || src.phone_number || '',
+      summary: src.summary || '',
+      skills: Array.isArray(src.skills) ? src.skills.map((s: any) => typeof s === 'string' ? s : s?.name || '') : [],
+      experience: mapExp(src.experience),
+      education: Array.isArray(src.education) ? src.education.map((e: any) =>
+        typeof e === 'string' ? { degree: e, institution: '', year: '' }
+          : { degree: e?.degree || e?.title || '', institution: e?.institution || '', year: e?.year || '' }
+      ) : [],
+      projects: Array.isArray(src.projects) ? src.projects.map((p: any) => ({
+        title: p?.title || p?.name || '',
+        description: Array.isArray(p?.description) ? p.description.join('\n') : p?.description || '',
+        link: p?.link || p?.url || '',
+        tech_stack: p?.tech_stack || p?.techStack || p?.skills || [],
+      })) : [],
+      certifications: mapCert(src.certifications),
+      languages: mapLang(src.languages),
+      internships: Array.isArray(src.internships) ? src.internships.map((i: any) => ({
+        role: i?.role || i?.title || '',
+        company: i?.company || '',
+        duration: i?.duration || '',
+        description: Array.isArray(i?.description) ? i.description : [],
+      })) : [],
+      achievements: Array.isArray(src.achievements) ? src.achievements.map((a: any) =>
+        typeof a === 'string' ? { title: a, description: '' }
+          : { title: a?.title || a?.name || '', description: a?.description || '' }
+      ) : [],
+      customSections: Array.isArray(src.custom_sections) || Array.isArray(src.customSections)
+        ? (src.custom_sections || src.customSections).map((cs: any) => ({
+            title: cs?.title || '',
+            items: Array.isArray(cs?.items) ? cs.items.map((i: any) => typeof i === 'string' ? i : i?.text || '') : [],
+          }))
+        : [],
+    };
+  };
+
+  const loadTailoredVersion = async (silent = false) => {
+    if (!resumeId || activeMode === 'tailored') return;
+    setIsLoadingTailored(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+      const listRes = await fetch(`${backendUrl}/api/agents/resume/${resumeId}/versions`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!listRes.ok) throw new Error("No tailored versions");
+      const listJson = await listRes.json();
+      const versions: any[] = listJson.versions ?? [];
+      if (!versions.length) {
+        if (!silent) {
+          toast.error('No tailored version available yet. Tailor your resume in Chat first.');
+        }
+        return;
+      }
+      const latest = versions[0];
+      const dataRes = await fetch(`${backendUrl}/api/agents/resume/version/${latest.version_id}/data`, {
+        headers: { "Authorization": `Bearer ${session.access_token}` },
+      });
+      if (!dataRes.ok) throw new Error("Version data fetch failed");
+      const dataJson = await dataRes.json();
+      const mapped = mapTailoredToResumeData(dataJson.parsed_data);
+      setData(mapped);
+      setTailoredVersionId(dataJson.version_id);
+      setActiveMode('tailored');
+      // Persist the Tailored-mode selection AND a local copy of the tailored
+      // data so returning to this page restores the tailored view immediately
+      // (even before the backend is re-queried). The mode flag holds only
+      // non-PII ids, so it is stored in plain localStorage; the resume data
+      // (PII) is encrypted like other drafts.
+      try {
+        localStorage.setItem('resumatch_tailored_mode', JSON.stringify({ resumeId, versionId: dataJson.version_id }));
+      } catch { /* ignore */ }
+      secureSet(localStorage, 'resumatch_tailored_data', { resumeId, versionId: dataJson.version_id, data: mapped }).catch(() => {});
+      if (!silent) {
+        toast.success(`Loaded Tailored Resume v${dataJson.version_number} (${mapped.fullName || 'resume'})`);
+      }
+    } catch (e: any) {
+      console.error('[Builder] Tailored load failed', e);
+      if (!silent) {
+        toast.error(e.message || 'Could not load tailored version');
+      }
+    } finally {
+      setIsLoadingTailored(false);
+    }
+  };
+
+  const switchToDefault = async () => {
+    setActiveMode('default');
+    setTailoredVersionId(null);
+    try { localStorage.removeItem('resumatch_tailored_mode'); } catch { /* ignore */ }
+    secureRemove(localStorage, 'resumatch_tailored_data');
+    if (resumeId) {
+      await fetchResume(resumeId);
+    }
+  };
+
+  // NOTE: this deliberately depends on `user?.id` (a stable string), NOT the
+  // `user` object. AuthProvider re-creates the user object on every auth event
+  // (including automatic token refresh when returning to this tab/page), so
+  // depending on `user` would re-run loadDraft -> fetchResume and clobber the
+  // Tailored-mode data with the original resume while the toggle stays Tailored.
   useEffect(() => {
     if (!isAuthReady) return; // WAIT FOR AUTH INITIALIZATION
 
@@ -161,9 +299,13 @@ export default function AIResumeBuilder() {
       if (urlId) {
         console.log('[Builder] Authority: URL ID identified. Restoring cloud record...', urlId);
         if (user) {
-          await fetchResume(urlId);
-          setIsLoaded(true);
-          return;
+          const restored = await fetchResume(urlId, { skipData: isTailoredResume(urlId) });
+          if (restored) {
+            setResumeId(urlId);
+            setIsLoaded(true);
+            return;
+          }
+          console.warn('[Builder] Authority: URL resume does not belong to this account. Starting fresh.');
         }
       }
 
@@ -183,7 +325,7 @@ export default function AIResumeBuilder() {
             const cloudId = latestResumes[0].id;
             console.log('[Builder] Authority: Cloud record found! Syncing account state...', cloudId);
             setResumeId(cloudId);
-            await fetchResume(cloudId);
+            await fetchResume(cloudId, { skipData: isTailoredResume(cloudId) });
             activeResumeId = cloudId;
             
             // Re-sync URL
@@ -204,11 +346,19 @@ export default function AIResumeBuilder() {
       // PHASE 3: Browser Cache Fallback (Guest or Offline sessions)
       // Only used if no Cloud data is available for this account.
       if (!activeResumeId) {
-        const savedSnapshot = sessionStorage.getItem('resumatch_builder_session') || localStorage.getItem('resumatch_builder_data');
+        const sessionSnapshot = await secureGet(sessionStorage, 'resumatch_builder_session');
+        const localSnapshot = await secureGet(localStorage, 'resumatch_builder_data');
+        const savedSnapshot = sessionSnapshot || localSnapshot;
         if (savedSnapshot) {
           try {
-            const parsed = JSON.parse(savedSnapshot);
-            const restoredData = parsed.data || parsed;
+            const parsed = typeof savedSnapshot === 'string' ? JSON.parse(savedSnapshot) : savedSnapshot;
+            const raw = parsed.data || parsed;
+            // Merge with defaults so every field (incl. customSections) is an array
+            const restoredData = { ...INITIAL_DATA, ...(raw && typeof raw === 'object' ? raw : {}) };
+            // 'custom' must always be the final section — old saves lack it
+            if (Array.isArray(restoredData.sectionOrder) && !restoredData.sectionOrder.includes('custom')) {
+              restoredData.sectionOrder.push('custom');
+            }
             const restoredResumeId = parsed.resumeId || null;
             const restoredDiscovery = parsed.discovery || null;
 
@@ -235,37 +385,95 @@ export default function AIResumeBuilder() {
     };
 
     loadDraft();
-  }, [user, isAuthReady]);
+  }, [user?.id, isAuthReady]);
 
-  // Auto-save to both localStorage (permanent) and sessionStorage (this session)
+  // Auto-open Tailored mode if a pending tailored version exists for this
+  // resume (from Chat), or the user previously left the builder in Tailored
+  // mode. When we have a locally cached tailored copy we restore it directly
+  // (no network, no race with fetchResume); otherwise we re-fetch from the
+  // backend. The plain `resumatch_tailored_mode` flag holds only non-PII ids,
+  // so it is read synchronously — the PII resume data stays encrypted.
   useEffect(() => {
-    if (!isLoaded) return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
-    const snapshot = JSON.stringify({ data, resumeId, discovery });
-    localStorage.setItem('resumatch_builder_data', snapshot);
-    sessionStorage.setItem('resumatch_builder_session', snapshot);
-  }, [data, resumeId, discovery, isLoaded]);
+    if (!isLoaded || !resumeId || activeMode !== 'default') return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(localStorage.getItem('resumatch_tailored_pending') || 'null');
+    } catch { /* ignore */ }
+    if (pending && pending.resume_id && pending.version_id && pending.resume_id === resumeId) {
+      try {
+        localStorage.removeItem('resumatch_tailored_pending');
+      } catch { /* ignore */ }
+      loadTailoredVersion(true);
+      return;
+    }
+    let flag: { resumeId?: string } | null = null;
+    try {
+      flag = JSON.parse(localStorage.getItem('resumatch_tailored_mode') || 'null');
+    } catch { /* ignore */ }
+    if (!flag) {
+      // Older builds stored this flag encrypted — read it via secureGet too.
+      secureGet(localStorage, 'resumatch_tailored_mode')
+        .then((stored) => {
+          const old = stored as { resumeId?: string } | null;
+          if (old && old.resumeId === resumeId) loadTailoredVersion(true);
+        })
+        .catch(() => {});
+    }
+    if (flag && flag.resumeId === resumeId) {
+      secureGet(localStorage, 'resumatch_tailored_data')
+        .then((stored) => {
+          const s = stored as { resumeId?: string; versionId?: string; data?: ResumeData } | null;
+          if (s && s.resumeId === resumeId && s.data) {
+            setData(s.data);
+            setTailoredVersionId(s.versionId || null);
+            setActiveMode('tailored');
+          } else {
+            loadTailoredVersion(true);
+          }
+        })
+        .catch(() => loadTailoredVersion(true));
+    }
+  }, [isLoaded, resumeId, activeMode]);
+
+  // Auto-save draft (AES-GCM encrypted — resume content contains PII like
+  // phone/email/certs and must not sit in browser storage as clear text).
+  useEffect(() => {
+    if (!isLoaded || activeMode === 'tailored') return; // DON'T SAVE UNTIL LOADED - Prevents overwriting with empty state
+    const snapshot = { data, resumeId, discovery };
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      try {
+        await secureSet(localStorage, 'resumatch_builder_data', snapshot);
+        await secureSet(sessionStorage, 'resumatch_builder_session', snapshot);
+      } catch (e) {
+        console.warn('[Builder] Encrypted draft save skipped:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data, resumeId, discovery, isLoaded, activeMode]);
 
   // Optimized Debounced Auto-save to DB
   useEffect(() => {
-    if (!isLoaded || !user || user.id === 'guest') return;
+    if (!isLoaded || !user || user.id === 'guest' || activeMode === 'tailored') return;
 
     const timer = setTimeout(() => {
       performSilentSave();
     }, 5000); // 5 second debounce for DB performance
 
     return () => clearTimeout(timer);
-  }, [data, discovery, user]);
+  }, [data, discovery, user?.id, activeMode]);
 
   // Save on tab switch/visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (isLoaded && document.visibilityState === 'hidden') {
+      if (isLoaded && activeMode !== 'tailored' && document.visibilityState === 'hidden') {
         performSilentSave();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [data, discovery, resumeId]);
+  }, [data, discovery, resumeId, activeMode]);
 
   const performSilentSave = async () => {
     if (!user || user.id === 'guest' || !isLoaded) return;
@@ -275,6 +483,7 @@ export default function AIResumeBuilder() {
     if (currentState === lastSavedRef.current) return;
 
     try {
+      const token = await getAuthToken();
       const isUpdate = !!resumeId;
       const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes/`;
       const method = isUpdate ? 'PUT' : 'POST';
@@ -304,7 +513,7 @@ export default function AIResumeBuilder() {
 
       const response = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
 
@@ -323,12 +532,25 @@ export default function AIResumeBuilder() {
     }
   };
 
-  const fetchResume = async (id: string) => {
+  // True when the user previously left THIS resume in Tailored mode (plain,
+  // non-PII flag in localStorage). Used to stop fetchResume from ever writing
+  // the original resume over the Tailored view.
+  const isTailoredResume = (id: string | null): boolean => {
+    if (!id) return false;
+    try {
+      const flag = JSON.parse(localStorage.getItem('resumatch_tailored_mode') || 'null');
+      return !!flag && flag.resumeId === id;
+    } catch { return false; }
+  };
+
+  const fetchResume = async (id: string, opts: { skipData?: boolean } = {}): Promise<boolean> => {
     console.log('[Builder] Fetching resume from DB:', id);
+    if (!user) return false;
     const { data: resume, error } = await supabase
       .from('resumes')
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (resume && !error) {
@@ -345,9 +567,11 @@ export default function AIResumeBuilder() {
 
       let restoredData: ResumeData = { ...INITIAL_DATA };
       if (resume.parsed_data) {
-        restoredData = typeof resume.parsed_data === 'string' 
+        const parsed = typeof resume.parsed_data === 'string' 
           ? JSON.parse(resume.parsed_data) 
           : resume.parsed_data;
+        // Merge with defaults so no field is ever undefined (keeps inputs controlled)
+        restoredData = { ...INITIAL_DATA, ...parsed };
       }
       
       // CRITICAL: Merge individual columns into restoredData to ensure "My Resume" edits reflect here
@@ -360,21 +584,37 @@ export default function AIResumeBuilder() {
       if (resume.languages) restoredData.languages = Array.isArray(resume.languages) ? resume.languages : restoredData.languages;
       if (resume.internships) restoredData.internships = Array.isArray(resume.internships) ? resume.internships : restoredData.internships;
       if (resume.achievements) restoredData.achievements = Array.isArray(resume.achievements) ? resume.achievements : restoredData.achievements;
-      if (resume.section_order) restoredData.sectionOrder = resume.section_order;
+      if (resume.custom_sections) restoredData.customSections = Array.isArray(resume.custom_sections) ? resume.custom_sections : restoredData.customSections;
+      if (resume.section_order) {
+        const order = Array.isArray(resume.section_order) ? [...resume.section_order] : [];
+        // 'custom' must always be the final section — old saves lack it
+        if (!order.includes('custom')) order.push('custom');
+        restoredData.sectionOrder = order;
+      }
       if (resume.phone_number) restoredData.phone = resume.phone_number;
       if (resume.title && !restoredData.fullName) restoredData.fullName = resume.title.split("'s Resume")[0];
       
-      setData(restoredData);
+      // When the user left this resume in Tailored mode, the original data must
+      // NOT overwrite the Tailored view — the auto-open restore below fills in
+      // the tailored data instead. Keep discovery/scores, skip the form data.
+      if (!opts.skipData) {
+        setData(restoredData);
+        lastSavedRef.current = JSON.stringify({ data: restoredData, discovery: newDiscovery });
+      }
       
       // Restore score metrics
       if (resume.original_score !== undefined) setOriginalScore(resume.original_score);
       if (resume.resume_score !== undefined) setCurrentScore(resume.resume_score || 0);
 
-      // Sync lastSavedRef to prevent immediate auto-save loop
-      lastSavedRef.current = JSON.stringify({ data: restoredData, discovery: newDiscovery });
       console.log('[Builder] State restored from DB');
+      return true;
     } else {
-      console.error('[Builder] Fetch resume failed or record missing', error);
+      console.error('[Builder] Fetch resume failed, record missing, or not owned by this account', error);
+      // Do NOT restore foreign data. Start with a clean slate so another
+      // user's resume can never be rendered or overwritten.
+      setResumeId(null);
+      setData({ ...INITIAL_DATA });
+      return false;
     }
   };
 
@@ -387,6 +627,11 @@ export default function AIResumeBuilder() {
       ? window.location.origin
       : 'http://127.0.0.1:8000');
 
+  const getAuthToken = async (): Promise<string> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || '';
+  };
+
   // --- AI Optimizations ---
   const handleOptimizeExperience = async (index: number) => {
     if (!discovery.role) {
@@ -395,11 +640,12 @@ export default function AIResumeBuilder() {
     }
 
     setIsOptimizing(true);
+    const token = await getAuthToken();
     toast.promise(
       (async () => {
         const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             experience: data.experience[index],
             target_role: discovery.role,
@@ -430,9 +676,10 @@ export default function AIResumeBuilder() {
   const handleGenerateSummary = async () => {
     setIsOptimizing(true);
     try {
+      const token = await getAuthToken();
       const response = await fetch(`${backendUrl}/api/builder/generate-summary`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           profileData: data,
           targetRole: discovery.role
@@ -460,11 +707,12 @@ export default function AIResumeBuilder() {
     if (!bullet.trim()) return;
 
     setIsOptimizing(true);
+    const token = await getAuthToken();
     toast.promise(
       (async () => {
         const response = await fetch(`${backendUrl}/api/builder/optimize-experience`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           // The backend expects an experience object with a description array
           body: JSON.stringify({
             experience: { ...data.experience[expIdx], description: [bullet] },
@@ -491,8 +739,13 @@ export default function AIResumeBuilder() {
 
   // --- Storage & Flow ---
   const handleSave = async () => {
+    if (activeMode === 'tailored') {
+      toast.info('Switch to Default mode to save manual edits to your resume.');
+      return;
+    }
     setIsSaving(true);
     try {
+      const token = await getAuthToken();
       const isUpdate = !!resumeId;
       const url = isUpdate ? `${backendUrl}/api/resumes/${resumeId}` : `${backendUrl}/api/resumes/`;
       const method = isUpdate ? 'PUT' : 'POST';
@@ -512,6 +765,7 @@ export default function AIResumeBuilder() {
         languages: data.languages,
         internships: data.internships,
         achievements: data.achievements,
+        custom_sections: data.customSections,
         section_order: data.sectionOrder,
         phone_number: data.phone,
         user_id: user?.id || 'guest',
@@ -522,7 +776,7 @@ export default function AIResumeBuilder() {
 
       const response = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
 
@@ -579,34 +833,222 @@ export default function AIResumeBuilder() {
     }
   };
 
-  const handleDownloadDocx = () => {
+  // --- Export helpers: clean, null-safe resume document builders ---
+
+  const NULL_PLACEHOLDERS = new Set(['null', 'none', 'n/a', 'undefined']);
+  const cleanVal = (v: unknown): string => {
+    if (v == null) return '';
+    const out = String(v).trim();
+    return NULL_PLACEHOLDERS.has(out.toLowerCase()) ? '' : out;
+  };
+  const cleanArr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : []);
+  const escapeHtml = (v: unknown): string =>
+    cleanVal(v)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  // Derived section order that ALWAYS keeps 'custom' last, even when the
+  // stored order predates the custom-section feature.
+  const effectiveSectionOrder = useMemo<string[]>(() => {
+    const order = Array.isArray(data.sectionOrder) ? [...data.sectionOrder] : [...INITIAL_DATA.sectionOrder];
+    const customIdx = order.indexOf('custom');
+    if (customIdx !== -1) order.splice(customIdx, 1);
+    order.push('custom');
+    return order;
+  }, [data.sectionOrder]);
+
+  // True when a custom section has anything to show (title or a non-empty bullet)
+  const hasCustomContent = (cs: any): boolean =>
+    !!cleanVal(cs?.title) || cleanArr(cs?.items).some((i: any) => !!cleanVal(i));
+
+  const customDocxHtml = (): string => {
+    const body = cleanArr(data.customSections)
+      .filter(hasCustomContent)
+      .map((cs: any) => {
+        const items = cleanArr(cs.items).map(cleanVal).filter(Boolean);
+        const title = cleanVal(cs.title) || 'Additional Information';
+        let html = `<h3>${escapeHtml(title)}</h3>`;
+        if (items.length) html += `<ul>${items.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`;
+        return html;
+      })
+      .join('');
+    return body;
+  };
+
+  const sectionDocxHtml = (sectionId: string): string => {
+    switch (sectionId) {
+      case 'summary':
+        return cleanVal(data.summary)
+          ? `<h3>Profile</h3><p>${escapeHtml(cleanVal(data.summary))}</p>`
+          : '';
+      case 'skills': {
+        const skills = cleanArr(data.skills).map(cleanVal).filter(Boolean);
+        return skills.length
+          ? `<h3>Expertise</h3><p>${skills.map(escapeHtml).join(' &bull; ')}</p>`
+          : '';
+      }
+      case 'experience': {
+        const exps = cleanArr(data.experience).filter((e: any) => cleanVal(e?.title) || cleanVal(e?.company));
+        if (!exps.length) return '';
+        const body = exps
+          .map((exp: any) => {
+            const title = cleanVal(exp.title);
+            const company = cleanVal(exp.company);
+            const duration = cleanVal(exp.duration);
+            const bullets = cleanArr(exp.description).map(cleanVal).filter(Boolean);
+            const head = [title && `<b>${escapeHtml(title)}</b>`, company && escapeHtml(company)]
+              .filter(Boolean)
+              .join(' &mdash; ');
+            let html = `<h4>${head}${duration ? ` <span class="right">${escapeHtml(duration)}</span>` : ''}</h4>`;
+            if (bullets.length) html += `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`;
+            return html;
+          })
+          .join('');
+        return `<h3>Experience</h3>${body}`;
+      }
+      case 'education': {
+        const edus = cleanArr(data.education).filter((e: any) => cleanVal(e?.degree));
+        if (!edus.length) return '';
+        const body = edus
+          .map((edu: any) => {
+            const degree = `<b>${escapeHtml(cleanVal(edu.degree))}</b>`;
+            const institution = cleanVal(edu.institution) ? ` &mdash; ${escapeHtml(edu.institution)}` : '';
+            const year = cleanVal(edu.year) ? ` <span class="right">${escapeHtml(edu.year)}</span>` : '';
+            return `<p>${degree}${institution}${year}</p>`;
+          })
+          .join('');
+        return `<h3>Education</h3>${body}`;
+      }
+      case 'projects': {
+        const projects = cleanArr(data.projects).filter((p: any) => cleanVal(p?.title));
+        if (!projects.length) return '';
+        const body = projects
+          .map((proj: any) => {
+            const title = `<b>${escapeHtml(cleanVal(proj.title))}</b>`;
+            const link = cleanVal(proj.link) ? ` <span class="link">${escapeHtml(proj.link)}</span>` : '';
+            const desc = cleanVal(proj.description) ? `<p>${escapeHtml(proj.description)}</p>` : '';
+            return `<h4>${title}${link}</h4>${desc}`;
+          })
+          .join('');
+        return `<h3>Projects</h3>${body}`;
+      }
+      case 'certifications': {
+        const certs = cleanArr(data.certifications).filter((c: any) => cleanVal(c?.name));
+        if (!certs.length) return '';
+        const body = certs
+          .map((cert: any) => {
+            const name = `<b>${escapeHtml(cleanVal(cert.name))}</b>`;
+            const year = cleanVal(cert.year) ? ` <span class="right">${escapeHtml(cert.year)}</span>` : '';
+            return `<p>${name}${year}</p>`;
+          })
+          .join('');
+        return `<h3>Certifications</h3>${body}`;
+      }
+      case 'languages': {
+        const langs = cleanArr(data.languages).filter((l: any) => cleanVal(l?.language));
+        if (!langs.length) return '';
+        const body = langs
+          .map((lang: any) => {
+            const name = `<b>${escapeHtml(cleanVal(lang.language))}</b>`;
+            const prof = cleanVal(lang.proficiency) ? ` &mdash; ${escapeHtml(lang.proficiency)}` : '';
+            return `<p>${name}${prof}</p>`;
+          })
+          .join('');
+        return `<h3>Languages</h3>${body}`;
+      }
+      case 'achievements': {
+        const items = cleanArr(data.achievements).filter((a: any) => cleanVal(a?.title) || cleanVal(a?.description));
+        if (!items.length) return '';
+        const body = items
+          .map((ach: any) => {
+            const title = cleanVal(ach.title) ? `<h4>${escapeHtml(ach.title)}</h4>` : '';
+            const desc = cleanVal(ach.description) ? `<p>${escapeHtml(ach.description)}</p>` : '';
+            return `${title}${desc}`;
+          })
+          .join('');
+        return `<h3>Highlights</h3>${body}`;
+      }
+      case 'internships': {
+        const ints = cleanArr(data.internships).filter((i: any) => cleanVal(i?.role));
+        if (!ints.length) return '';
+        const body = ints
+          .map((int: any) => {
+            const role = `<b>${escapeHtml(cleanVal(int.role))}</b>`;
+            const company = cleanVal(int.company) ? ` &mdash; ${escapeHtml(int.company)}` : '';
+            const bullets = cleanArr(int.description).map(cleanVal).filter(Boolean);
+            let html = `<h4>${role}${company}</h4>`;
+            if (bullets.length) html += `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`;
+            return html;
+          })
+          .join('');
+        return `<h3>Internships</h3>${body}`;
+      }
+      case 'custom': {
+        return customDocxHtml();
+      }
+      default:
+        return '';
+    }
+  };
+
+  const handleDownloadDocx = async () => {
+    if (activeMode === 'tailored' && tailoredVersionId) {
+      toast.info('Downloading tailored Word file...');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("No session");
+        const res = await fetch(`${backendUrl}/api/agents/resume/version/${tailoredVersionId}/download`, {
+          headers: { "Authorization": `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) throw new Error("Download failed");
+        const blob = await res.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `tailored-resume-${new Date().toISOString().slice(0, 10)}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+        toast.success('Tailored Word file downloaded!');
+      } catch (e) {
+        console.error('Tailored DOCX download failed', e);
+        toast.error('Download failed - please try one more time');
+      }
+      return;
+    }
     if (!previewRef.current) return;
     toast.info('Generating compatible Word file...');
-    
-    // Improved XML template for Word compatibility
-    const header = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head><meta charset='utf-8'><title>Resume</title>
-      <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
-      <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.4; }
-        h2 { font-size: 28pt; margin: 0; color: #0f172a; text-transform: uppercase; }
-        h3 { font-size: 14pt; color: #4f46e5; border-bottom: 1px solid #e1e4e8; padding-bottom: 2pt; }
-        .flex { display: flex; }
-        .gap-4 { gap: 1rem; }
-      </style></head><body>
-    `;
-    const footer = "</body></html>";
-    const source = header + previewRef.current.innerHTML + footer;
-    
-    // Use the older format for maximum compatibility on localhost
-    const blob = new Blob(['\ufeff', source], {
-      type: 'application/msword'
-    });
-    
+
+    const name = cleanVal(data.fullName);
+    const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
+    const headerBlock = name ? `<h2 style="text-align:center;margin:0 0 2pt;">${escapeHtml(name)}</h2>` : '';
+    const contactBlock = contacts.length ? `<p style="text-align:center;margin:0 0 4pt;">${contacts.map(escapeHtml).join(' &bull; ')}</p>` : '';
+    const sections = effectiveSectionOrder.map(sectionDocxHtml).filter(Boolean).join('');
+
+    const source =
+      `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>` +
+      `<head><meta charset='utf-8'><title>Resume</title>` +
+      `<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->` +
+      `<style>` +
+      `body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.4; color: #0f172a; }` +
+      `h2 { font-size: 28pt; margin: 0 0 4pt; color: #0f172a; text-transform: uppercase; }` +
+      `h3 { font-size: 14pt; color: #4f46e5; border-bottom: 1px solid #e1e4e8; padding-bottom: 2pt; text-transform: uppercase; }` +
+      `h4 { font-size: 12pt; margin: 10pt 0 2pt; }` +
+      `p, li { font-size: 11pt; }` +
+      `.right { float: right; }` +
+      `.link { color: #4f46e5; }` +
+      `</style></head><body>` +
+      headerBlock + contactBlock + sections +
+      `</body></html>`;
+
+    const blob = new Blob(['\ufeff', source], { type: 'application/msword' });
+
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${(data.fullName || 'Resume').trim().replace(/[^a-z0-9]/gi, '_')}.doc`;
+    link.download = `${(cleanVal(data.fullName) || 'Resume').replace(/[^a-z0-9]/gi, '_')}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -614,97 +1056,467 @@ export default function AIResumeBuilder() {
   };
 
   const handleDownloadPDF = async () => {
-    if (!previewRef.current) return;
     toast.info('Generating high-fidelity PDF...');
 
-    const originalEl = previewRef.current;
-    const originalGCS = window.getComputedStyle;
-    
-    const oklchToRgb = (val: string) => {
-      if (!val || typeof val !== 'string' || !val.includes('oklch')) return val;
-      return val.replace(/oklch\([^)]+\)/g, (match) => {
-        if (match.includes('0.55')) return 'rgb(79, 70, 229)';   // indigo-600
-        if (match.includes('0.64') || match.includes('0.63')) return 'rgb(99, 102, 241)';   // indigo-500
-        if (match.includes('0.2')) return 'rgb(15, 23, 42)';    // slate-900
-        if (match.includes('0.92')) return 'rgb(241, 245, 249)'; // slate-100
-        if (match.includes('0.44')) return 'rgb(71, 85, 105)';   // slate-600
-        return 'rgb(79, 70, 229)';
-      });
-    };
-
     try {
-      (window as any).getComputedStyle = (el: Element, pseudo?: string) => {
-        const style = originalGCS(el, pseudo);
-        return new Proxy(style, {
-          get(target, prop) {
-            if (prop === 'getPropertyValue') {
-              return (p: string) => {
-                const val = target.getPropertyValue(p);
-                return (typeof val === 'string' && val.includes('oklch')) ? oklchToRgb(val) : val;
-              };
-            }
-            const val = (target as any)[prop];
-            if (typeof val === 'function') return val.bind(target);
-            if (typeof val === 'string' && val.includes('oklch')) return oklchToRgb(val);
-            return val;
-          }
-        });
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+
+      type PdfSettings = {
+        mx: number; my: number; bar: number; afterBar: number;
+        name: number; contact: number; headerAfter: number;
+        section: number; ruleGap: number;
+        body: number; gap: number; sectionPad: number;
+        head: number; headLine: number; company: number; companyGap: number; itemPad: number;
+        bullet: number; bulletGap: number;
       };
 
-      const canvas = await html2canvas(originalEl, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc) => {
-          const clonedRoot = clonedDoc.querySelector('[data-resume-preview]');
-          
-          const resetStyle = clonedDoc.createElement('style');
-          resetStyle.innerHTML = `
-            * { 
-              letter-spacing: normal !important; 
-              font-variant-ligatures: none !important;
-              font-kerning: none !important;
-              word-spacing: normal !important;
-              text-rendering: optimizeSpeed !important;
-              -webkit-font-smoothing: antialiased !important;
-            }
-            [style*="oklch"] { color: inherit; }
-          `;
-          clonedDoc.head.appendChild(resetStyle);
+      const layouts: Record<'normal' | 'compact', PdfSettings> = {
+        normal: {
+          mx: 18, my: 18, bar: 4, afterBar: 10,
+          name: 22, contact: 9, headerAfter: 7,
+          section: 11, ruleGap: 6,
+          body: 10, gap: 1.8, sectionPad: 4,
+          head: 11, headLine: 0.5, company: 9.5, companyGap: 4.6, itemPad: 3,
+          bullet: 10, bulletGap: 4.2,
+        },
+        compact: {
+          mx: 14, my: 11, bar: 3, afterBar: 7,
+          name: 17, contact: 8.5, headerAfter: 5,
+          section: 10, ruleGap: 5,
+          body: 8.5, gap: 1.4, sectionPad: 2.5,
+          head: 10, headLine: 0.3, company: 9, companyGap: 3.8, itemPad: 2,
+          bullet: 8.5, bulletGap: 3.4,
+        },
+      };
 
-          if (clonedRoot instanceof HTMLElement) {
-            clonedRoot.style.width = '210mm';
-            clonedRoot.style.transform = 'none';
-            clonedRoot.style.position = 'relative';
-            clonedRoot.style.margin = '0';
+      // Renders the whole resume into `doc`. When `paint` is false it only
+      // simulates layout (identical math, no drawing) so we can measure page count.
+      const renderLayout = (doc: typeof pdf, st: PdfSettings, paint: boolean) => {
+        const contentW = pageW - st.mx * 2;
+        let y = st.my;
+        let pages = 1;
+
+        const ensure = (needed: number, keepAfter = 0) => {
+          if (y + needed + keepAfter > pageH - st.my) {
+            pages += 1;
+            y = st.my;
+            if (paint) doc.addPage();
+          }
+        };
+
+        const wrap = (text: string, size: number, width = contentW): string[] => {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(size);
+          return doc.splitTextToSize(text, width) as string[];
+        };
+
+        const draw = (lines: string | string[], size: number, color: [number, number, number], style: 'normal' | 'bold' | 'italic', lineGap: number, indent = 0) => {
+          if (paint) {
+            doc.setFont('helvetica', style);
+            doc.setFontSize(size);
+            doc.setTextColor(color[0], color[1], color[2]);
+          }
+          const arr = Array.isArray(lines) ? lines : [lines];
+          arr.forEach((ln) => {
+            ensure(size * 0.35 + lineGap);
+            if (paint) doc.text(ln, st.mx + indent, y);
+            y += size * 0.35 + lineGap;
+          });
+        };
+
+        const drawCentered = (text: string, size: number, color: [number, number, number], style: 'normal' | 'bold' | 'italic', lineGap: number) => {
+          if (paint) {
+            doc.setFont('helvetica', style);
+            doc.setFontSize(size);
+            doc.setTextColor(color[0], color[1], color[2]);
+          }
+          const arr = Array.isArray(text) ? text : [text];
+          arr.forEach((ln) => {
+            ensure(size * 0.35 + lineGap);
+            if (paint) {
+              const w = doc.getTextWidth(ln);
+              doc.text(ln, (pageW - w) / 2, y);
+            }
+            y += size * 0.35 + lineGap;
+          });
+        };
+
+        const sectionTitle = (title: string) => {
+          ensure(10, 16); // keep the title together with the first block of content
+          if (paint) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(st.section);
+            doc.setTextColor(79, 70, 229);
+            doc.text(title.toUpperCase(), st.mx, y);
+          }
+          y += 1.5;
+          if (paint) {
+            doc.setDrawColor(225, 228, 232);
+            doc.line(st.mx, y, pageW - st.mx, y);
+          }
+          y += st.ruleGap;
+        };
+
+        const bullets = (items: string[]) => {
+          items.forEach((b) => {
+            const lines = wrap(b, st.bullet, contentW - 6);
+            const h = lines.length * st.bulletGap;
+            ensure(h + 1); // never split a single bullet across pages
+            lines.forEach((ln, li) => {
+              if (paint) {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(st.bullet);
+                doc.setTextColor(71, 85, 105);
+                if (li === 0) doc.text('•', st.mx + 1, y);
+                doc.text(ln, st.mx + 5, y);
+              }
+              y += st.bulletGap;
+            });
+          });
+        };
+
+        // Accent bar
+        if (paint) {
+          doc.setFillColor(79, 70, 229);
+          doc.rect(0, 0, pageW, st.bar, 'F');
+        }
+        y = st.my + st.bar + st.afterBar;
+
+        // Header (only non-empty values), centered with minimal gaps
+        const name = cleanVal(data.fullName);
+        if (name) {
+          ensure(14);
+          drawCentered(name.toUpperCase(), st.name, [15, 23, 42], 'bold', 0.5);
+          y += 1;
+        }
+        const contacts = [cleanVal(data.email), cleanVal(data.phone)].filter(Boolean);
+        if (contacts.length) {
+          ensure(8);
+          drawCentered(contacts.join('   •   '), st.contact, [100, 116, 139], 'bold', 0.5);
+          y += 0.5;
+        }
+        if (paint) {
+          doc.setDrawColor(241, 245, 249);
+          doc.line(st.mx, y, pageW - st.mx, y);
+        }
+        y += st.headerAfter;
+
+        // Sections (only render non-empty ones — no null/placeholder values)
+        const renderSection = (sectionId: string) => {
+          switch (sectionId) {
+            case 'summary': {
+              const text = cleanVal(data.summary);
+              if (!text) return;
+              sectionTitle('Profile');
+              draw(wrap(text, st.body), st.body, [71, 85, 105], 'normal', st.gap);
+              y += st.sectionPad;
+              return;
+            }
+            case 'skills': {
+              const skills = cleanArr(data.skills).map(cleanVal).filter(Boolean);
+              if (!skills.length) return;
+              sectionTitle('Expertise');
+              draw(wrap(skills.join('  •  '), st.body), st.body, [71, 85, 105], 'normal', st.gap);
+              y += st.sectionPad;
+              return;
+            }
+            case 'experience': {
+              const exps = cleanArr(data.experience).filter((e: any) => cleanVal(e?.title) || cleanVal(e?.company));
+              if (!exps.length) return;
+              sectionTitle('Experience');
+              exps.forEach((exp: any) => {
+                const title = cleanVal(exp.title);
+                const company = cleanVal(exp.company);
+                const duration = cleanVal(exp.duration);
+                const blist = cleanArr(exp.description).map(cleanVal).filter(Boolean);
+                const firstBulletH = blist.length ? Math.max(1, wrap(blist[0], st.bullet, contentW - 6).length) * st.bulletGap : 6;
+                ensure(12, Math.min(firstBulletH + 4, 18)); // keep header with its first bullet
+                if (title) {
+                  draw(title, st.head, [15, 23, 42], 'bold', st.headLine);
+                  y += st.itemPad;
+                }
+                if (company || duration) {
+                  ensure(8);
+                  if (paint) {
+                    if (company) {
+                      doc.setFont('helvetica', 'italic');
+                      doc.setFontSize(st.company);
+                      doc.setTextColor(99, 102, 241);
+                      doc.text(company, st.mx, y);
+                    }
+                    if (duration) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.company);
+                      doc.setTextColor(100, 116, 139);
+                      doc.text(duration, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                bullets(blist);
+                y += st.itemPad;
+              });
+              y += 2;
+              return;
+            }
+            case 'education': {
+              const edus = cleanArr(data.education).filter((e: any) => cleanVal(e?.degree));
+              if (!edus.length) return;
+              sectionTitle('Education');
+              edus.forEach((edu: any) => {
+                const degree = cleanVal(edu.degree);
+                const institution = cleanVal(edu.institution);
+                const year = cleanVal(edu.year);
+                ensure(8, 6);
+                if (degree) {
+                  draw(degree, st.head - 0.5, [15, 23, 42], 'bold', st.headLine);
+                  y += st.itemPad;
+                }
+                if (institution || year) {
+                  ensure(8);
+                  if (paint) {
+                    if (institution) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body);
+                      doc.setTextColor(71, 85, 105);
+                      doc.text(institution, st.mx, y);
+                    }
+                    if (year) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 0.5);
+                      doc.setTextColor(100, 116, 139);
+                      doc.text(year, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                y += 1;
+              });
+              y += 2;
+              return;
+            }
+            case 'projects': {
+              const projects = cleanArr(data.projects).filter((p: any) => cleanVal(p?.title));
+              if (!projects.length) return;
+              sectionTitle('Projects');
+              projects.forEach((proj: any) => {
+                const title = cleanVal(proj.title);
+                const link = cleanVal(proj.link);
+                const desc = cleanVal(proj.description);
+                ensure(9, 8);
+                if (title) {
+                  if (paint) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(st.head - 0.5);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(title, st.mx, y);
+                    if (link) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 1);
+                      doc.setTextColor(79, 70, 229);
+                      doc.text(link, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                if (desc) {
+                  draw(wrap(desc, st.body), st.body, [71, 85, 105], 'normal', st.gap);
+                  y += 2;
+                }
+                y += 2;
+              });
+              y += 2;
+              return;
+            }
+            case 'certifications': {
+              const certs = cleanArr(data.certifications).filter((c: any) => cleanVal(c?.name));
+              if (!certs.length) return;
+              sectionTitle('Certifications');
+              certs.forEach((cert: any) => {
+                const cname = cleanVal(cert.name);
+                const year = cleanVal(cert.year);
+                ensure(8);
+                if (cname) {
+                  if (paint) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(st.head - 0.5);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(cname, st.mx, y);
+                    if (year) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 0.5);
+                      doc.setTextColor(100, 116, 139);
+                      doc.text(year, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                y += 1;
+              });
+              y += 2;
+              return;
+            }
+            case 'languages': {
+              const langs = cleanArr(data.languages).filter((l: any) => cleanVal(l?.language));
+              if (!langs.length) return;
+              sectionTitle('Languages');
+              langs.forEach((lang: any) => {
+                const lname = cleanVal(lang.language);
+                const prof = cleanVal(lang.proficiency);
+                ensure(8);
+                if (lname) {
+                  if (paint) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(st.head - 0.5);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(lname, st.mx, y);
+                    if (prof) {
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(st.body - 0.5);
+                      doc.setTextColor(79, 70, 229);
+                      doc.text(`• ${prof}`, pageW - st.mx, y, { align: 'right' });
+                    }
+                  }
+                  y += st.companyGap;
+                }
+              });
+              y += 2;
+              return;
+            }
+            case 'achievements': {
+              const items = cleanArr(data.achievements).filter((a: any) => cleanVal(a?.title) || cleanVal(a?.description));
+              if (!items.length) return;
+              sectionTitle('Highlights');
+              items.forEach((ach: any) => {
+                const title = cleanVal(ach.title);
+                const desc = cleanVal(ach.description);
+                ensure(9, 8);
+                if (title) {
+                  draw(title, st.head - 0.5, [15, 23, 42], 'bold', st.headLine);
+                  y += st.itemPad;
+                }
+                if (desc) {
+                  draw(wrap(desc, st.body), st.body, [71, 85, 105], 'normal', st.gap);
+                  y += 2;
+                }
+                y += 2;
+              });
+              y += 2;
+              return;
+            }
+            case 'internships': {
+              const ints = cleanArr(data.internships).filter((i: any) => cleanVal(i?.role));
+              if (!ints.length) return;
+              sectionTitle('Internships');
+              ints.forEach((int: any) => {
+                const role = cleanVal(int.role);
+                const company = cleanVal(int.company);
+                const blist = cleanArr(int.description).map(cleanVal).filter(Boolean);
+                const firstBulletH = blist.length ? Math.max(1, wrap(blist[0], st.bullet, contentW - 6).length) * st.bulletGap : 6;
+                ensure(9, Math.min(firstBulletH + 4, 18));
+                if (role || company) {
+                  if (paint) {
+                    if (role) {
+                      doc.setFont('helvetica', 'bold');
+                      doc.setFontSize(st.head - 0.5);
+                      doc.setTextColor(15, 23, 42);
+                      doc.text(role, st.mx, y);
+                    }
+                    if (company) {
+                      doc.setFont('helvetica', 'italic');
+                      doc.setFontSize(st.company);
+                      doc.setTextColor(99, 102, 241);
+                      doc.text(company, st.mx + (role ? doc.getTextWidth(role) + 5 : 0), y);
+                    }
+                  }
+                  y += st.companyGap;
+                }
+                bullets(blist);
+                y += st.itemPad;
+              });
+              y += 2;
+              return;
+            }
+            case 'custom': {
+              const customs = cleanArr(data.customSections).filter(hasCustomContent);
+              if (!customs.length) return;
+              customs.forEach((cs: any) => {
+                const items = cleanArr(cs.items).map(cleanVal).filter(Boolean);
+                if (!items.length) return;
+                sectionTitle(cleanVal(cs.title) || 'Additional Information');
+                bullets(items);
+                y += st.sectionPad;
+              });
+              return;
+            }
+            default:
+              return;
+          }
+        };
+
+        effectiveSectionOrder.forEach(renderSection);
+        return pages;
+      };
+
+      const probe = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+      // Scale every numeric layout setting by `s` so one pass can shrink the
+      // whole page proportionally (fonts, margins, spacing) to force a fit.
+      const scaleSettings = (base: PdfSettings, s: number): PdfSettings => {
+        const out = {} as PdfSettings;
+        (Object.keys(base) as (keyof PdfSettings)[]).forEach((k) => {
+          out[k] = base[k] * s;
+        });
+        return out;
+      };
+
+      const pageCount = (st: PdfSettings) => renderLayout(probe, st, false);
+
+      // Fit to exactly one page: try the full-size layout first, then compact,
+      // then progressively shrink compact (down to ~0.75x) until it fits.
+      const chosen = (() => {
+        if (pageCount(layouts.normal) === 1) return layouts.normal;
+        if (pageCount(layouts.compact) === 1) return layouts.compact;
+        const MIN_SCALE = 0.75;
+        let lo = MIN_SCALE;
+        let hi = 1;
+        let best = layouts.compact;
+        for (let i = 0; i < 8; i += 1) {
+          const mid = (lo + hi) / 2;
+          const st = scaleSettings(layouts.compact, mid);
+          if (pageCount(st) === 1) {
+            best = st;
+            lo = mid;
+          } else {
+            hi = mid;
           }
         }
-      });
+        return best;
+      })();
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.85); // Optimized quality for compatibility
-      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${(data.fullName || 'Resume').trim().replace(/[^a-z0-9]/gi, '_')}.pdf`);
+      renderLayout(pdf, chosen, true);
+      pdf.save(`${(cleanVal(data.fullName) || 'Resume').replace(/[^a-z0-9]/gi, '_')}.pdf`);
       toast.success('Resume downloaded successfully!');
     } catch (e) {
       console.error('PDF Error:', e);
       toast.error('Export failed - please try one more time');
-    } finally {
-      (window as any).getComputedStyle = originalGCS;
     }
   };
 
   const handleReimport = async () => {
     if (!resumeId) return;
     try {
-      const { data: resume, error } = await supabase.from('resumes').select('parsed_data').eq('id', resumeId).single();
+      const { data: resume, error } = await supabase
+        .from('resumes')
+        .select('parsed_data')
+        .eq('id', resumeId)
+        .eq('user_id', user?.id)
+        .single();
       if (resume?.parsed_data && !error) {
         const originalData = typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data;
-        setData(originalData);
+        setData({ ...INITIAL_DATA, ...originalData });
         if (originalData.targetRole || originalData.target_role) {
           setDiscovery(prev => ({ ...prev, role: originalData.targetRole || originalData.target_role }));
         }
@@ -730,15 +1542,17 @@ export default function AIResumeBuilder() {
     setIsSaving(true);
     try {
       if (resumeId && user?.id !== 'guest') {
-        const { error } = await supabase.from('resumes').delete().eq('id', resumeId);
+        const { error } = await supabase.from('resumes').delete().eq('id', resumeId).eq('user_id', user.id);
         if (error) throw error;
       }
 
       // Clear local caches and state IMMEDIATELY
       localStorage.removeItem('resumatch_builder_data');
       sessionStorage.removeItem('resumatch_builder_session');
+      try { localStorage.removeItem('resumatch_tailored_mode'); } catch { /* ignore */ }
+      secureRemove(localStorage, 'resumatch_tailored_data');
       setResumeId(null);
-      setData({} as any);
+      setData({ ...INITIAL_DATA });
       
       toast.success('Draft deleted successfully');
       router.replace('/dashboard');
@@ -922,6 +1736,27 @@ export default function AIResumeBuilder() {
             </div>
           </section>
         );
+      case 'custom':
+        return (data.customSections || []).some(hasCustomContent) && (
+          <section className="space-y-4 md:space-y-6">
+            {(data.customSections || []).map((cs, ci) => hasCustomContent(cs) && (
+              <div key={ci} className="space-y-2 md:space-y-3">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-[10px] md:text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">{cs.title || 'Additional Information'}</h3>
+                  <div className="h-px bg-indigo-50 flex-1" />
+                </div>
+                <ul className="list-none space-y-1.5 md:space-y-2">
+                  {(cs.items || []).map((item, bi) => item.trim() && (
+                    <li key={bi} className="text-[10px] md:text-[12px] text-slate-600 leading-normal flex gap-2 md:gap-3">
+                      <span className="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full bg-indigo-200 mt-1 md:mt-1.5 flex-shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </section>
+        );
       default:
         return null;
     }
@@ -929,153 +1764,291 @@ export default function AIResumeBuilder() {
 
   // --- Render Helpers ---
   const steps = [
-    { id: 1, name: 'Personal', icon: User },
-    { id: 2, name: 'Skills', icon: List },
-    { id: 3, name: 'Experience', icon: Briefcase },
-    { id: 4, name: 'Education', icon: GraduationCap },
-    { id: 5, name: 'Projects', icon: Wand2 },
-    { id: 6, name: 'Certifications', icon: Badge },
-    { id: 7, name: 'Languages', icon: List },
-    { id: 8, name: 'Achievements', icon: Sparkles },
-    { id: 9, name: 'Internships', icon: Briefcase }
+    { id: 1, name: 'Personal', icon: User, desc: 'Your name, contact details and a high-impact summary.' },
+    { id: 2, name: 'Skills', icon: List, desc: 'Core skills and expertise that match your target role.' },
+    { id: 3, name: 'Experience', icon: Briefcase, desc: 'Work history with achievement-driven bullet points.' },
+    { id: 4, name: 'Education', icon: GraduationCap, desc: 'Degrees, institutions and graduation years.' },
+    { id: 5, name: 'Projects', icon: Wand2, desc: 'Hands-on projects that showcase your real-world impact.' },
+    { id: 6, name: 'Certifications', icon: Badge, desc: 'Professional certifications and credentials.' },
+    { id: 7, name: 'Languages', icon: List, desc: 'Languages you speak and your proficiency level.' },
+    { id: 8, name: 'Achievements', icon: Sparkles, desc: 'Awards, recognitions and standout wins.' },
+    { id: 9, name: 'Internships', icon: Briefcase, desc: 'Internships and early-career experience.' },
+    { id: 10, name: 'Custom', icon: FilePlus2, desc: 'Your own custom sections — anything you want to add.' }
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[var(--bg-surface)] md:flex-row">
       {/* --- Left Panel: Editor --- */}
-      <div className="flex-1 flex flex-col h-full bg-white border-r border-slate-200 overflow-y-auto">
-        <header className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between bg-white/50 backdrop-blur-md sticky top-0 z-10 gap-2">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-none mb-1">AI Builder</h1>
-              <div className="flex items-center gap-2">
-                <div className="group relative flex items-center gap-2 cursor-pointer" onClick={() => {
-                  const newRole = prompt("Enter your target role:", discovery.role);
-                  if (newRole !== null) setDiscovery({ ...discovery, role: newRole });
-                }}>
-                  <p className="text-xs md:text-sm text-slate-500 font-medium truncate max-w-[100px] md:max-w-none hover:text-indigo-600 transition-colors">
-                    Target: {discovery.role || "Set Role"}
-                  </p>
-                  <Wand2 className="h-3 w-3 text-slate-300 group-hover:text-indigo-400" />
-                </div>
-                {originalScore !== null && (
-                  <Badge className="bg-green-50 text-green-600 border-green-100 font-black text-[8px] md:text-[10px] uppercase">
-                    +{currentScore - originalScore}
-                  </Badge>
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-base)] md:border-r md:border-[var(--border-soft)] xl:max-w-[640px]">
+        {/* Default / Tailored toggle bar (above the header) */}
+        <div className="shrink-0 border-b border-[var(--border-soft)] bg-gradient-to-r from-indigo-50/80 via-white/90 to-indigo-50/80 px-3 py-2 backdrop-blur-xl sm:px-5 lg:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-subtle)] sm:text-[11px]">
+              <Settings className="h-3 w-3 text-indigo-600" />
+              Resume Version
+            </span>
+            <div className="flex shrink-0 items-center rounded-full bg-white p-1 shadow-sm ring-1 ring-[var(--border-soft)]">
+              <button
+                type="button"
+                onClick={switchToDefault}
+                className={`flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[11px] font-semibold transition-all sm:h-8 sm:px-4 sm:text-xs ${
+                  activeMode === 'default'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Check className="h-3 w-3" aria-hidden />
+                Default
+              </button>
+              <button
+                type="button"
+                onClick={() => loadTailoredVersion()}
+                disabled={isLoadingTailored || !resumeId}
+                className={`flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[11px] font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:px-4 sm:text-xs ${
+                  activeMode === 'tailored'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-indigo-600'
+                }`}
+              >
+                {isLoadingTailored ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" aria-hidden />
                 )}
-              </div>
+                Tailored
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 md:gap-2">
-            {/* Desktop-only secondary buttons */}
-            <div className="hidden lg:flex items-center gap-2">
-               <Button variant="ghost" onClick={handleDeleteDraft} className="h-10 rounded-xl text-slate-300 hover:text-rose-500 px-4 transition-colors">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" onClick={handleReimport} className="h-10 rounded-xl border-slate-200 px-4 text-indigo-600 hover:bg-indigo-50">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                <span className="hidden xl:inline">Import Original</span>
-              </Button>
-              <Button variant="ghost" onClick={handleCopyForWord} className="h-10 rounded-xl text-slate-500 hover:text-indigo-600 px-4 transition-colors">
-                <Copy className="h-4 w-4 mr-2" />
-                <span className="hidden xl:inline">Copy</span>
-              </Button>
-              <Button variant="outline" onClick={handleDownloadDocx} className="h-10 rounded-xl border-slate-200 px-4 text-slate-600 hover:text-slate-900">
-                <FileDown className="h-4 w-4 mr-2" />
-                <span className="hidden xl:inline">Word</span>
-              </Button>
+        </div>
+        <header className="sticky top-0 z-20 shrink-0 border-b border-[var(--border-soft)] bg-white/80 backdrop-blur-xl">
+          <div className="flex items-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 lg:px-8">
+            {/* Back */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.back()}
+              aria-label="Go back"
+              className="h-9 w-9 shrink-0 rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Title + target role */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-500 text-white shadow-sm sm:h-8 sm:w-8">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <h1 className="truncate text-sm font-semibold leading-none tracking-tight text-[var(--text-primary)] sm:text-base">
+                  Resume Builder
+                </h1>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const newRole = prompt("Enter your target role:", discovery.role);
+                  if (newRole !== null) setDiscovery({ ...discovery, role: newRole });
+                }}
+                title="Edit target role"
+                className="group mt-1.5 flex max-w-full items-center gap-1.5 sm:max-w-[300px]"
+              >
+                <Target className="h-3 w-3 shrink-0 text-indigo-600" />
+                <span className="truncate text-[11px] font-medium text-[var(--text-muted)] transition-colors group-hover:text-indigo-600 sm:text-xs">
+                  Target: <span className="font-semibold text-indigo-600">{discovery.role || 'Set role'}</span>
+                </span>
+                <Wand2 className="h-3 w-3 shrink-0 text-[var(--text-subtle)] transition-colors group-hover:text-indigo-500" />
+              </button>
             </div>
 
-            {/* Mobile Actions Menu */}
-            <div className="lg:hidden">
+            {/* Desktop secondary actions */}
+            <div className="hidden shrink-0 items-center gap-1 md:flex">
+              <Button variant="ghost" size="icon" onClick={handleCopyForWord} title="Copy for Word" className="h-9 w-9 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-indigo-600">
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleDownloadDocx} title="Export Word (.doc)" className="h-9 w-9 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-indigo-600">
+                <FileDown className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleReimport} title="Restore original data" className="h-9 w-9 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-indigo-600">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleDeleteDraft} title="Delete draft" className="h-9 w-9 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <div className="mx-1 h-6 w-px bg-[var(--border-soft)]" />
+            </div>
+
+            {/* Mobile actions sheet */}
+            <div className="shrink-0 md:hidden">
               <Sheet>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full text-slate-500">
-                    <MoreVertical className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" aria-label="More actions" className="h-9 w-9 rounded-lg text-[var(--text-muted)]">
+                    <MoreVertical className="h-4 w-4" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="bottom" className="rounded-t-[24px] p-6 pb-12 space-y-4">
-                  <SheetHeader className="mb-4">
-                    <SheetTitle>Actions</SheetTitle>
+                <SheetContent side="bottom" className="rounded-t-3xl border-t-[var(--border-soft)] px-5 pb-8 pt-6">
+                  <SheetHeader className="mb-4 text-left">
+                    <SheetTitle className="text-base font-semibold text-[var(--text-primary)]">Builder actions</SheetTitle>
                   </SheetHeader>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button variant="outline" onClick={handleReimport} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
-                      <RefreshCw className="h-4 w-4 text-indigo-500" />
-                      Restore Original
-                    </Button>
-                    <Button variant="outline" onClick={handleCopyForWord} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
-                      <Copy className="h-4 w-4 text-slate-500" />
-                      Copy Content
-                    </Button>
-                    <Button variant="outline" onClick={handleDownloadDocx} className="h-12 rounded-2xl justify-start gap-3 px-4 border-slate-200">
-                      <FileDown className="h-4 w-4 text-slate-500" />
-                      Export Word
-                    </Button>
-                    <Button variant="outline" onClick={handleDeleteDraft} className="h-12 rounded-2xl justify-start gap-3 px-4 border-rose-100 text-rose-500 hover:bg-rose-50">
-                      <Trash2 className="h-4 w-4" />
-                      Delete Draft
-                    </Button>
+                  <div className="space-y-4">
+                    <div className="flex items-center rounded-xl bg-[var(--bg-muted)] p-1">
+                      <button
+                        type="button"
+                        onClick={switchToDefault}
+                        className={`h-10 flex-1 rounded-lg text-xs font-semibold transition-all ${
+                          activeMode === 'default'
+                            ? 'bg-white text-[var(--text-primary)] shadow-sm'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        Default
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => loadTailoredVersion()}
+                        disabled={isLoadingTailored || !resumeId}
+                        className={`h-10 flex-1 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 ${
+                          activeMode === 'tailored'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {isLoadingTailored && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
+                        Tailored
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <Button variant="outline" onClick={handleReimport} className="h-11 justify-start gap-2.5 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                        <RefreshCw className="h-4 w-4 text-indigo-600" /> Restore Original
+                      </Button>
+                      <Button variant="outline" onClick={handleCopyForWord} className="h-11 justify-start gap-2.5 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                        <Copy className="h-4 w-4 text-[var(--text-subtle)]" /> Copy Content
+                      </Button>
+                      <Button variant="outline" onClick={handleDownloadDocx} className="h-11 justify-start gap-2.5 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                        <FileDown className="h-4 w-4 text-[var(--text-subtle)]" /> Export Word
+                      </Button>
+                      <Button variant="outline" onClick={handleDeleteDraft} className="h-11 justify-start gap-2.5 rounded-lg border-danger-200 text-danger-500 hover:bg-danger-50">
+                        <Trash2 className="h-4 w-4" /> Delete Draft
+                      </Button>
+                    </div>
                   </div>
                 </SheetContent>
               </Sheet>
             </div>
 
-            {/* Save Button (Compact on mobile) */}
-            <Button variant="outline" onClick={handleSave} disabled={isSaving} className="h-9 md:h-10 rounded-xl border-slate-200 px-3 md:px-4 shrink-0 transition-all active:scale-95">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" /> : <Save className="h-4 w-4 md:mr-2 text-indigo-600" />}
-              <span className="hidden sm:inline">Save</span>
+            {/* Save */}
+            <Button
+              variant="outline"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="h-9 shrink-0 rounded-lg border-[var(--border-soft)] px-2.5 font-medium text-[var(--text-muted)] hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 sm:h-10 sm:px-4"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" /> : <Save className="h-4 w-4 text-indigo-600" />}
+              <span className="ml-1.5 hidden md:inline">Save</span>
             </Button>
 
-            {/* View/Download PDF (Primary) */}
-            <Button onClick={handleDownloadPDF} className="h-9 md:h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 px-3 md:px-4 shrink-0 ml-1">
-              <Download className="h-4 w-4 md:mr-2" />
-              <span className="hidden sm:inline font-bold">PDF</span>
+            {/* Download PDF */}
+            <Button
+              onClick={handleDownloadPDF}
+              className="h-9 shrink-0 rounded-lg bg-indigo-600 px-2.5 text-white shadow-sm hover:bg-indigo-800 active:scale-[0.98] sm:h-10 sm:px-4"
+            >
+              <Download className="h-4 w-4" />
+              <span className="ml-1.5 hidden font-semibold md:inline">PDF</span>
             </Button>
           </div>
         </header>
-        <div className="px-4 md:px-12 py-4 md:py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4 overflow-hidden">
-          <div className="flex-1 w-full flex flex-col gap-4">
-            <div className="flex items-center overflow-x-auto no-scrollbar gap-4 md:gap-8 pb-1 md:pb-0">
-              {(steps || []).map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setStep(s.id)}
-                  className={`flex items-center gap-2 pb-3 border-b-2 transition-all whitespace-nowrap px-1 ${
-                    step === s.id ? 'border-indigo-600 text-indigo-600 font-bold' : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  <div className={`p-1.5 rounded-lg ${step === s.id ? 'bg-indigo-50' : 'bg-transparent'}`}>
-                    <s.icon className={`h-4 w-4 ${step === s.id ? 'text-indigo-600' : 'text-slate-400'}`} />
-                  </div>
-                  <span className="text-xs md:text-sm">{s.name}</span>
-                </button>
-              ))}
+        <div className="shrink-0 border-b border-[var(--border-soft)] bg-white/60 px-3 py-2.5 backdrop-blur sm:px-5 sm:py-3 lg:px-8">
+          <div className="flex items-stretch gap-4 sm:gap-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-0.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {steps.map((s) => {
+                  const isActive = step === s.id;
+                  const isDone = s.id < step;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setStep(s.id)}
+                      aria-current={isActive ? 'step' : undefined}
+                      className={`group flex items-center gap-1.5 whitespace-nowrap rounded-full px-1.5 py-1.5 transition-all sm:gap-2 sm:px-2.5 ${
+                        isActive ? 'bg-indigo-50' : 'hover:bg-[var(--bg-muted)]'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition-all sm:h-7 sm:w-7 sm:text-xs ${
+                          isDone
+                            ? 'bg-indigo-600 text-white'
+                            : isActive
+                              ? 'bg-indigo-600 text-white shadow-[0_0_0_3px_rgba(79,70,229,0.15)]'
+                              : 'bg-[var(--bg-muted)] text-[var(--text-subtle)]'
+                        }`}
+                      >
+                        {isDone ? <Check className="h-3.5 w-3.5" /> : <s.icon className="h-3.5 w-3.5" />}
+                      </span>
+                      <span
+                        className={`text-[11px] font-semibold sm:text-xs ${
+                          isActive ? 'text-indigo-700' : isDone ? 'text-[var(--text-primary)]' : 'text-[var(--text-subtle)]'
+                        }`}
+                      >
+                        {s.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex items-center gap-3">
+                <Progress value={(step / steps.length) * 100} className="h-1.5 flex-1" />
+                <span className="shrink-0 text-[10px] font-bold tabular-nums text-[var(--text-subtle)]">
+                  {step} of {steps.length}
+                </span>
+              </div>
             </div>
-            <Progress value={(step / steps.length) * 100} className="h-1 bg-slate-200" />
-          </div>
 
-          {originalScore !== null && (
-            <div className="hidden sm:flex ml-4 md:ml-12 pl-4 md:pl-12 border-l border-slate-200 items-center gap-3 md:gap-6">
-              <div className="text-center">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Initial Score</p>
-                <p className="text-xl font-black text-slate-400">{originalScore}</p>
+            {originalScore !== null && (
+              <div className="hidden shrink-0 items-center gap-3 border-l border-[var(--border-soft)] pl-4 md:flex sm:pl-6">
+                <div className="text-right">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-subtle)]">Initial</p>
+                  <p className="text-sm font-bold tabular-nums text-[var(--text-subtle)]">{originalScore}</p>
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-50 to-indigo-100 text-indigo-600">
+                  <ChevronRight className="h-4 w-4" />
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-accent-700">Optimized</p>
+                  <p className="flex items-center gap-1.5 text-base font-bold tabular-nums text-indigo-700">
+                    {currentScore || 85}
+                    {currentScore > originalScore && (
+                      <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-bold text-accent-700">
+                        +{currentScore - originalScore}
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
-              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-                <ChevronRight className="h-5 w-5" />
-              </div>
-              <div className="text-center">
-                <p className="text-[10px] font-black text-green-600 uppercase tracking-tighter">Optimized</p>
-                <p className="text-2xl font-black text-indigo-600">{currentScore || 85}</p>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        <ScrollArea className="flex-1 p-4 md:p-8 lg:p-12">
-          <div className="max-w-2xl mx-auto">
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+            {(() => {
+              const s = steps.find((x) => x.id === step);
+              if (!s) return null;
+              return (
+                <div className="mb-6 sm:mb-8">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white shadow-sm sm:h-11 sm:w-11">
+                      <s.icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-semibold leading-tight tracking-tight text-[var(--text-primary)] sm:text-xl">
+                        {s.name}
+                      </h2>
+                      <p className="mt-0.5 text-xs text-[var(--text-muted)] sm:text-sm">{s.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <AnimatePresence mode="wait">
               {step === 1 && (
                 <motion.div
@@ -1083,37 +2056,50 @@ export default function AIResumeBuilder() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
+                  className="space-y-5 sm:space-y-6"
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">Full Name</label>
-                      <Input value={data.fullName} onChange={(e) => setData({ ...data, fullName: e.target.value })} placeholder="Jane Doe" className="h-12 rounded-xl" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Full Name</label>
+                      <Input
+                        value={data.fullName}
+                        onChange={(e) => setData({ ...data, fullName: e.target.value })}
+                        placeholder="Jane Doe"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">Email Address</label>
-                      <Input value={data.email} onChange={(e) => setData({ ...data, email: e.target.value })} placeholder="jane@example.com" className="h-12 rounded-xl" />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Email Address</label>
+                      <Input
+                        type="email"
+                        value={data.email}
+                        onChange={(e) => setData({ ...data, email: e.target.value })}
+                        placeholder="jane@example.com"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">Phone Number</label>
-                      <Input value={data.phone} onChange={(e) => setData({ ...data, phone: e.target.value })} placeholder="+1 234 567 890" className="h-12 rounded-xl" />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Phone Number</label>
+                      <Input
+                        type="tel"
+                        value={data.phone}
+                        onChange={(e) => setData({ ...data, phone: e.target.value })}
+                        placeholder="+1 234 567 890"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold text-slate-700">Professional Summary</label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={handleGenerateSummary} 
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">Professional Summary</label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateSummary}
                         disabled={isOptimizing}
-                        className="text-indigo-600 hover:text-indigo-700 h-8 gap-1 p-1 disabled:opacity-50"
+                        className="h-8 gap-1.5 rounded-lg border-indigo-200 bg-indigo-50 px-3 font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
                       >
-                        {isOptimizing ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Wand2 className="h-3 w-3" />
-                        )}
+                        {isOptimizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
                         {isOptimizing ? 'Generating...' : 'AI Generate'}
                       </Button>
                     </div>
@@ -1121,21 +2107,21 @@ export default function AIResumeBuilder() {
                       value={data.summary}
                       onChange={(e) => setData({ ...data, summary: e.target.value })}
                       placeholder="High-impact 3-sentence summary..."
-                      className="min-h-[120px] rounded-xl resize-none"
+                      className="min-h-[120px] rounded-lg border-[var(--border-soft)] resize-none focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30"
                     />
                   </div>
                 </motion.div>
               )}
 
               {step === 2 && (
-                <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                  <div className="space-y-4">
-                    <label className="text-sm font-semibold text-slate-700">Skills & Expertise</label>
+                <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium text-[var(--text-primary)]">Skills & Expertise</label>
                     <div className="flex gap-2">
                       <Input
                         id="skill-input"
                         placeholder="e.g. React, Python, Product Management"
-                        className="h-12 rounded-xl"
+                        className="h-11 rounded-lg border-[var(--border-soft)] focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             const val = (e.target as HTMLInputElement).value;
@@ -1146,21 +2132,34 @@ export default function AIResumeBuilder() {
                           }
                         }}
                       />
-                      <Button onClick={() => {
-                        const el = document.getElementById('skill-input') as HTMLInputElement;
-                        if (el.value) {
-                          setData({ ...data, skills: [...data.skills, el.value] });
-                          el.value = '';
-                        }
-                      }} className="h-12 px-6 rounded-xl bg-slate-900">Add</Button>
+                      <Button
+                        onClick={() => {
+                          const el = document.getElementById('skill-input') as HTMLInputElement;
+                          if (el.value) {
+                            setData({ ...data, skills: [...data.skills, el.value] });
+                            el.value = '';
+                          }
+                        }}
+                        className="h-11 rounded-lg bg-indigo-600 px-6 font-semibold hover:bg-indigo-800 sm:h-12"
+                      >
+                        Add
+                      </Button>
                     </div>
-                    <div className="flex flex-wrap gap-2 pt-2">
+                    <p className="text-xs text-[var(--text-subtle)]">Press Enter to add a skill as a tag.</p>
+                    <div className="flex flex-wrap gap-2 pt-1">
                       {(data.skills || []).map((s, i) => (
-                        <div key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold flex items-center gap-2 border border-indigo-100">
+                        <div key={i} className="group flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition-colors hover:border-indigo-200">
                           {s}
-                          <button onClick={() => {
-                            const newSkills = [...data.skills]; newSkills.splice(i, 1); setData({ ...data, skills: newSkills });
-                          }}><Trash2 className="h-3 w-3" /></button>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${s}`}
+                            onClick={() => {
+                              const newSkills = [...data.skills]; newSkills.splice(i, 1); setData({ ...data, skills: newSkills });
+                            }}
+                            className="text-indigo-300 transition-colors hover:text-danger-500"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1169,26 +2168,50 @@ export default function AIResumeBuilder() {
               )}
 
               {step === 3 && (
-                <motion.div key="step3" className="space-y-8">
+                <motion.div key="step3" className="space-y-5 sm:space-y-6">
                   {(data.experience || []).map((exp, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <CardContent className="p-6 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Job Title" value={exp.title} onChange={(e) => {
-                            const newExp = [...data.experience]; newExp[idx].title = e.target.value; setData({ ...data, experience: newExp });
-                          }} className="h-10 border-none bg-slate-50 font-bold" />
-                          <Input placeholder="Company" value={exp.company} onChange={(e) => {
-                            const newExp = [...data.experience]; newExp[idx].company = e.target.value; setData({ ...data, experience: newExp });
-                          }} className="h-10 border-none bg-slate-50" />
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)]">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove work experience"
+                        onClick={() => {
+                          const newExp = [...data.experience];
+                          newExp.splice(idx, 1);
+                          setData({ ...data, experience: newExp });
+                        }}
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Job Title"
+                            value={exp.title}
+                            onChange={(e) => {
+                              const newExp = [...data.experience]; newExp[idx].title = e.target.value; setData({ ...data, experience: newExp });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 font-semibold focus-visible:border-indigo-300 sm:h-11"
+                          />
+                          <Input
+                            placeholder="Company"
+                            value={exp.company}
+                            onChange={(e) => {
+                              const newExp = [...data.experience]; newExp[idx].company = e.target.value; setData({ ...data, experience: newExp });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-indigo-300 sm:h-11"
+                          />
                         </div>
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-slate-400 uppercase">Key Achievements</label>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
+                          <label className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-subtle)]">Key Achievements</label>
                           <Button
                             onClick={() => handleOptimizeExperience(idx)}
-                            variant="outline" size="sm"
-                            className="h-8 rounded-lg border-indigo-100 text-indigo-600 hover:bg-indigo-50 font-bold"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-lg border-indigo-200 bg-indigo-50 font-semibold text-indigo-700 hover:bg-indigo-100"
                           >
-                            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                             Optimize Bullet Points
                           </Button>
                         </div>
@@ -1199,45 +2222,61 @@ export default function AIResumeBuilder() {
                               onChange={(e) => {
                                 const newExp = [...data.experience]; newExp[idx].description[bIdx] = e.target.value; setData({ ...data, experience: newExp });
                               }}
-                              className="min-h-[60px] text-sm border-none focus-visible:ring-0 p-0 shadow-none"
+                              className="min-h-[60px] rounded-lg border-[var(--border-soft)] text-sm focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30"
                             />
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Enhance with AI"
                               onClick={() => handleEnhanceBullet(idx, bIdx)}
-                              className="h-8 w-8 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              className="h-8 w-8 shrink-0 rounded-lg text-indigo-500 hover:bg-indigo-50 hover:text-indigo-600"
                             >
                               <Wand2 className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => {
-                              const newExp = [...data.experience]; newExp[idx].description.splice(bIdx, 1); setData({ ...data, experience: newExp });
-                            }} className="h-8 w-8 text-slate-300 hover:text-red-500">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Remove bullet"
+                              onClick={() => {
+                                const newExp = [...data.experience]; newExp[idx].description.splice(bIdx, 1); setData({ ...data, experience: newExp });
+                              }}
+                              className="h-8 w-8 shrink-0 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500"
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         ))}
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          const newExp = [...data.experience]; newExp[idx].description.push(''); setData({ ...data, experience: newExp });
-                        }} className="w-full border-dashed border-slate-200 hover:bg-slate-50 text-slate-400 h-8 rounded-lg">
-                          <Plus className="h-3 w-3 mr-1" /> Add Bullet
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newExp = [...data.experience]; newExp[idx].description.push(''); setData({ ...data, experience: newExp });
+                          }}
+                          className="h-8 w-full rounded-lg border border-dashed border-[var(--border-soft)] text-[var(--text-muted)] hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600"
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" /> Add Bullet
                         </Button>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, experience: [...data.experience, { title: '', company: '', duration: '', description: [''] }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add New Work Experience
+                  <Button
+                    onClick={() => setData({ ...data, experience: [...data.experience, { title: '', company: '', duration: '', description: [''] }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add New Work Experience
                   </Button>
                 </motion.div>
               )}
 
               {step === 4 && (
-                <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+                <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.education || []).map((edu, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute top-4 right-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-10"
+                        aria-label="Remove education"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] transition-all hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:group-hover:opacity-100"
                         onClick={() => {
                           const newEdu = [...data.education];
                           newEdu.splice(idx, 1);
@@ -1246,219 +2285,455 @@ export default function AIResumeBuilder() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <Input placeholder="Degree (e.g. BS Computer Science)" value={edu.degree} onChange={(e) => {
-                          const newEdu = [...data.education]; newEdu[idx].degree = e.target.value; setData({ ...data, education: newEdu });
-                        }} className="h-12 rounded-xl" />
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Institution" value={edu.institution} onChange={(e) => {
-                            const newEdu = [...data.education]; newEdu[idx].institution = e.target.value; setData({ ...data, education: newEdu });
-                          }} className="h-10 border-none bg-slate-50" />
-                          <Input placeholder="Year" value={edu.year} onChange={(e) => {
-                            const newEdu = [...data.education]; newEdu[idx].year = e.target.value; setData({ ...data, education: newEdu });
-                          }} className="h-10 border-none bg-slate-50" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Input
+                          placeholder="Degree (e.g. BS Computer Science)"
+                          value={edu.degree}
+                          onChange={(e) => {
+                            const newEdu = [...data.education]; newEdu[idx].degree = e.target.value; setData({ ...data, education: newEdu });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
+                        />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Institution"
+                            value={edu.institution}
+                            onChange={(e) => {
+                              const newEdu = [...data.education]; newEdu[idx].institution = e.target.value; setData({ ...data, education: newEdu });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-indigo-300"
+                          />
+                          <Input
+                            placeholder="Year"
+                            value={edu.year}
+                            onChange={(e) => {
+                              const newEdu = [...data.education]; newEdu[idx].year = e.target.value; setData({ ...data, education: newEdu });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-indigo-300"
+                          />
                         </div>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, education: [...data.education, { degree: '', institution: '', year: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Education
+                  <Button
+                    onClick={() => setData({ ...data, education: [...data.education, { degree: '', institution: '', year: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Education
                   </Button>
                 </motion.div>
               )}
 
               {step === 5 && (
-                <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                <motion.div key="step5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.projects || []).map((proj, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newProj = [...data.projects]; newProj.splice(idx, 1); setData({ ...data, projects: newProj });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove project"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newProj = [...data.projects]; newProj.splice(idx, 1); setData({ ...data, projects: newProj });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <Input placeholder="Project Title" value={proj.title} onChange={(e) => {
-                          const newProj = [...data.projects]; newProj[idx].title = e.target.value; setData({ ...data, projects: newProj });
-                        }} className="h-12 rounded-xl font-bold" />
-                        <Input placeholder="Link (Optional)" value={proj.link} onChange={(e) => {
-                          const newProj = [...data.projects]; newProj[idx].link = e.target.value; setData({ ...data, projects: newProj });
-                        }} className="h-10 border-none bg-slate-50" />
-                        <Textarea placeholder="Brief description of your impact..." value={proj.description} onChange={(e) => {
-                          const newProj = [...data.projects]; newProj[idx].description = e.target.value; setData({ ...data, projects: newProj });
-                        }} className="min-h-[100px] rounded-xl resize-none" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Input
+                          placeholder="Project Title"
+                          value={proj.title}
+                          onChange={(e) => {
+                            const newProj = [...data.projects]; newProj[idx].title = e.target.value; setData({ ...data, projects: newProj });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
+                        />
+                        <Input
+                          placeholder="Link (Optional)"
+                          value={proj.link}
+                          onChange={(e) => {
+                            const newProj = [...data.projects]; newProj[idx].link = e.target.value; setData({ ...data, projects: newProj });
+                          }}
+                          className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 text-indigo-700 focus-visible:border-indigo-300"
+                        />
+                        <Textarea
+                          placeholder="Brief description of your impact..."
+                          value={proj.description}
+                          onChange={(e) => {
+                            const newProj = [...data.projects]; newProj[idx].description = e.target.value; setData({ ...data, projects: newProj });
+                          }}
+                          className="min-h-[100px] rounded-lg border-[var(--border-soft)] resize-none focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30"
+                        />
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, projects: [...data.projects, { title: '', description: '', link: '', tech_stack: [] }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Project
+                  <Button
+                    onClick={() => setData({ ...data, projects: [...data.projects, { title: '', description: '', link: '', tech_stack: [] }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Project
                   </Button>
                 </motion.div>
               )}
 
               {step === 6 && (
-                <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                <motion.div key="step6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.certifications || []).map((cert, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newCerts = [...data.certifications]; newCerts.splice(idx, 1); setData({ ...data, certifications: newCerts });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove certification"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newCerts = [...data.certifications]; newCerts.splice(idx, 1); setData({ ...data, certifications: newCerts });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <Input placeholder="Certification Name" value={cert.name} onChange={(e) => {
-                          const newCerts = [...data.certifications]; newCerts[idx].name = e.target.value; setData({ ...data, certifications: newCerts });
-                        }} className="h-12 rounded-xl font-bold" />
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Issuer" value={cert.issuer} onChange={(e) => {
-                            const newCerts = [...data.certifications]; newCerts[idx].issuer = e.target.value; setData({ ...data, certifications: newCerts });
-                          }} className="h-10 border-none bg-slate-50" />
-                          <Input placeholder="Year" value={cert.year} onChange={(e) => {
-                            const newCerts = [...data.certifications]; newCerts[idx].year = e.target.value; setData({ ...data, certifications: newCerts });
-                          }} className="h-10 border-none bg-slate-50" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Input
+                          placeholder="Certification Name"
+                          value={cert.name}
+                          onChange={(e) => {
+                            const newCerts = [...data.certifications]; newCerts[idx].name = e.target.value; setData({ ...data, certifications: newCerts });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
+                        />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Issuer"
+                            value={cert.issuer}
+                            onChange={(e) => {
+                              const newCerts = [...data.certifications]; newCerts[idx].issuer = e.target.value; setData({ ...data, certifications: newCerts });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-indigo-300"
+                          />
+                          <Input
+                            placeholder="Year"
+                            value={cert.year}
+                            onChange={(e) => {
+                              const newCerts = [...data.certifications]; newCerts[idx].year = e.target.value; setData({ ...data, certifications: newCerts });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-indigo-300"
+                          />
                         </div>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, certifications: [...data.certifications, { name: '', issuer: '', year: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Certification
+                  <Button
+                    onClick={() => setData({ ...data, certifications: [...data.certifications, { name: '', issuer: '', year: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Certification
                   </Button>
                 </motion.div>
               )}
 
               {step === 7 && (
-                <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <motion.div key="step7" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                     {(data.languages || []).map((lang, idx) => (
-                      <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                        <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-slate-300 hover:text-red-500" onClick={() => {
-                          const newLangs = [...data.languages]; newLangs.splice(idx, 1); setData({ ...data, languages: newLangs });
-                        }}>
-                          <Trash2 className="h-4 w-4" />
+                      <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remove language"
+                          className="absolute right-2 top-2 z-10 h-7 w-7 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                          onClick={() => {
+                            const newLangs = [...data.languages]; newLangs.splice(idx, 1); setData({ ...data, languages: newLangs });
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        <CardContent className="p-4 space-y-2">
-                          <Input placeholder="Language" value={lang.language} onChange={(e) => {
-                            const newLangs = [...data.languages]; newLangs[idx].language = e.target.value; setData({ ...data, languages: newLangs });
-                          }} className="h-10 rounded-lg font-bold" />
-                          <Input placeholder="Proficiency (e.g. Native)" value={lang.proficiency} onChange={(e) => {
-                            const newLangs = [...data.languages]; newLangs[idx].proficiency = e.target.value; setData({ ...data, languages: newLangs });
-                          }} className="h-8 border-none bg-slate-50 text-xs" />
+                        <CardContent className="space-y-2 p-3.5 sm:p-4">
+                          <Input
+                            placeholder="Language"
+                            value={lang.language}
+                            onChange={(e) => {
+                              const newLangs = [...data.languages]; newLangs[idx].language = e.target.value; setData({ ...data, languages: newLangs });
+                            }}
+                            className="h-10 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30"
+                          />
+                          <Input
+                            placeholder="Proficiency (e.g. Native)"
+                            value={lang.proficiency}
+                            onChange={(e) => {
+                              const newLangs = [...data.languages]; newLangs[idx].proficiency = e.target.value; setData({ ...data, languages: newLangs });
+                            }}
+                            className="h-9 rounded-lg border-transparent bg-[var(--bg-muted)]/70 text-xs focus-visible:border-indigo-300"
+                          />
                         </CardContent>
                       </Card>
                     ))}
                   </div>
-                  <Button onClick={() => setData({ ...data, languages: [...data.languages, { language: '', proficiency: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Language
+                  <Button
+                    onClick={() => setData({ ...data, languages: [...data.languages, { language: '', proficiency: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Language
                   </Button>
                 </motion.div>
               )}
 
               {step === 8 && (
-                <motion.div key="step8" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                <motion.div key="step8" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.achievements || []).map((ach, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newAch = [...data.achievements]; newAch.splice(idx, 1); setData({ ...data, achievements: newAch });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove achievement"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newAch = [...data.achievements]; newAch.splice(idx, 1); setData({ ...data, achievements: newAch });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-2">
-                        <Input placeholder="Title (e.g. Hackathon Winner)" value={ach.title} onChange={(e) => {
-                          const newAch = [...data.achievements]; newAch[idx].title = e.target.value; setData({ ...data, achievements: newAch });
-                        }} className="h-12 rounded-xl font-bold" />
-                        <Textarea placeholder="Describe the accomplishment..." value={ach.description} onChange={(e) => {
-                          const newAch = [...data.achievements]; newAch[idx].description = e.target.value; setData({ ...data, achievements: newAch });
-                        }} className="min-h-[80px] rounded-xl resize-none" />
+                      <CardContent className="space-y-3 p-4 sm:p-5">
+                        <Input
+                          placeholder="Title (e.g. Hackathon Winner)"
+                          value={ach.title}
+                          onChange={(e) => {
+                            const newAch = [...data.achievements]; newAch[idx].title = e.target.value; setData({ ...data, achievements: newAch });
+                          }}
+                          className="h-11 rounded-lg border-[var(--border-soft)] font-semibold focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30 sm:h-12"
+                        />
+                        <Textarea
+                          placeholder="Describe the accomplishment..."
+                          value={ach.description}
+                          onChange={(e) => {
+                            const newAch = [...data.achievements]; newAch[idx].description = e.target.value; setData({ ...data, achievements: newAch });
+                          }}
+                          className="min-h-[80px] rounded-lg border-[var(--border-soft)] resize-none focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30"
+                        />
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, achievements: [...data.achievements, { title: '', description: '' }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Achievement
+                  <Button
+                    onClick={() => setData({ ...data, achievements: [...data.achievements, { title: '', description: '' }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Achievement
                   </Button>
                 </motion.div>
               )}
 
               {step === 9 && (
-                <motion.div key="step9" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+                <motion.div key="step9" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
                   {(data.internships || []).map((intern, idx) => (
-                    <Card key={idx} className="border-slate-100 shadow-sm relative group">
-                      <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-slate-300 hover:text-red-500" onClick={() => {
-                        const newIntern = [...data.internships]; newIntern.splice(idx, 1); setData({ ...data, internships: newIntern });
-                      }}>
+                    <Card key={idx} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove internship"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newIntern = [...data.internships]; newIntern.splice(idx, 1); setData({ ...data, internships: newIntern });
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <CardContent className="p-6 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input placeholder="Role" value={intern.role} onChange={(e) => {
-                            const newInt = [...data.internships]; newInt[idx].role = e.target.value; setData({ ...data, internships: newInt });
-                          }} className="h-10 border-none bg-slate-50 font-bold" />
-                          <Input placeholder="Company" value={intern.company} onChange={(e) => {
-                            const newInt = [...data.internships]; newInt[idx].company = e.target.value; setData({ ...data, internships: newInt });
-                          }} className="h-10 border-none bg-slate-50" />
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            placeholder="Role"
+                            value={intern.role}
+                            onChange={(e) => {
+                              const newInt = [...data.internships]; newInt[idx].role = e.target.value; setData({ ...data, internships: newInt });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 font-semibold focus-visible:border-indigo-300 sm:h-11"
+                          />
+                          <Input
+                            placeholder="Company"
+                            value={intern.company}
+                            onChange={(e) => {
+                              const newInt = [...data.internships]; newInt[idx].company = e.target.value; setData({ ...data, internships: newInt });
+                            }}
+                            className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 focus-visible:border-indigo-300 sm:h-11"
+                          />
                         </div>
                         {(intern.description || []).map((bullet, bIdx) => (
                           <div key={bIdx} className="flex gap-2">
-                            <Textarea value={bullet} onChange={(e) => {
-                              const newInt = [...data.internships]; newInt[idx].description[bIdx] = e.target.value; setData({ ...data, internships: newInt });
-                            }} className="min-h-[60px] text-sm border-none focus-visible:ring-0 p-0 shadow-none" />
-                            <Button variant="ghost" size="icon" onClick={() => {
-                              const newInt = [...data.internships]; newInt[idx].description.splice(bIdx, 1); setData({ ...data, internships: newInt });
-                            }}><Trash2 className="h-4 w-4" /></Button>
+                            <Textarea
+                              value={bullet}
+                              onChange={(e) => {
+                                const newInt = [...data.internships]; newInt[idx].description[bIdx] = e.target.value; setData({ ...data, internships: newInt });
+                              }}
+                              className="min-h-[60px] rounded-lg border-[var(--border-soft)] text-sm focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Remove bullet"
+                              onClick={() => {
+                                const newInt = [...data.internships]; newInt[idx].description.splice(bIdx, 1); setData({ ...data, internships: newInt });
+                              }}
+                              className="h-8 w-8 shrink-0 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         ))}
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          const newInt = [...data.internships]; newInt[idx].description.push(''); setData({ ...data, internships: newInt });
-                        }} className="w-full border-dashed border-slate-200 text-slate-400">Add Bullet</Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newInt = [...data.internships]; newInt[idx].description.push(''); setData({ ...data, internships: newInt });
+                          }}
+                          className="h-8 w-full rounded-lg border border-dashed border-[var(--border-soft)] text-[var(--text-muted)] hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600"
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" /> Add Bullet
+                        </Button>
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={() => setData({ ...data, internships: [...data.internships, { role: '', company: '', duration: '', description: [''] }] })} className="w-full h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">
-                    <Plus className="h-5 w-5 mr-2" /> Add Internship
+                  <Button
+                    onClick={() => setData({ ...data, internships: [...data.internships, { role: '', company: '', duration: '', description: [''] }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Internship
+                  </Button>
+                </motion.div>
+              )}
+
+              {step === 10 && (
+                <motion.div key="step10" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5 sm:space-y-6">
+                  {(data.customSections || []).map((cs, ci) => (
+                    <Card key={ci} className="relative border-[var(--border-soft)] bg-[var(--bg-base)] shadow-[var(--shadow-card)] group">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove custom section"
+                        className="absolute right-3 top-3 z-10 h-8 w-8 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100"
+                        onClick={() => {
+                          const newCustom = [...data.customSections]; newCustom.splice(ci, 1); setData({ ...data, customSections: newCustom });
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <CardContent className="space-y-4 p-4 sm:p-5">
+                        <Input
+                          placeholder="Section title (e.g. Volunteer Work, Publications)"
+                          value={cs.title}
+                          onChange={(e) => {
+                            const newCustom = [...data.customSections]; newCustom[ci].title = e.target.value; setData({ ...data, customSections: newCustom });
+                          }}
+                          className="h-10 rounded-lg border-transparent bg-[var(--bg-muted)]/70 font-semibold focus-visible:border-indigo-300 sm:h-11"
+                        />
+                        {(cs.items || []).map((item, iIdx) => (
+                          <div key={iIdx} className="flex gap-2">
+                            <Textarea
+                              value={item}
+                              placeholder="Bullet point..."
+                              onChange={(e) => {
+                                const newCustom = [...data.customSections]; newCustom[ci].items[iIdx] = e.target.value; setData({ ...data, customSections: newCustom });
+                              }}
+                              className="min-h-[60px] rounded-lg border-[var(--border-soft)] text-sm focus-visible:border-indigo-300 focus-visible:ring-indigo-500/30"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Remove bullet"
+                              onClick={() => {
+                                const newCustom = [...data.customSections]; newCustom[ci].items.splice(iIdx, 1); setData({ ...data, customSections: newCustom });
+                              }}
+                              className="h-8 w-8 shrink-0 rounded-lg text-[var(--text-subtle)] hover:bg-danger-50 hover:text-danger-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newCustom = [...data.customSections]; newCustom[ci].items = newCustom[ci].items || []; newCustom[ci].items.push(''); setData({ ...data, customSections: newCustom });
+                          }}
+                          className="h-8 w-full rounded-lg border border-dashed border-[var(--border-soft)] text-[var(--text-muted)] hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600"
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" /> Add Bullet
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  <Button
+                    onClick={() => setData({ ...data, customSections: [...(data.customSections || []), { title: '', items: [''] }] })}
+                    className="h-11 w-full rounded-lg border border-dashed border-[var(--border-soft)] bg-transparent font-semibold text-[var(--text-muted)] shadow-none hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600 sm:h-12"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Custom Section
                   </Button>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <div className="mt-12 flex items-center justify-between gap-4">
+            <div className="mt-8 flex items-center justify-between gap-3 sm:mt-10">
               <Button
                 variant="outline"
                 disabled={step === 1}
                 onClick={() => setStep(step - 1)}
-                className="flex-1 h-12 rounded-xl border-slate-200 font-bold"
+                className="h-11 flex-1 rounded-lg border-[var(--border-soft)] font-medium text-[var(--text-muted)] hover:border-indigo-300 hover:text-indigo-600 sm:h-12"
               >
-                Previous Section
+                <ChevronLeft className="mr-1.5 h-4 w-4" />
+                Previous
               </Button>
-              <Button
-                disabled={step === steps.length}
-                onClick={() => setStep(step + 1)}
-                className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 font-bold text-white shadow-lg"
-              >
-                Next Section
-                <ChevronRight className="ml-2 h-5 w-5" />
-              </Button>
+              {step < steps.length && (
+                <Button
+                  onClick={() => setStep(step + 1)}
+                  className="h-11 flex-1 rounded-lg bg-indigo-600 font-semibold text-white shadow-sm hover:bg-indigo-800 sm:h-12"
+                >
+                  Next Section
+                  <ChevronRight className="ml-1.5 h-4 w-4" />
+                </Button>
+              )}
             </div>
+
+            <p className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-[var(--text-subtle)]">
+              <Lock className="h-3 w-3" /> Your draft is auto-saved and encrypted locally.
+            </p>
           </div>
         </ScrollArea>
       </div>
 
       {/* --- Right Panel: Live Preview (Desktop) --- */}
-      <div className="hidden lg:flex flex-1 bg-slate-200/50 p-8 lg:p-12 justify-center overflow-y-auto overflow-x-hidden relative">
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
-          <Badge variant="outline" className="bg-white/80 backdrop-blur-md px-3 py-1 font-bold text-indigo-600 border-indigo-100 shadow-sm">
-            <Sparkles className="h-3 w-3 mr-1.5" />
-            ATS Optimized
-          </Badge>
-          <div className="bg-white h-8 w-24 rounded-lg shadow-sm border border-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400 gap-2">
-            A4 PAPER
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+      <div className="hidden min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-surface)] md:flex">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-soft)] bg-white/70 px-4 py-2.5 backdrop-blur sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Eye className="h-4 w-4 shrink-0 text-indigo-600" />
+            <span className="truncate text-sm font-semibold text-[var(--text-primary)]">Live Preview</span>
+            <Badge variant="info" className="hidden shrink-0 md:inline-flex">
+              <Sparkles className="h-3 w-3" /> ATS Optimized
+            </Badge>
+            <span className="hidden shrink-0 items-center gap-1.5 text-[10px] font-bold tracking-widest text-[var(--text-subtle)] xl:inline-flex">
+              A4 PAPER <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={handleCopyForWord} title="Copy for Word" className="h-8 rounded-lg px-2.5 text-[var(--text-muted)] hover:text-indigo-600">
+              <Copy className="h-3.5 w-3.5" /> <span className="hidden 2xl:inline">Copy</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleDownloadDocx} title="Export Word (.doc)" className="h-8 rounded-lg px-2.5 text-[var(--text-muted)] hover:text-indigo-600">
+              <FileDown className="h-3.5 w-3.5" /> <span className="hidden 2xl:inline">Word</span>
+            </Button>
+            <Button size="sm" onClick={handleDownloadPDF} className="h-8 rounded-lg bg-indigo-600 px-3 font-semibold text-white shadow-sm hover:bg-indigo-800">
+              <Download className="h-3.5 w-3.5" /> <span className="hidden 2xl:inline">PDF</span>
+            </Button>
           </div>
         </div>
 
-        <Reorder.Group
+        <div className="relative flex min-h-0 flex-1 justify-center overflow-auto p-6 lg:p-8 xl:p-10">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundImage: 'radial-gradient(circle, rgba(15,23,42,0.07) 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+          />
+          <Reorder.Group
           as="div"
           axis="y"
-          values={data.sectionOrder}
+          values={effectiveSectionOrder}
           onReorder={(newOrder) => setData({ ...data, sectionOrder: newOrder })}
-          className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] lg:scale-[0.8] xl:scale-[0.9] flex flex-col font-sans"
+          className="bg-white shadow-[0_40px_100px_rgba(0,0,0,0.1)] w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.6] sm:scale-[0.7] md:scale-[0.5] lg:scale-[0.7] xl:scale-[0.8] 2xl:scale-[0.9] flex flex-col font-sans"
           ref={previewRef as any}
           data-resume-preview
         >
@@ -1476,7 +2751,7 @@ export default function AIResumeBuilder() {
           </div>
 
           <div className="px-8 md:px-16 pb-8 md:pb-16 space-y-6 md:space-y-10 flex-1">
-            {(data.sectionOrder || []).map((sectionId) => (
+            {effectiveSectionOrder.map((sectionId) => (
               <Reorder.Item as="div" key={sectionId} value={sectionId} className="cursor-grab active:cursor-grabbing">
                 {renderResumeSection(sectionId)}
               </Reorder.Item>
@@ -1485,63 +2760,71 @@ export default function AIResumeBuilder() {
 
           {/* Footer Branding (Subtle) */}
           <div className="p-8 md:p-12 border-t border-slate-50 text-center shrink-0">
-            <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
+            <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by CareerAmp • Nemotron Intelligence</p>
           </div>
-        </Reorder.Group>
+          </Reorder.Group>
+        </div>
       </div>
 
       {/* --- Mobile: Live Preview Floating Toggle & Sheet --- */}
-      <div className="lg:hidden fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-5 right-5 z-50 md:hidden">
         <Sheet open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
           <SheetTrigger asChild>
-            <Button variant="default" size="icon" className="h-14 w-14 rounded-full bg-indigo-600 shadow-2xl shadow-indigo-200">
+            <Button
+              variant="default"
+              size="icon"
+              aria-label="Open live preview"
+              className="h-14 w-14 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-500 text-white shadow-[0_12px_30px_rgba(79,70,229,0.4)] active:scale-95"
+            >
               <Eye className="h-6 w-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[90vh] p-0 border-none rounded-t-[32px] overflow-y-auto">
-            <SheetHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white shrink-0">
-              <div>
-                <SheetTitle className="text-xl font-black">Live Preview</SheetTitle>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ATS Optimized Analysis</p>
+          <SheetContent side="bottom" className="h-[90vh] overflow-y-auto rounded-t-[28px] border-none p-0">
+            <SheetHeader className="flex shrink-0 flex-row items-center justify-between gap-3 border-b border-[var(--border-soft)] bg-white px-4 py-3.5 sm:px-5">
+              <div className="flex min-w-0 items-center gap-2">
+                <Eye className="h-4 w-4 shrink-0 text-indigo-600" />
+                <SheetTitle className="truncate text-base font-semibold text-[var(--text-primary)]">Live Preview</SheetTitle>
+                <Badge variant="info" className="hidden shrink-0 sm:inline-flex">
+                  <Sparkles className="h-3 w-3" /> ATS
+                </Badge>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={handleCopyForWord} variant="ghost" size="sm" className="rounded-xl text-slate-400">
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button onClick={handleCopyForWord} variant="ghost" size="icon" aria-label="Copy for Word" className="h-9 w-9 rounded-lg text-[var(--text-muted)]">
                   <Copy className="h-4 w-4" />
                 </Button>
-                <Button onClick={handleDownloadDocx} variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-600 font-bold">
-                  <FileDown className="h-4 w-4 mr-2" /> Word
+                <Button onClick={handleDownloadDocx} variant="outline" size="sm" className="h-9 rounded-lg border-[var(--border-soft)] text-[var(--text-muted)]">
+                  <FileDown className="mr-1.5 h-4 w-4" /> Word
                 </Button>
-                <Button onClick={handleDownloadPDF} variant="outline" size="sm" className="rounded-xl border-indigo-100 text-indigo-600 font-bold">
-                  <Download className="h-4 w-4 mr-2" /> PDF
+                <Button onClick={handleDownloadPDF} size="sm" className="h-9 rounded-lg bg-indigo-600 font-semibold text-white hover:bg-indigo-800">
+                  <Download className="mr-1.5 h-4 w-4" /> PDF
                 </Button>
               </div>
             </SheetHeader>
-            <div className="flex-1 bg-slate-100/50 p-4 flex justify-center pb-32">
+            <div className="flex justify-center bg-[var(--bg-surface)] p-4 pb-32">
               {/* Scaled Preview for Mobile Sheet */}
-              <div className="bg-white shadow-2xl w-[210mm] min-h-[297mm] h-fit origin-top scale-[0.4] sm:scale-[0.6] flex flex-col font-sans" ref={previewRef}>
-                {/* We reuse the same content as desktop preview here or refactor it. 
-                       For now, since it uses a ref, it will visually match if we put the same content. 
-                       Actually, the ref should be on the visible one or shared. 
-                       Alternative: use a shared component ResumePreview. 
-                   */}
-                {/* Restoring the content inside the sheet for mobile view */}
-                <div className="h-2 bg-indigo-600 w-full" />
-                <div className="p-16 pb-12 space-y-4">
-                  <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">{data.fullName || "Your Name"}</h2>
-                  <div className="flex items-center gap-4 text-slate-500 text-xs font-bold tracking-widest uppercase">
+              <div className="h-fit w-[210mm] min-h-[297mm] origin-top scale-[0.4] flex flex-col bg-white font-sans shadow-2xl sm:scale-[0.55]">
+                <div className="h-2 w-full bg-indigo-600" />
+                <div className="space-y-4 p-16 pb-12">
+                  <h2 className="text-5xl font-black uppercase leading-none tracking-tighter text-slate-900">{data.fullName || "Your Name"}</h2>
+                  <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
                     {data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-indigo-600" /> {data.email}</span>}
                     {data.phone && <span className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-indigo-600" /> {data.phone}</span>}
                   </div>
-                  <div className="h-px bg-slate-100 w-24 !mt-6" />
+                  <div className="h-px w-24 !mt-6 bg-slate-100" />
                 </div>
-                {/* ... Simplified version for mobile preview toggle ... */}
-                <div className="px-16 pb-16 space-y-10 flex-1">
-                  {(data.sectionOrder || []).map((sectionId) => (
-                    <div key={sectionId}>
+                <Reorder.Group
+                  as="div"
+                  axis="y"
+                  values={effectiveSectionOrder}
+                  onReorder={(newOrder) => setData({ ...data, sectionOrder: newOrder })}
+                  className="flex-1 space-y-10 px-16 pb-16"
+                >
+                  {effectiveSectionOrder.map((sectionId) => (
+                    <Reorder.Item as="div" key={sectionId} value={sectionId} className="cursor-grab active:cursor-grabbing">
                       {renderResumeSection(sectionId)}
-                    </div>
+                    </Reorder.Item>
                   ))}
-                </div>
+                </Reorder.Group>
               </div>
             </div>
           </SheetContent>

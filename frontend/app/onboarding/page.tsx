@@ -23,15 +23,19 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { LoadingScreen } from '@/components/ui/loading';
 import { toast } from 'sonner';
 import { AuthModal } from '@/components/common/AuthModal';
 import { extractTextFromFile } from '@/lib/pdf';
 import { startResumeAnalysis, completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
 import { generateJobLinks } from '@/lib/job-portals';
+import { saveGuestFile, loadGuestFile, clearGuestFile } from '@/lib/guestFile';
+import { BrandMark } from '@/components/brand/Logo';
 
 type Step = 'upload' | 'analyzing' | 'personalize';
 
 export default function OnboardingFlow() {
+  const GUEST_ONBOARDING_STATE_KEY = 'guestOnboardingState';
   const { user, profile } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +63,27 @@ export default function OnboardingFlow() {
   const [activeResumeId, setActiveResumeId] = useState('guest');
   const [isTailoring, setIsTailoring] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedState = sessionStorage.getItem(GUEST_ONBOARDING_STATE_KEY);
+    if (!storedState) return;
+
+    try {
+      const guestState = JSON.parse(storedState);
+      if (guestState?.analysisData) {
+        setFullAnalysisData(guestState.analysisData);
+        setActiveResumeId(guestState.activeResumeId || 'guest');
+        setFileName(guestState.fileName || '');
+        setCurrentStep('personalize');
+        setUploadProgress(100);
+      }
+    } catch (error) {
+      console.warn('Failed to restore guest onboarding state', error);
+      sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+    }
+  }, []);
 
   const updateStepStatus = (id: string, status: 'pending' | 'loading' | 'done') => {
     setAnalysisSteps(prev => prev.map(step => step.id === id ? { ...step, status } : step));
@@ -92,16 +117,14 @@ export default function OnboardingFlow() {
   const processFile = async (file: File) => {
     const allowedTypes = [
       'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
     const isAllowedType = allowedTypes.includes(file.type) ||
-      file.name.endsWith('.pdf') ||
-      file.name.endsWith('.docx') ||
-      file.name.endsWith('.doc');
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.name.toLowerCase().endsWith('.docx');
 
     if (!isAllowedType) {
-      toast.error('Please upload a PDF or DOCX file');
+      toast.error('Unsupported file type. Please upload a PDF or DOCX resume.');
       return;
     }
 
@@ -112,6 +135,7 @@ export default function OnboardingFlow() {
     }
 
     fileRef.current = file;
+    saveGuestFile(file);
     setFileName(file.name);
     setCurrentStep('analyzing');
     setUploadProgress(10);
@@ -192,18 +216,20 @@ export default function OnboardingFlow() {
       const reader = response.body.getReader();
       const decoder = new (window.TextDecoder || TextDecoder)();
       let done = false;
+      let buffer = '';
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const messages = chunk.split('\n\n');
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() || '';
 
-          for (const message of messages) {
-            if (message.startsWith('data: ')) {
+          for (const frame of frames) {
+            if (frame.startsWith('data: ')) {
               try {
-                const event = JSON.parse(message.replace('data: ', ''));
+                const event = JSON.parse(frame.replace('data: ', ''));
 
                 if (event.type === 'ping') {
                   continue; // Keep connection alive
@@ -239,7 +265,7 @@ export default function OnboardingFlow() {
                   throw new Error(event.error);
                 }
               } catch (e) {
-                console.warn('Parsing SSE chunk failed', e);
+                console.warn('Parsing SSE frame failed', e);
               }
             }
           }
@@ -248,7 +274,11 @@ export default function OnboardingFlow() {
 
     } catch (error: any) {
       console.error('Analysis failed', error);
-      toast.error('Failed to process resume. Please try again.');
+      const message = error?.message || 'Failed to process resume. Please try again.';
+      const friendlyMessage = message.includes('Unsupported') || message.includes('PDF or DOCX')
+        ? 'Unsupported file type. Please upload a PDF or DOCX resume.'
+        : message;
+      toast.error(friendlyMessage);
       setCurrentStep('upload');
     }
   };
@@ -272,15 +302,39 @@ export default function OnboardingFlow() {
       let resumeId = activeResumeId;
 
       // If this was a guest analysis, we need to save it to the DB now for the new user
-      if (resumeId === 'guest' && fileRef.current) {
+      if (resumeId === 'guest') {
         console.log('Saving guest analysis to new user record...');
-        const file = fileRef.current;
-        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
+        let file = fileRef.current;
+        const storedState = typeof window !== 'undefined'
+          ? sessionStorage.getItem(GUEST_ONBOARDING_STATE_KEY)
+          : null;
+        const guestState = storedState ? JSON.parse(storedState) : null;
 
-        // 1. Upload to storage
+        // The original file may no longer be in memory (e.g. page was refreshed
+        // during the guest analysis). Restore it from IndexedDB so the resume
+        // can be uploaded to storage instead of failing.
+        if (!file) {
+          file = await loadGuestFile();
+        }
+
+        if (!file) {
+          sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+          setFullAnalysisData(null);
+          setActiveResumeId('guest');
+          setCurrentStep('upload');
+          setIsTailoring(false);
+          toast.error('Session expired. Please re-upload your resume to link it to your account.');
+          return;
+        }
+
+        const resumeFileName = file.name;
+        const resumeFileType = resumeFileName.endsWith('.pdf') ? 'pdf' : 'docx';
+        const resumeFileSize = file.size;
+
+        // 1. Upload the file to storage
+        const filePath = `resumes/${user.id}/${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage.from('resumes').upload(filePath, file);
         if (uploadError) throw new Error(`Migrate upload failed: ${uploadError.message}`);
-
         const { data: { publicUrl } } = supabase.storage.from('resumes').getPublicUrl(filePath);
 
         // 2. Insert resume record
@@ -288,10 +342,10 @@ export default function OnboardingFlow() {
           .from('resumes')
           .insert({
             user_id: user.id,
-            file_name: file.name,
+            file_name: resumeFileName,
             file_url: publicUrl,
-            file_type: file.name.endsWith('.pdf') ? 'pdf' : 'docx',
-            file_size_bytes: file.size,
+            file_type: resumeFileType,
+            file_size_bytes: resumeFileSize,
             status: 'parsing',
           })
           .select()
@@ -301,13 +355,32 @@ export default function OnboardingFlow() {
         resumeId = resumeData.id;
         setActiveResumeId(resumeId);
 
-        // 3. Persist the analysis data received earlier as a guest
+        // Persist the guest analysis immediately (fast DB write) so the
+        // migration always succeeds even if the tailor call fails below.
         await completeResumeAnalysis(user.id, resumeId, fullAnalysisData);
+        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
       }
 
       if (resumeId !== 'guest') {
-        const result = await tailorResume(user.id, resumeId, personalizeData, fullAnalysisData.parsed_data);
-        if (!result.success) throw new Error(result.error || 'Failed to tailor results');
+        // Run the tailor with the analysis already computed during the guest
+        // run, so the backend skips the expensive re-analysis. The guest
+        // analysis was already persisted above, so a tailor failure is
+        // non-fatal: the user still lands on the dashboard with their results.
+        const result = await tailorResume(
+          user.id,
+          resumeId,
+          personalizeData,
+          fullAnalysisData.parsed_data,
+          {
+            analysis: fullAnalysisData.analysis,
+            rawText: fullAnalysisData.raw_text,
+          }
+        );
+        if (!result.success) {
+          console.warn('Tailor step failed, but analysis is already persisted:', (result as any).error);
+        }
+        sessionStorage.removeItem(GUEST_ONBOARDING_STATE_KEY);
+        clearGuestFile();
       }
 
       toast.success('Strategy optimized!');
@@ -324,10 +397,8 @@ export default function OnboardingFlow() {
       {/* Header */}
       <header className="h-16 border-b bg-white px-8 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">ResumeAI</span>
+          <BrandMark size={32} />
+          <span className="text-xl font-bold tracking-tight text-slate-900">Career<span className="text-brand-600">Amp</span></span>
         </div>
 
         {/* Stepper */}
@@ -428,33 +499,7 @@ export default function OnboardingFlow() {
               <div className="flex flex-col lg:flex-row">
                 {/* Left: Illustration */}
                 <div className="lg:w-1/2 bg-indigo-50/30 p-12 flex flex-col items-center justify-center border-r border-slate-50 relative overflow-hidden">
-                  {/* Animated Scanning Effect */}
-                  <div className="relative w-48 h-48">
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.3, 1],
-                        opacity: [0.3, 0.1, 0.3]
-                      }}
-                      transition={{ duration: 4, repeat: Infinity }}
-                      className="absolute inset-0 bg-indigo-500/10 rounded-full blur-3xl"
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="relative z-10 w-full h-full rounded-[3rem] bg-white border border-white/80 shadow-[0_25px_60px_rgba(79,70,229,0.12)] flex items-center justify-center"
-                    >
-                      <div className="relative">
-                        <FileText className="h-24 w-24 text-indigo-600" />
-                        <motion.div
-                          animate={{ 
-                            top: ["0%", "100%", "0%"]
-                          }}
-                          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                          className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent blur-[1px]"
-                        />
-                      </div>
-                    </motion.div>
-                  </div>
+                  <LoadingScreen compact label="Analyzing…" sublabel={`Our AI is matching ${fileName} with your career goals`} />
                 </div>
 
                 {/* Right: Progress Content */}
@@ -663,28 +708,9 @@ export default function OnboardingFlow() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
+              className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
             >
-              <div className="max-w-md space-y-8">
-                <div className="relative">
-                  <div className="h-24 w-24 rounded-3xl bg-indigo-50 flex items-center justify-center mx-auto animate-pulse">
-                    <Sparkles className="h-12 w-12 text-indigo-600" />
-                  </div>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                    className="absolute -inset-2 border-2 border-dashed border-indigo-200 rounded-[32px]"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <h2 className="text-2xl font-bold text-slate-900">Fine-tuning your strategy</h2>
-                  <p className="text-slate-500 font-medium">We&apos;re matching your specific goals with current market demands in <span className="text-indigo-600">{personalizeData.location}</span>.</p>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
-                  <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Finalizing results...</span>
-                </div>
-              </div>
+              <LoadingScreen compact label="Fine-tuning your strategy" sublabel={`We're matching your goals with current market demands in ${personalizeData.location}`} />
             </motion.div>
           )}
         </AnimatePresence>
