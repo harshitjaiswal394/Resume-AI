@@ -1,17 +1,15 @@
-name: Production Deployment to resumatches.com
+name: Deploy to Cloud Run (jaiswal.shop)
 
 on:
-  pull_request:
-    branches: [ "main", "dev" ]
   push:
-    branches: [ "redesign/builder-premium-ui-2" ]
+    branches: [ "feature/cloudrun-cloudflare-terraform" ]
   workflow_dispatch:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-east1
   REPOSITORY: resumatches-official
-  
+  DOMAIN: jaiswal.shop
 
 permissions:
   contents: read
@@ -40,8 +38,8 @@ jobs:
         working-directory: ./backend
         run: python -m pytest tests -q
 
-  build-and-prep:
-    name: "Build & Prep"
+  build-and-push:
+    name: "Build & Push Images"
     needs: test-backend
     runs-on: ubuntu-latest
     environment: dev
@@ -52,8 +50,10 @@ jobs:
       - name: Secret Sanity Check
         run: |
           ERROR=0
-          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then echo "::error::SUPABASE_URL secret is MISSING in environment 'dev'"; ERROR=1; fi
-          if [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then echo "::error::SUPABASE_ANON_KEY secret is MISSING in environment 'dev'"; ERROR=1; fi
+          if [ -z "${{ secrets.DATABASE_URL }}" ]; then echo "::error::DATABASE_URL secret is MISSING"; ERROR=1; fi
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then echo "::error::SUPABASE_URL secret is MISSING"; ERROR=1; fi
+          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then echo "::error::SUPABASE_SERVICE_ROLE_KEY secret is MISSING"; ERROR=1; fi
+          if [ -z "${{ secrets.NVIDIA_API_KEY_REASONING }}" ]; then echo "::error::NVIDIA_API_KEY_REASONING secret is MISSING"; ERROR=1; fi
           if [ "$ERROR" -eq 1 ]; then exit 1; fi
           echo "Secret check PASSED."
 
@@ -62,31 +62,6 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ./terraform
-
-      - name: Bootstrap Infra
-        run: |
-          terraform apply -auto-approve \
-            -target=google_project_service.services \
-            -target=google_artifact_registry_repository.repo \
-            -target=google_compute_network.vpc \
-            -var="project_id=${{ env.PROJECT_ID }}" \
-            -var="domain_name=jaiswal.shop" \
-            -var="database_url=${{ secrets.DATABASE_URL }}" \
-            -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
-            -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
-            -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
-            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
-            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
-            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -var="image_tag=${{ github.sha }}"
-        working-directory: ./terraform
 
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
@@ -102,14 +77,14 @@ jobs:
           docker build \
             --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
-            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://jaiswal.shop" \
+            --build-arg NEXT_PUBLIC_BACKEND_API_URL="https://${{ env.DOMAIN }}" \
             -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ./frontend
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend:latest
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/frontend --all-tags
-    
+
   deploy:
-    name: "Deploy to GKE"
-    needs: build-and-prep
+    name: "Deploy Terraform (Cloud Run + LB)"
+    needs: build-and-push
     runs-on: ubuntu-latest
     environment: dev
     if: github.event_name != 'pull_request'
@@ -123,67 +98,35 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
 
-      - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          install_components: 'gke-gcloud-auth-plugin'
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
-      - name: Get GKE Credentials
-        uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: ${{ vars.GKE_CLUSTER_NAME || 'resumatch-cluster-1' }}
-          location: ${{ vars.GKE_CLUSTER_LOCATION || 'us-east1' }}
-          project_id: ${{ env.PROJECT_ID }}
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform/cloudflare
 
-      - name: Rollout Backend and Frontend
+      - name: Terraform Apply
         run: |
-          kubectl rollout restart deployment/backend -n resumatch-ai
-          kubectl rollout restart deployment/frontend -n resumatch-ai
+          terraform apply -auto-approve \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="region=${{ env.REGION }}" \
+            -var="repository=${{ env.REPOSITORY }}" \
+            -var="domain_name=${{ env.DOMAIN }}" \
+            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
+            -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
+            -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
+            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
+            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -var="image_tag=${{ github.sha }}"
+        working-directory: terraform/cloudflare
 
-      - name: Verify Rollout Status
+      - name: Report Load Balancer IP
         run: |
-          kubectl rollout status deployment/backend -n resumatch-ai --timeout=300s
-          kubectl rollout status deployment/frontend -n resumatch-ai --timeout=300s
-
-      - name: Check Pod Health
-        run: |
-          kubectl wait --for=condition=Available deployment/backend -n resumatch-ai --timeout=300s
-          kubectl wait --for=condition=Available deployment/frontend -n resumatch-ai --timeout=300s
-          kubectl get pods -n resumatch-ai
-  
-  # deploy:
-  #   name: "2. Deploy"
-  #   needs: build-and-prep
-  #   runs-on: ubuntu-latest
-  #   environment: dev
-  #   steps:
-  #     - name: Checkout Code
-  #       uses: actions/checkout@v4
-
-  #     - name: Google Auth
-  #       uses: google-github-actions/auth@v2
-  #       with:
-  #         workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-  #         service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-
-  #     - name: Setup Terraform
-  #       uses: hashicorp/setup-terraform@v3
-
-  #     - name: Terraform Init
-  #       run: terraform init
-  #       working-directory: ./terraform
-
-  ##    - name: Final Terraform Apply
-  #       run: |
-  #         terraform apply -auto-approve \
-  #           -var="project_id=${{ env.PROJECT_ID }}" \
-  #           -var="domain_name=resumatches.com" \
-  #           -var="database_url=${{ secrets.DATABASE_URL }}" \
-  #           -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
-  #           -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
-  #           -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
-  #           -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
-  #           -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
-  #           -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-  #           -var="image_tag=${{ github.sha }}"
-  #       working-directory: ./terraform
+          echo "LB IP to point ${{ env.DOMAIN }} at in Cloudflare:"
+          terraform output -raw load_balancer_ip
+          echo ""
+          echo "Managed cert status:"
+          terraform output managed_cert_expiry
+        working-directory: terraform/cloudflare
