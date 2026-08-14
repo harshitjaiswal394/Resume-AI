@@ -5,7 +5,7 @@ from uuid import UUID
 
 class ChatMessageRequest(BaseModel):
     conversation_id: str = Field(..., description="The ID of the conversation")
-    message: str = Field(..., description="The user's message content", min_length=1)
+    message: str = Field(..., description="The user's message content", min_length=1, max_length=8000)
     selected_resume_id: Optional[str] = Field(None, description="Optional resume ID to use for this chat request")
     client_request_id: Optional[str] = Field(None, description="Optional client-generated request id for telemetry correlation")
 

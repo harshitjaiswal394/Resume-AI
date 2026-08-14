@@ -26,7 +26,7 @@ const CATEGORIES: { key: CategoryKey; title: string; desc: string; required?: bo
   {
     key: "analytics",
     title: "Analytics",
-    desc: "Helps us understand how the Service is used so we can improve features. ResuMatch AI does not currently run third-party analytics trackers.",
+    desc: "Helps us understand how the Service is used so we can improve features. CareerAmp does not currently run third-party analytics trackers.",
   },
   {
     key: "marketing",
@@ -239,7 +239,7 @@ export function CookieConsent() {
                 </div>
                 <div>
                   <h3 className="text-[16px] font-bold text-[var(--text-primary)]">Cookie Preferences</h3>
-                  <p className="text-[12px] text-[var(--text-subtle)]">Manage how ResuMatch AI uses cookies</p>
+                  <p className="text-[12px] text-[var(--text-subtle)]">Manage how CareerAmp uses cookies</p>
                 </div>
               </div>
 

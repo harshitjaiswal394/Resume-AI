@@ -6,7 +6,7 @@ import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { Reveal } from "@/components/marketing/Reveal";
 
 export const metadata: Metadata = {
-  title: "Interview Prep | ResuMatch AI",
+  title: "Interview Prep | CareerAmp",
   description: "Prepare for Indian tech interviews with structured frameworks, mock interview tips, and company-specific guidance.",
 };
 

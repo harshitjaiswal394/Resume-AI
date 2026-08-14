@@ -30,6 +30,7 @@ import { extractTextFromFile } from '@/lib/pdf';
 import { startResumeAnalysis, completeResumeAnalysis, tailorResume } from '@/app/actions/resume';
 import { generateJobLinks } from '@/lib/job-portals';
 import { saveGuestFile, loadGuestFile, clearGuestFile } from '@/lib/guestFile';
+import { BrandMark } from '@/components/brand/Logo';
 
 type Step = 'upload' | 'analyzing' | 'personalize';
 
@@ -396,10 +397,8 @@ export default function OnboardingFlow() {
       {/* Header */}
       <header className="h-16 border-b bg-white px-8 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">ResumeAI</span>
+          <BrandMark size={32} />
+          <span className="text-xl font-bold tracking-tight text-slate-900">Career<span className="text-brand-600">Amp</span></span>
         </div>
 
         {/* Stepper */}

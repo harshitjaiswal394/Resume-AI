@@ -25,9 +25,9 @@ export function useRazorpay() {
       key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, 
       amount: amount * 100, 
       currency: "INR",
-      name: "ResuMatch AI",
+      name: "CareerAmp",
       description: `Upgrade to ${planName}`,
-      image: "https://picsum.photos/seed/resumatch/200",
+      image: "https://picsum.photos/seed/careeramp/200",
       handler: async function (response: any) {
         try {
           const { error } = await supabase

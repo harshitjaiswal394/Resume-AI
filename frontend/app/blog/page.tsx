@@ -4,8 +4,8 @@ import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { BlogExplorer } from "@/components/marketing/BlogExplorer";
 
 export const metadata: Metadata = {
-  title: "Career Blog | ResuMatch AI",
-  description: "India-focused career advice: resume strategies, interview preparation, salary negotiation, and job market trends from the ResuMatch AI team.",
+  title: "Career Blog | CareerAmp",
+  description: "India-focused career advice: resume strategies, interview preparation, salary negotiation, and job market trends from the CareerAmp team.",
 };
 
 export default function BlogPage() {

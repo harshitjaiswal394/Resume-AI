@@ -70,6 +70,16 @@ backend:
     RAZORPAY_KEY_SECRET: ""
     RAZORPAY_WEBHOOK_SECRET: ""
     CRON_SECRET: ""
+    METRICS_TOKEN: ""
+
+# Prometheus scraping
+prometheus:
+  serviceMonitor:
+    enabled: false
+    release: prometheus
+    bearerToken: false
+    # interval: 30s
+    # extraLabels: {}
 
 # Frontend service configurations
 frontend:

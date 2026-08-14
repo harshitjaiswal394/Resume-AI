@@ -6,7 +6,7 @@ import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { Reveal } from "@/components/marketing/Reveal";
 
 export const metadata: Metadata = {
-  title: "Pricing | ResuMatch AI",
+  title: "Pricing | CareerAmp",
   description: "Simple, transparent pricing for Indian job seekers. Start free, upgrade to Pro for unlimited AI-powered resume optimization.",
 };
 
@@ -15,7 +15,7 @@ const PLANS = [
     name: "Free",
     price: "₹0",
     period: "/forever",
-    desc: "Perfect for trying ResuMatch AI and getting your first resume score.",
+    desc: "Perfect for trying CareerAmp and getting your first resume score.",
     cta: "Start Free",
     href: "/",
     featured: false,
@@ -53,7 +53,7 @@ const PLANS = [
     period: "",
     desc: "Bulk pricing for campus placement cells and institutions.",
     cta: "Contact Sales",
-    href: "mailto:support@resumatch.ai",
+    href: "mailto:support@careeramp.ai",
     featured: false,
     icon: Building2,
     features: [
@@ -87,7 +87,7 @@ const FAQS = [
   },
   {
     q: "Do college placements get a discount?",
-    a: "Yes — our College plan offers custom bulk pricing for placement cells. Email support@resumatch.ai and we'll tailor a package for your institution.",
+    a: "Yes — our College plan offers custom bulk pricing for placement cells. Email support@careeramp.ai and we'll tailor a package for your institution.",
   },
   {
     q: "Is my resume data safe on paid plans?",

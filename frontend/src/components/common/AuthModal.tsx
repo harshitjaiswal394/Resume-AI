@@ -332,7 +332,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
   // Shared UI helpers
   // ================================
 
-  const inputClass = "w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-slate-50/80 text-sm font-medium placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white outline-none transition-all duration-200";
+  const inputClass = "w-full h-12 pl-11 pr-4 rounded-xl border border-slate-200 bg-slate-50/80 text-sm font-medium placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white outline-none transition-all duration-200";
 
   const renderErrors = () => {
     if (errors.length === 0) return null;
@@ -378,18 +378,18 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
                 value={digit}
                 onChange={e => handleOtpChange(i, e.target.value)}
                 onKeyDown={e => handleOtpKeyDown(i, e)}
-                className="h-13 w-11 sm:h-14 sm:w-12 text-center text-xl sm:text-2xl font-black rounded-xl border-2 border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-slate-50 hover:border-slate-300"
+                className="h-13 w-11 sm:h-14 sm:w-12 text-center text-xl sm:text-2xl font-black rounded-xl border-2 border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all bg-slate-50 hover:border-slate-300"
               />
             ))}
           </div>
-          <Button onClick={handleVerifyOtp} disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/30">
+          <Button onClick={handleVerifyOtp} disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-brand-600 hover:bg-brand-800 shadow-lg shadow-brand-600/25 transition-all duration-200 hover:shadow-xl hover:shadow-brand-600/30">
             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Verify & Sign In'}
           </Button>
           <div className="text-center">
             <button
               onClick={handleResendOtp}
               disabled={resendTimer > 0 || isResending}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline disabled:text-slate-400 disabled:no-underline transition-colors"
+              className="text-xs font-bold text-brand-600 hover:text-brand-800 hover:underline disabled:text-slate-400 disabled:no-underline transition-colors"
             >
               {resendTimer > 0 ? `Resend in ${resendTimer}s` : isResending ? 'Resending...' : 'Resend code'}
             </button>
@@ -412,11 +412,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             </div>
             {renderErrors()}
             <div className="relative group">
-              <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
               <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)}
                 className={inputClass} />
             </div>
-            <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/30">
+            <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-brand-600 hover:bg-brand-800 shadow-lg shadow-brand-600/25 transition-all duration-200 hover:shadow-xl hover:shadow-brand-600/30">
               {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send Reset Link'}
             </Button>
           </form>
@@ -438,11 +438,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             </div>
             {renderErrors()}
             <div className="relative group">
-              <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
               <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)}
                 className={inputClass} />
             </div>
-            <Button onClick={() => handleSendOtp('email')} disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/30">
+            <Button onClick={() => handleSendOtp('email')} disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-brand-600 hover:bg-brand-800 shadow-lg shadow-brand-600/25 transition-all duration-200 hover:shadow-xl hover:shadow-brand-600/30">
               {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send OTP'}
             </Button>
           </div>
@@ -464,11 +464,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             </div>
             {renderErrors()}
             <div className="relative group">
-              <Phone className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <Phone className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
               <input type="tel" placeholder="+919876543210" required value={phone} onChange={e => setPhone(e.target.value)}
                 className={inputClass} />
             </div>
-            <Button onClick={() => handleSendOtp('phone')} disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/30">
+            <Button onClick={() => handleSendOtp('phone')} disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-brand-600 hover:bg-brand-800 shadow-lg shadow-brand-600/25 transition-all duration-200 hover:shadow-xl hover:shadow-brand-600/30">
               {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send OTP'}
             </Button>
           </div>
@@ -510,7 +510,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             </h2>
             <p className="text-sm text-slate-500">
               {view === 'signup'
-                ? (description || 'Join 10,000+ job seekers using ResuMatch AI to land their dream roles.')
+                ? (description || 'Join 10,000+ job seekers using CareerAmp to land their dream roles.')
                 : 'Sign in to access your resumes and job matches.'}
             </p>
           </div>
@@ -519,12 +519,12 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
 
           <form onSubmit={handleEmailAuth} className="space-y-3">
             <div className="relative group">
-              <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
               <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)}
                 className={inputClass} />
             </div>
             <div className="relative group">
-              <Lock className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <Lock className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
               <input type={showPassword ? 'text' : 'password'} placeholder="Password" required value={password} onChange={e => setPassword(e.target.value)}
                 className={`${inputClass} pr-11`} />
               <button
@@ -537,18 +537,18 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             </div>
             {view === 'signup' && (
               <div className="relative group">
-                <Phone className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                <Phone className="absolute left-3.5 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
                 <input type="tel" placeholder="Phone (optional, e.g. +919876543210)" value={phone} onChange={e => setPhone(e.target.value)}
                   className={inputClass} />
               </div>
             )}
-            <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5">
+            <Button type="submit" disabled={isLoading} className="w-full h-12 rounded-xl text-base font-bold bg-brand-600 hover:bg-brand-800 shadow-lg shadow-brand-600/25 transition-all duration-200 hover:shadow-xl hover:shadow-brand-600/30 hover:-translate-y-0.5">
               {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (view === 'signup' ? 'Sign Up' : 'Sign In')}
             </Button>
           </form>
 
           {view === 'signin' && (
-            <button onClick={() => setView('forgot-password')} className="w-full text-xs text-slate-500 hover:text-blue-600 font-semibold transition-colors">
+            <button onClick={() => setView('forgot-password')} className="w-full text-xs text-slate-500 hover:text-brand-600 font-semibold transition-colors">
               Forgot your password?
             </button>
           )}
@@ -620,6 +620,9 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             className="relative w-full max-w-[440px] max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl bg-white shadow-2xl shadow-black/20 ring-1 ring-black/5"
             style={{ scrollbarWidth: 'thin', scrollbarColor: '#e2e8f0 transparent' }}
           >
+            {/* Brand accent bar */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-brand-500 via-brand-700 to-amber-400" />
+
             {/* Close button */}
             <button
               onClick={onClose}
@@ -633,8 +636,11 @@ export function AuthModal({ isOpen, onClose, onSuccess, title, description, defa
             <div className="p-6 sm:p-8">
               {/* Logo icon for main auth views */}
               {(view === 'signup' || view === 'signin') && (
-                <div className="mb-5 flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30">
-                  <Sparkles className="h-5 w-5 sm:h-6 sm:w-6" />
+                <div className="relative mb-5">
+                  <div className="pointer-events-none absolute -inset-3 rounded-3xl bg-brand-100/60 blur-2xl" />
+                  <div className="relative flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-white shadow-lg shadow-brand-600/30 ring-1 ring-white/20">
+                    <Sparkles className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </div>
                 </div>
               )}
 

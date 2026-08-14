@@ -2764,6 +2764,278 @@ Expected:
 - All targets UP
 - No scrape failures
 
+## Backend (`/metrics`) Scraping Setup
+
+The FastAPI backend exposes its application + AI-security metrics on `/metrics`
+via `prometheus-client` (`backend/app/security/metrics.py`). Scraping is wired
+with a `ServiceMonitor` + a labeled Service so kube-prometheus-stack discovers it.
+
+### 1. Prerequisites
+
+- `prometheus-client` installed in the backend image (`prometheus-client>=0.20.0` is in `backend/requirements.txt`). Without it `/metrics` returns a placeholder (no `resumatch_ai_*` series).
+- The backend runs in the `resumatch-ai` namespace behind `backend-service` (ClusterIP, port 8090).
+- The `release` label below must match your Prometheus `serviceMonitorSelector`:
+  ```bash
+  kubectl get prometheus -n monitoring -o jsonpath='{.spec.serviceMonitorSelector}'
+  # this cluster: {"matchLabels":{"release":"prometheus"}}
+  ```
+
+### 2. Manifests
+
+`kubernetes/servicemonitor.yaml`:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: resumatch-backend
+  namespace: resumatch-ai
+  labels:
+    app: backend
+    release: prometheus          # must match serviceMonitorSelector
+spec:
+  jobLabel: app                  # -> job label becomes "backend"
+  endpoints:
+  - port: http                   # named port on backend-service
+    path: /metrics
+    interval: 30s
+    # bearerTokenSecret:         # enable once ENVIRONMENT=production + METRICS_TOKEN set
+    #   name: resumatch-secrets
+    #   key: METRICS_TOKEN
+  namespaceSelector:
+    matchNames: [resumatch-ai]
+  selector:
+    matchLabels: {app: backend}  # must match backend-service labels
+```
+
+`backend-service` must carry the label `app: backend` and a named `http` port
+(see `kubernetes/backend.yaml` Service).
+
+### 3. Apply
+
+```bash
+kubectl apply -f kubernetes/servicemonitor.yaml
+kubectl apply -f kubernetes/backend.yaml      # if not already applied
+kubectl get servicemonitor -n resumatch-ai
+```
+
+Helm equivalent: `helm/resumatch` chart — set
+`prometheus.serviceMonitor.enabled=true` (+ `release: prometheus` default) and
+`backend.secrets.METRICS_TOKEN`.
+
+### 4. METRICS_TOKEN gate
+
+- `ENVIRONMENT=development|staging`: `/metrics` and `/api/security/status` are open (dashboard still works).
+- `ENVIRONMENT=production`: both require `Authorization: Bearer $METRICS_TOKEN`. Set `METRICS_TOKEN` in `resumatch-secrets` and either enable the ServiceMonitor `bearerTokenSecret` above or configure Prometheus `scrape_configs` with the same token. An empty/unset token returns 401.
+
+### 5. Metrics exposed
+
+Prefix `resumatch_ai_` (counters unless noted):
+
+| Metric | Labels |
+|---|---|
+| `http_requests_total` | method, path (templated), status |
+| `http_request_duration_seconds` (histogram) | method, path |
+| `chat_latency_seconds` (histogram) | – |
+| `tokens_total` (estimated) | provider |
+| `provider_failures_total` | provider, outcome |
+| `tool_calls_total` / `tool_denied_total` | tool, outcome / tool, reason |
+| `security_decisions_total` | engine, decision |
+| `prompt_injections_total` | risk |
+| `pii_detections_total` / `pii_masked_total` | kind / – |
+| `rate_limited_total` | scope |
+| `output_rejected_total` | rule |
+
+Plus the standard `python_*`/`process_*` series. Counters only appear after their
+first increment, so a fresh scrape looks nearly empty until traffic flows.
+
+### 6. Verify scraping
+
+```bash
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+# Targets:
+curl -s "http://localhost:9090/api/v1/targets" | grep -A2 resumatch
+# Series present:
+curl -s "http://localhost:9090/api/v1/query?query=count({__name__=~\"resumatch_ai_.*\"})"
+```
+
+Expected: target `serviceMonitor/resumatch-ai/resumatch-backend/0` → `up`, and the
+query returns an increasing series count as traffic flows.
+
+### 7. Grafana dashboard
+
+`grafana/backend-dashboard.json` — 18 panels (traffic, HTTP + chat latency, AI &
+security, providers/tools, runtime). Import: Grafana → Dashboards → Import →
+upload JSON → select the Prometheus datasource (uses `$datasource` + `$job`
+template variables).
+
+### 8. Troubleshooting
+
+- **Target missing from Targets page** — ServiceMonitor label `release` doesn't match `serviceMonitorSelector`, or the Service is missing the `app: backend` label / named `http` port.
+- **Target shows `down`** — backend unreachable on 8090, or `prometheus-client` not installed (endpoint still returns 200 with placeholder body, so check series, not just `up`).
+- **Target shows `dropped`** — service label/port mismatch (see above); re-apply the Service labels.
+- **401 on scrape in production** — `METRICS_TOKEN` unset/mismatched between the ServiceMonitor `bearerTokenSecret` and the backend env.
+- **New series (tokens, provider failures, tool calls, http) missing** — backend image predates the metric wiring; rebuild + `kubectl rollout restart deploy/backend -n resumatch-ai`.
+- **ALL panels show "No data"** — the `$job` template variable is empty because its query referenced a metric that does not exist yet. Use `label_values({__name__=~"resumatch_ai_.*"}, job)` (matches any `resumatch_ai_*` series). Fix in Dashboard → Settings → Variables → `job` → Query.
+
+### 9. Grafana dashboards
+
+Three dashboard JSONs are provided:
+
+| File | Audience | Panels |
+|---|---|---|
+| `grafana/backend-dashboard.json` | Engineering | 18 — Traffic (req/s, HTTP p95/p99, chat latency, errors), AI & Security, Providers & Tools, Runtime (Python) |
+| `grafana/backend-dashboard-summary.json` | Stakeholders | 17 — Service health, AI usage (last hour), Security (last hour), Trends |
+| `grafana/app-overview-dashboard.json` | Engineering | 16 — Live service state, HTTP traffic, chat latency, AI tokens, security & rate-limiting |
+
+Import: Grafana → Dashboards → New → Import → upload JSON → select the Prometheus
+datasource (all use `$datasource` + `$job` template variables).
+
+Stakeholder-friendly labels avoid jargon: "ops/s" → "Requests handled / second",
+"p95" → "Slowest 5% of requests". Threshold colors (green/orange/red) make health
+glanceable for non-technical reviewers.
+
+### 9b. Alerting & notifications (Unified Alerting)
+
+`grafana/` ships a provisioning bundle that relies on the **stack's built-in
+Prometheus datasource (uid `prometheus`)** and delivers a **13-rule
+severity-tiered alert set** by email:
+
+| File | Purpose |
+|---|---|
+| `grafana/alerting/alerting.yaml` | Single-file bundle: contact point + notification policies + all 13 rules (query the `prometheus` datasource uid) |
+| `grafana/alerting/templates/resumatch_email.tmpl` | Enterprise email subject/body template (mounted as `resumatch_email.tmpl`) |
+| `grafana/values-overlay.yaml` | kube-prometheus-stack values enabling the Grafana sidecars + alerting mount |
+| `grafana/deploy.sh` | One-shot: creates ConfigMaps and runs the helm upgrade |
+| `grafana/alerting/team-based/` | **Optional** per-team split (Platform/Security emails + routing) — not deployed yet |
+
+#### Deploy — step by step
+
+**Step 1 — set the alert recipient**
+
+In `grafana/alerting/alerting.yaml` → `contactPoints[].receivers[].settings.addresses`
+replace `CHANGE_ME_TO_YOUR_EMAIL@gmail.com` with the real recipient (your email
+or a distribution list / Google Group).
+
+**Step 2 — configure SMTP (the account that *sends* the emails)**
+
+`kubernetes/persistent.yaml` → `grafana.env` now has the SMTP block. Fill in the
+three `REPLACE_ME_*` values (your Gmail + an **App Password** from
+https://myaccount.google.com/apppasswords — not your login password). Do not
+commit the real password; set it in CI/secret or edit it after apply.
+
+**Step 3 — deploy**
+
+```bash
+bash grafana/deploy.sh
+```
+
+This is idempotent and:
+1. Creates ConfigMaps in `monitoring`: `grafana-resumatch-alerting`,
+   `grafana-backend-dashboard`,
+   `grafana-backend-dashboard-summary`, `grafana-app-overview-dashboard`
+   (a stale `grafana-resumatch-datasources` ConfigMap from earlier revisions is
+   deleted, if present)
+2. Runs `helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+   -f grafana/values-overlay.yaml --reuse-values`
+
+The overlay keeps the stack's default `Prometheus` datasource (uid `prometheus`)
+as the single datasource, enables the dashboards sidecar (`grafana_dashboard`
+label), and mounts the alerting bundle into
+`/etc/grafana/provisioning/alerting`.
+
+**Step 4 — wait for the rollout**
+
+```bash
+kubectl -n monitoring rollout status deploy/prometheus-grafana
+kubectl -n monitoring get configmap | grep grafana-resumatch   # 5 ConfigMaps
+```
+
+**Step 5 — verify in Grafana UI** (https://grafana.jaiswal.shop)
+
+1. Connections → Data sources → `Prometheus` (uid `prometheus`) → **Save & test** → green
+2. Dashboards → folder `Resume-AI` → 3 dashboards with live data
+3. Alerting → Contact points → `email-enterprise` → **Test** → email arrives
+4. Alerting → Alert rules → 13 rules under folder `Resume-AI`
+
+#### Test — verify a real alert fires end-to-end
+
+The rules depend on backend metrics. Send a couple of chat messages first so the
+`resumatch_ai_*` series exist (counters only appear after their first increment),
+then trigger a real failure:
+
+```bash
+# 1. force the backend down (rule fires after 2m)
+kubectl -n resumatch-ai scale deploy/backend --replicas=0
+sleep 180
+# 2. expect an email: "Resume-AI backend is down" (Critical -> repeats every 30m)
+#    Grafana -> Alerting -> Alert rules -> resumatch-backend-down = Firing
+# 3. recover
+kubectl -n resumatch-ai scale deploy/backend --replicas=1
+sleep 180
+# 4. expect a "resolved" email; rule returns to Normal
+```
+
+Quick rule-state check without waiting for email:
+
+```bash
+# Alertmanager UI (or via kubectl):
+kubectl -n monitoring get pod -l app.kubernetes.io/name=alertmanager -o name
+kubectl -n monitoring port-forward deploy/alertmanager 9093  # http://localhost:9093
+```
+
+#### Testing order
+
+1) dashboards → 2) alerting single-file bundle → 3) real
+alert fire/resolve. Only after all pass, swap the alerting ConfigMap to the
+`team-based/` files (edit `deploy.sh` step 1 to mount those instead, rerun).
+
+### 10. Operational gotchas (incident log)
+
+**A. `/api/*` returns 503 after the Service port rename (NGINX Gateway Fabric)**
+
+- Renaming the `backend-service` port (e.g. adding `name: http` for the ServiceMonitor) can leave the NGINX Gateway Fabric upstream with **only the 503 fallback socket** — no real endpoints — so every `/api/*` request returns 503 even though the backend is healthy.
+- Verify the upstream:
+  ```bash
+  kubectl exec deploy/resumatch-gateway-nginx -n resumatch-ai -c nginx -- \
+    grep -A6 'upstream resumatch-ai_backend-service_8090' /etc/nginx/conf.d/http.conf
+  # healthy:  server 10.52.130.29:8090;
+  # broken:   server unix:/var/run/nginx/nginx-503-server.sock;
+  ```
+- Fix: regenerate the config from current EndpointSlices:
+  ```bash
+  kubectl rollout restart deploy/ngf-nginx-gateway-fabric -n nginx-gateway
+  kubectl rollout status deploy/ngf-nginx-gateway-fabric -n nginx-gateway
+  ```
+- Retest through the gateway (expect 200):
+  ```bash
+  curl -k -s -o /dev/null -w "%{http_code}\n" -X OPTIONS \
+    "https://www.jaiswal.shop/api/chat/resumes" \
+    --resolve "www.jaiswal.shop:443:34.139.197.149" \
+    -H "Origin: https://www.jaiswal.shop" -H "Access-Control-Request-Method: GET"
+  ```
+
+**B. Token usage / provider failures / tool calls show "No data" (multi-worker gotcha)**
+
+- `prometheus_client` counters are in-memory **per process**. With gunicorn `-w 2`, the worker serving the chat request increments its own copy; the worker that Prometheus scrapes shows never-incremented counters → no samples.
+- Symptom: security/HTTP counters (incremented on every request, including the scrape itself) show data, but token/provider/tool metrics never do.
+- Fix: run a single worker (`-w 1` in the Dockerfile CMD) — an async FastAPI app keeps high concurrency on one event loop — OR enable prometheus_client multiprocess mode (`PROMETHEUS_MULTIPROC_DIR` + `MultiProcessCollector` on a dedicated registry + gunicorn `worker_exit` hook calling `multiprocess.mark_process_dead(pid)`).
+
+**C. Counters only appear after their first increment**
+
+- A Prometheus counter renders **no sample lines** until `.inc()` is first called. Token usage / provider failures / tool calls stay "No data" until real AI traffic (a chat turn or agent tool call) flows. Send one test chat message to verify.
+
+**D. New metric code not live**
+
+- Panels for `resumatch_ai_http_requests_total` / `_http_request_duration_seconds` stay empty until the image with the middleware is rebuilt and rolled out:
+  ```bash
+  cd backend
+  docker build -t us-east1-docker.pkg.dev/resumeai-503317/resumatches-official/backend:latest .
+  docker push us-east1-docker.pkg.dev/resumeai-503317/resumatches-official/backend:latest
+  kubectl rollout restart deploy/backend -n resumatch-ai
+  kubectl rollout status deploy/backend -n resumatch-ai
+  ```
+
 ---
 
 # 4. Logging Architecture

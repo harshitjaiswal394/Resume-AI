@@ -21,3 +21,11 @@ grafana:
   env:
     GF_SERVER_ROOT_URL: "https://grafana.jaiswal.shop/"
     GF_SERVER_SERVE_FROM_SUB_PATH: "false"
+    # SMTP — email alerts. Use a Gmail App Password (not your login password).
+    # Ref: https://support.google.com/accounts/answer/185833
+    GF_SMTP_ENABLED: "true"
+    GF_SMTP_HOST: smtp.gmail.com:587
+    GF_SMTP_USER: "REPLACE_ME_YOUR_GMAIL@gmail.com"
+    GF_SMTP_PASSWORD: "REPLACE_ME_GMAIL_APP_PASSWORD"
+    GF_SMTP_FROM_ADDRESS: "REPLACE_ME_YOUR_GMAIL@gmail.com"
+    GF_SMTP_STARTTLS_POLICY: "OpportunisticStartTLS"

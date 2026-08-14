@@ -6,8 +6,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from './AuthProvider';
 import { supabase } from '../lib/supabase';
 import { Button } from './ui/button';
-import { Briefcase, LogOut, User, Menu } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { AuthModal } from './common/AuthModal';
+import { Logo } from './brand/Logo';
 
 export default function Navbar() {
   const { user } = useAuth();
@@ -45,12 +46,7 @@ export default function Navbar() {
     <>
       <nav className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
         <div className="container mx-auto flex h-20 items-center justify-between px-6">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="h-8 w-8 rounded-lg bg-brand-600 flex items-center justify-center">
-              <Briefcase className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-h3 font-bold tracking-tight">ResuMatch AI</span>
-          </Link>
+          <Logo size={32} />
 
           <div className="hidden md:flex items-center space-x-8 text-small font-medium text-muted-foreground">
             <button onClick={() => scrollToSection('features')} className="hover:text-brand-600 transition-colors cursor-pointer">Features</button>

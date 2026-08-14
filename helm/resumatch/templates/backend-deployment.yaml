@@ -129,6 +129,11 @@ spec:
             secretKeyRef:
               name: resumatch-secrets
               key: CRON_SECRET
+        - name: METRICS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: METRICS_TOKEN
         - name: AI_SECURITY_ENABLED
           valueFrom:
             configMapKeyRef:

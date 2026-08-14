@@ -3,8 +3,8 @@ import Link from "next/link";
 import { LegalPage, LegalSection, LegalP, LegalList } from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | ResuMatch AI",
-  description: "Read the Terms of Service that govern your use of ResuMatch AI, including accounts, subscriptions, acceptable use, and liability.",
+  title: "Terms of Service | CareerAmp",
+  description: "Read the Terms of Service that govern your use of CareerAmp, including accounts, subscriptions, acceptable use, and liability.",
 };
 
 export default function TermsPage() {
@@ -12,8 +12,8 @@ export default function TermsPage() {
     <LegalPage
       badge="Terms of Service"
       title="Terms of Service"
-      intro="These Terms of Service govern your access to and use of ResuMatch AI. By signing up, uploading a resume, or otherwise using the Service, you agree to these terms. If you don't agree, please don't use the Service."
-      updated="August 8, 2026"
+      intro="These Terms of Service govern your access to and use of CareerAmp. By signing up, uploading a resume, or otherwise using the Service, you agree to these terms. If you don't agree, please don't use the Service."
+      updated="August 13, 2026"
       sections={[
         { id: "acceptance", title: "Acceptance of Terms" },
         { id: "service", title: "About the Service" },
@@ -35,17 +35,17 @@ export default function TermsPage() {
     >
       <LegalSection id="acceptance" number="01" title="Acceptance of Terms">
         <LegalP>
-          By accessing or using ResuMatch AI (the <strong className="font-semibold text-[var(--text-primary)]">"Service"</strong>),
+          By accessing or using CareerAmp (the <strong className="font-semibold text-[var(--text-primary)]">"Service"</strong>),
           you confirm that you have read, understood, and agree to be bound by these Terms of Service (the{" "}
           <strong className="font-semibold text-[var(--text-primary)]">"Terms"</strong>). These Terms form a binding agreement
-          between you and ResuMatch AI. If you use the Service on behalf of an organization, you represent that you have
+          between you and CareerAmp. If you use the Service on behalf of an organization, you represent that you have
           authority to bind that organization to these Terms.
         </LegalP>
       </LegalSection>
 
       <LegalSection id="service" number="02" title="About the Service">
         <LegalP>
-          ResuMatch AI provides AI-powered tools that help job seekers analyze their resumes, check ATS compatibility, identify
+          CareerAmp provides AI-powered tools that help job seekers analyze their resumes, check ATS compatibility, identify
           missing skills, match against live job descriptions, generate tailored resume versions, and create cover letters. The
           Service processes the resume files and information you provide to generate scores, suggestions, and content.
         </LegalP>
@@ -199,7 +199,7 @@ export default function TermsPage() {
       <LegalSection id="ip" number="08" title="Our Intellectual Property">
         <LegalP>
           The Service, including its software, design, branding, trademarks, and content (other than your Content and third-party
-          materials), is owned by or licensed to ResuMatch AI and is protected by intellectual property laws. You may not copy,
+          materials), is owned by or licensed to CareerAmp and is protected by intellectual property laws. You may not copy,
           reproduce, distribute, or create derivative works from the Service except as expressly permitted by these Terms or by
           applicable law.
         </LegalP>
@@ -225,7 +225,7 @@ export default function TermsPage() {
 
       <LegalSection id="liability" number="11" title="Limitation of Liability">
         <LegalP>
-          To the maximum extent permitted by law, ResuMatch AI and its affiliates, officers, employees, and agents will not be
+          To the maximum extent permitted by law, CareerAmp and its affiliates, officers, employees, and agents will not be
           liable for any indirect, incidental, special, consequential, or punitive damages, or for any loss of profits, data, or
           goodwill, arising out of or in connection with your use of the Service, even if advised of the possibility of such
           damages. Our total aggregate liability arising out of or in connection with these Terms will not exceed the amount you
@@ -235,7 +235,7 @@ export default function TermsPage() {
 
       <LegalSection id="indemnification" number="12" title="Indemnification">
         <LegalP>
-          You agree to indemnify, defend, and hold harmless ResuMatch AI and its affiliates, officers, employees, and agents from
+          You agree to indemnify, defend, and hold harmless CareerAmp and its affiliates, officers, employees, and agents from
           and against any claims, liabilities, damages, losses, and expenses (including reasonable legal fees) arising out of or in
           connection with your use of the Service, your Content, or your violation of these Terms or applicable law.
         </LegalP>
@@ -243,10 +243,19 @@ export default function TermsPage() {
 
       <LegalSection id="termination" number="13" title="Termination">
         <LegalP>
-          You may stop using the Service at any time and may delete your account by contacting us. We may suspend or terminate
-          your access to the Service, in whole or in part, at our discretion, including if you violate these Terms. Upon
-          termination, your right to use the Service ceases, and we may delete or retain your data in accordance with our Privacy
-          Policy and applicable law.
+          You may stop using the Service at any time. If you are signed in, you can delete your account directly from the{" "}
+          <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+            Privacy Settings
+          </Link>{" "}
+          page. Deletion begins a{" "}
+          <strong className="font-semibold text-[var(--text-primary)]">30-day grace period</strong> during which you can change
+          your mind and cancel the request; after it lapses, your data is permanently purged. You can also contact us to request
+          deletion at any time.
+        </LegalP>
+        <LegalP>
+          We may suspend or terminate your access to the Service, in whole or in part, at our discretion, including if you
+          violate these Terms. Upon termination, your right to use the Service ceases, and we may delete or retain your data in
+          accordance with our Privacy Policy and applicable law.
         </LegalP>
       </LegalSection>
 
@@ -268,10 +277,10 @@ export default function TermsPage() {
       <LegalSection id="contact" number="16" title="Contact Us">
         <LegalP>
           If you have questions about these Terms, you can contact us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
-          . ResuMatch AI, Mumbai, Maharashtra, India.
+          . CareerAmp, Mumbai, Maharashtra, India.
         </LegalP>
       </LegalSection>
     </LegalPage>

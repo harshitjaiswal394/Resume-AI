@@ -410,7 +410,7 @@ export function ChatWidget() {
             </div>
             <iframe
               src="/chat?embedded=1"
-              title="ResuMatch AI Chat Assistant"
+              title="CareerAmp Chat Assistant"
               className="h-full w-full flex-1 border-0 bg-[#050816]"
               allow="microphone"
             />

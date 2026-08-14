@@ -8,6 +8,8 @@ load_dotenv("../.env") # checks root .env
 
 import logging
 import asyncio
+import secrets
+import time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
@@ -28,16 +30,42 @@ from app.api.builder import router as builder_router
 from app.api.cover_letters import router as cover_letters_router
 from app.api.chat_routes import chat_router
 from app.api.agent_routes import router as agent_router
+from app.api.privacy_routes import privacy_router
 from app.services.knowledge_base_seeder import job_seeder
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.tracing import instrument_app
 
-app = FastAPI(title="ResuMatch AI API")
+_env = os.getenv("ENVIRONMENT", "development").strip().lower()
+_docs_enabled = _env in ("development", "staging")
+app = FastAPI(
+    title="CareerAmp AI API",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 instrument_app(app)
 
 
 # Setup Background Scheduler
 scheduler = BackgroundScheduler()
+
+from app.security.metrics import HTTP_REQUESTS, HTTP_REQUEST_DURATION
+
+
+@app.middleware("http")
+async def prometheus_http_metrics(request: Request, call_next):
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        raise
+    finally:
+        route = request.scope.get("route")
+        path = getattr(route, "path", None) or request.url.path
+        HTTP_REQUEST_DURATION.labels(method=request.method, path=path).observe(time.monotonic() - start)
+    HTTP_REQUESTS.labels(method=request.method, path=path, status=str(response.status_code)).inc()
+    return response
+
 
 @app.middleware("http")
 async def mark_failed_requests(request: Request, call_next):
@@ -59,12 +87,46 @@ async def mark_failed_requests(request: Request, call_next):
         span.set_attribute("error.message", str(exc))
         raise
 
+
 @app.on_event("startup")
 async def startup_event():
     # Start Scheduler
     if not scheduler.running:
         scheduler.start()
         logger.info("Background scheduler started.")
+
+    # DPDP retention purge: nightly hard-delete of accounts past their grace period.
+    try:
+        from app.services.privacy_service import prune_deletion_queue
+        from app.security import EventType, audit_logger
+
+        def _dpdp_purge_job():
+            try:
+                result = prune_deletion_queue()
+                if result.get("purged"):
+                    audit_logger.log(
+                        EventType.DATA_PURGED,
+                        extra={"purged": result.get("purged", 0), "failed": result.get("failed", [])},
+                    )
+                    logger.info("DPDP_NIGHTLY_PURGE | purged=%d failed=%d",
+                                result.get("purged", 0), len(result.get("failed", [])))
+            except Exception as exc:  # never let a purge failure take the app down
+                logger.error("DPDP_NIGHTLY_PURGE_FAILED | error=%s", exc, exc_info=True)
+
+        scheduler.add_job(
+            _dpdp_purge_job,
+            "cron",
+            hour=int(os.getenv("DPDP_PURGE_HOUR", "3")),
+            minute=int(os.getenv("DPDP_PURGE_MINUTE", "0")),
+            id="dpdp_retention_purge",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
+        logger.info("DPDP nightly purge scheduled at %s:%s.",
+                    os.getenv("DPDP_PURGE_HOUR", "3"), os.getenv("DPDP_PURGE_MINUTE", "0"))
+    except Exception as e:
+        logger.error("DPDP purge job scheduling failed: %s", e, exc_info=True)
 
     # Ensure additive DB schema (resume_versions.jd_skills etc.) is present
     try:
@@ -123,6 +185,15 @@ async def startup_event():
     # Use 'python scripts/seed_kb.py' to run it manually.
     logger.info("Backend started. Automatic Knowledge Base seeding is DISABLED.")
 
+    # Warm the Vertex embedding client in the background so the ~40s one-time
+    # OAuth/token setup doesn't hit the first job-search query.
+    try:
+        from app.services.nvidia_service import nvidia_service
+        asyncio.create_task(nvidia_service.warm_vertex_client())
+        logger.info("Vertex embedding client warm-up scheduled.")
+    except Exception as e:
+        logger.warning("Vertex warm-up could not be scheduled: %s", e)
+
 @app.on_event("shutdown")
 def shutdown_event():
     if scheduler.running:
@@ -148,8 +219,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-Forwarded-For", "traceparent", "tracestate", "baggage"],
+    max_age=600,
 )
 
 app.include_router(resume_router, prefix="/api/resume", tags=["resume"])
@@ -159,14 +231,20 @@ app.include_router(builder_router, prefix="/api/builder", tags=["builder"])
 app.include_router(cover_letters_router, prefix="/api/cover-letter", tags=["cover-letter"])
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
 app.include_router(agent_router, prefix="/api/agents", tags=["agents"])
+app.include_router(privacy_router, prefix="/api/v1/users", tags=["privacy"])
 
 from app.security.metrics import metrics_enabled
 from fastapi.responses import PlainTextResponse
 
 
 @app.get("/metrics")
-async def metrics_endpoint():
-    """Prometheus metrics. Returns a placeholder when the client is absent."""
+async def metrics_endpoint(request: Request):
+    """Prometheus metrics. Bearer METRICS_TOKEN required outside dev/staging."""
+    if _env not in ("development", "staging"):
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        expected = os.getenv("METRICS_TOKEN", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
     if not metrics_enabled():
         return PlainTextResponse("# prometheus_client not installed; metrics disabled\n", media_type="text/plain")
     from prometheus_client import generate_latest
@@ -174,8 +252,17 @@ async def metrics_endpoint():
 
 
 @app.get("/api/security/status")
-async def security_status():
-    """Liveness of the AI security core (kill-switch aware)."""
+async def security_status(request: Request):
+    """Liveness of the AI security core (kill-switch aware).
+
+    Open in dev/staging; requires a METRICS_TOKEN bearer in production so
+    the enabled-engines map and policy thresholds stay internal.
+    """
+    if _env not in ("development", "staging"):
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        expected = os.getenv("METRICS_TOKEN", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
     from app.security import get_config
 
     cfg = get_config()

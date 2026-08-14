@@ -30,6 +30,7 @@ logger = logging.getLogger("resumatch-api.security.ratelimit")
 DEFAULT_LIMITS: Dict[str, Tuple[int, int]] = {
     "chat": (30, 60),             # 30 chat messages / minute / user
     "ai_request": (60, 60),       # 60 AI requests / minute / user
+    "ai_request_guest": (10, 900),  # 10 AI requests / 15 min / guest IP
     "resume_upload": (20, 3600),  # 20 uploads / hour / user
     "file_upload": (50, 3600),    # 50 files / hour / user
     "tool_call": (100, 3600),     # 100 tool calls / hour / user
@@ -42,6 +43,7 @@ DEFAULT_LIMITS: Dict[str, Tuple[int, int]] = {
 IP_LIMITS: Dict[str, Tuple[int, int]] = {
     "chat": (120, 60),
     "ai_request": (300, 60),
+    "ai_request_guest": (20, 900),  # anonymous AI abuse guard / 15 min / IP
     "resume_upload": (60, 3600),
     "file_upload": (200, 3600),
     "tool_call": (400, 3600),

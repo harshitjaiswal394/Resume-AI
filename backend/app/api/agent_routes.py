@@ -12,9 +12,12 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+from app.api.deps import get_client_ip
+from app.security import rate_limiter
 
 logger = logging.getLogger("resumatch-ai.api.agents")
 
@@ -24,7 +27,7 @@ router = APIRouter(tags=["agents"])
 # ── Request/Response Models ──────────────────────────────────────────────────
 
 class IntentRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=4000)
 
 class IntentResponse(BaseModel):
     intent: str
@@ -38,35 +41,35 @@ class ResumeParseRequest(BaseModel):
 
 class ResumeTailorRequest(BaseModel):
     resume_id: str
-    jd_text: str
-    jd_url: Optional[str] = None
+    jd_text: str = Field(..., min_length=1, max_length=20000)
+    jd_url: Optional[str] = Field(None, max_length=2000)
 
 class JDIngestRequest(BaseModel):
-    source: str
+    source: str = Field(..., min_length=1, max_length=20000)
     source_type: str = "auto"
 
 class ATSAnalysisRequest(BaseModel):
     resume_id: Optional[str] = None
     version_id: Optional[str] = None
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
 
 class InterviewStartRequest(BaseModel):
     resume_id: str
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
     interview_type: str = "mixed"
-    num_questions: int = 5
+    num_questions: int = Field(5, ge=1, le=20)
 
 class InterviewAnswerRequest(BaseModel):
     session_id: str
-    answer: str
+    answer: str = Field(..., min_length=1, max_length=8000)
 
 class RoadmapRequest(BaseModel):
     resume_id: str
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
 
 class CoachRequest(BaseModel):
     resume_id: Optional[str] = None
-    jd_text: Optional[str] = None
+    jd_text: Optional[str] = Field(None, max_length=20000)
 
 
 # ── Helper: get user from JWT ───────────────────────────────────────────────
@@ -82,6 +85,14 @@ async def _get_user_id(authorization: Optional[str] = Header(None)) -> str:
     if not result.get("success"):
         raise HTTPException(status_code=401, detail="Invalid token")
     return result["user"]["id"]
+
+
+async def _check_ai_rate_limit(request: Request, user_id: str) -> None:
+    """Shared per-user+IP AI rate limit for agent endpoints (cost / DoS guard)."""
+    ip = await get_client_ip(request)
+    result = rate_limiter.check("ai_request", user_id=user_id, ip=ip)
+    if not result.allowed:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
 
 
 # ── Intent Classification ───────────────────────────────────────────────────
@@ -408,7 +419,7 @@ async def analyze_ats(req: ATSAnalysisRequest, user_id: str = Depends(_get_user_
 # ── Interview ───────────────────────────────────────────────────────────────
 
 @router.post("/interview/start")
-async def start_interview(req: InterviewStartRequest, user_id: str = Depends(_get_user_id)):
+async def start_interview(req: InterviewStartRequest, request: Request, user_id: str = Depends(_get_user_id)):
     """Start a mock interview session."""
     from app.agents.resume_intel import resume_intel_agent
     from app.agents.interview import interview_agent
@@ -416,6 +427,8 @@ async def start_interview(req: InterviewStartRequest, user_id: str = Depends(_ge
 
     if not interview_agent:
         raise HTTPException(status_code=503, detail="Interview agent not initialized")
+
+    await _check_ai_rate_limit(request, user_id)
 
     resume_result = await resume_intel_agent.get_resume_context(user_id, req.resume_id)
     if resume_result["status"] == "error":
@@ -438,13 +451,15 @@ async def start_interview(req: InterviewStartRequest, user_id: str = Depends(_ge
 
 
 @router.post("/interview/answer")
-async def answer_interview(req: InterviewAnswerRequest, user_id: str = Depends(_get_user_id)):
+async def answer_interview(req: InterviewAnswerRequest, request: Request, user_id: str = Depends(_get_user_id)):
     """Submit an answer to the current interview question."""
     from app.agents.interview import interview_agent
     if not interview_agent:
         raise HTTPException(status_code=503, detail="Interview agent not initialized")
 
-    result = await interview_agent.answer(req.session_id, req.answer)
+    await _check_ai_rate_limit(request, user_id)
+
+    result = await interview_agent.answer(req.session_id, req.answer, user_id=user_id)
     if result["status"] == "error":
         raise HTTPException(status_code=400, detail=result["message"])
     return result
@@ -457,7 +472,7 @@ async def interview_status(session_id: str, user_id: str = Depends(_get_user_id)
     if not interview_agent:
         raise HTTPException(status_code=503, detail="Interview agent not initialized")
 
-    result = await interview_agent.get_status(session_id)
+    result = await interview_agent.get_status(session_id, user_id=user_id)
     if result["status"] == "error":
         raise HTTPException(status_code=404, detail=result["message"])
     return result

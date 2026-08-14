@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, boolean, timestamp, jsonb, vector, index, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, boolean, timestamp, jsonb, vector, index, pgEnum, numeric } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 
 // ── ENUMS ────────────────────────────────────
@@ -97,6 +97,35 @@ export const coverLetters = pgTable('cover_letters', {
   tone: text('tone').default('professional'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
+
+// ── TABLE: job_applications (Job Tracker) ─────
+export const jobApplications = pgTable('job_applications', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  userId: text('user_id').notNull(), // mirrors auth.users.id as text
+  jobPostingId: text('job_posting_id'),
+  resumeId: text('resume_id'),
+  source: text('source').default('manual'),
+  company: text('company'),
+  title: text('title'),
+  location: text('location'),
+  applyUrl: text('apply_url'),
+  salaryRange: jsonb('salary_range'), // { min, max, currency }
+  status: text('status').default('saved').notNull(), // saved|applied|interview|offer|rejected
+  notes: text('notes'),
+  coverLetterId: text('cover_letter_id'),
+  tailoredVersionId: text('tailored_version_id'),
+  interviewAt: timestamp('interview_at', { withTimezone: true }),
+  offerAmount: numeric('offer_amount'),
+  offerCurrency: text('offer_currency').default('USD'),
+  offerAt: timestamp('offer_at', { withTimezone: true }),
+  outcome: text('outcome'),
+  appliedAt: timestamp('applied_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (t) => ({
+  userIdx: index('idx_job_applications_user').on(t.userId),
+  statusIdx: index('idx_job_applications_status').on(t.status),
+}));
 
 // ── TABLE: subscriptions ──────────────────────
 export const subscriptions = pgTable('subscriptions', {

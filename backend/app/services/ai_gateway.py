@@ -3,7 +3,29 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from app.security.metrics import TOKEN_USAGE, PROVIDER_FAILURES, TOOL_CALLS
+
 logger = logging.getLogger("resumatch-ai.gateway")
+
+
+def _estimate_tokens(text: Any) -> int:
+    """Rough token estimate (~4 chars/token) when providers don't return usage."""
+    return max(1, len(str(text or "")) // 4)
+
+
+def _messages_token_estimate(messages: List[Dict[str, Any]]) -> int:
+    total = 0
+    for message in messages or []:
+        content = message.get("content") or message.get("text") or ""
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict):
+                    total += _estimate_tokens(part.get("text", ""))
+                else:
+                    total += _estimate_tokens(part)
+        else:
+            total += _estimate_tokens(content)
+    return total
 
 ToolCallable = Callable[..., Awaitable[str]]
 ToolCallCallback = Callable[["ToolCall"], Awaitable[None]]
@@ -121,6 +143,9 @@ class GatewayRouter:
                 continue
             try:
                 content = await provider.complete(request)
+                TOKEN_USAGE.labels(provider=provider.name).inc(
+                    _messages_token_estimate(request.messages) + _estimate_tokens(content)
+                )
                 return GatewayResponse(
                     content=content,
                     provider=provider.name,
@@ -130,6 +155,7 @@ class GatewayRouter:
             except Exception as exc:  # pragma: no cover
                 last_error = exc
                 all_errors.append(f"{provider.name}: {exc}")
+                PROVIDER_FAILURES.labels(provider=provider.name, outcome="error").inc()
                 logger.warning("provider failed", extra={"provider": provider.name, "error": str(exc)})
 
         detail = "; ".join(all_errors) if all_errors else str(last_error)
@@ -161,6 +187,7 @@ class GatewayRouter:
             except Exception as exc:  # pragma: no cover
                 last_error = exc
                 all_errors.append(f"{provider.name}: {exc}")
+                PROVIDER_FAILURES.labels(provider=provider.name, outcome="error").inc()
                 logger.warning("agent provider failed", extra={"provider": provider.name, "error": str(exc)})
 
         detail = "; ".join(all_errors) if all_errors else str(last_error)
@@ -197,6 +224,9 @@ class GatewayRouter:
                 on_tool_call=on_tool_call,
                 on_tool_result=on_tool_result,
             )
+            TOKEN_USAGE.labels(provider=provider_name).inc(
+                _messages_token_estimate(messages) + _estimate_tokens(turn.content)
+            )
 
             if not turn.tool_calls:
                 return GatewayResponse(
@@ -219,11 +249,14 @@ class GatewayRouter:
 
                 if tool is None:
                     result_text = json.dumps({"status": "error", "message": f"Unknown tool: {tc.name}"})
+                    TOOL_CALLS.labels(tool=tc.name, outcome="unknown").inc()
                     logger.warning("agent requested unknown tool", extra={"tool": tc.name})
                 else:
                     try:
                         result_text = await tool.function(**tc.arguments)
+                        TOOL_CALLS.labels(tool=tc.name, outcome="success").inc()
                     except Exception as exc:  # pragma: no cover
+                        TOOL_CALLS.labels(tool=tc.name, outcome="error").inc()
                         logger.exception("tool execution failed", extra={"tool": tc.name})
                         result_text = json.dumps({"status": "error", "message": str(exc)})
 

@@ -7,7 +7,7 @@ import { BrowserTracing } from "@/components/BrowserTracing";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "ResuMatch AI - Indian Resume Optimizer",
+  title: "CareerAmp - Indian Resume Optimizer",
   description: "Optimize your resume for the Indian job market with AI-powered ATS scoring and job matching.",
 };
 

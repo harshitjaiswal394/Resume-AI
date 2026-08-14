@@ -3,8 +3,8 @@ import Link from "next/link";
 import { LegalPage, LegalSection, LegalP, LegalList } from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy | ResuMatch AI",
-  description: "Learn how ResuMatch AI uses cookies and similar technologies, what categories we use, and how you can control your preferences.",
+  title: "Cookie Policy | CareerAmp",
+  description: "Learn how CareerAmp uses cookies and similar technologies, what categories we use, and how you can control your preferences.",
 };
 
 export default function CookiePolicyPage() {
@@ -12,8 +12,8 @@ export default function CookiePolicyPage() {
     <LegalPage
       badge="Cookie Policy"
       title="Cookie Policy"
-      intro="This Cookie Policy explains what cookies and similar technologies ResuMatch AI uses, why we use them, and how you can control them. It works alongside our Privacy Policy and Terms of Service."
-      updated="August 8, 2026"
+      intro="This Cookie Policy explains what cookies and similar technologies CareerAmp uses, why we use them, and how you can control them. It works alongside our Privacy Policy and Terms of Service."
+      updated="August 13, 2026"
       sections={[
         { id: "what-are-cookies", title: "What Are Cookies" },
         { id: "how-we-use", title: "How We Use Cookies" },
@@ -138,7 +138,9 @@ export default function CookiePolicyPage() {
               content: (
                 <>
                   <strong className="font-semibold text-[var(--text-primary)]">Cookie consent preference.</strong> Stores your cookie
-                  choices (e.g., "rm_cookie_consent_v1") in local storage. Category: Essential.
+                  choices (e.g., "rm_cookie_consent_v1") in local storage. For signed-in users, your consent choices are also
+                  recorded on your account (with the notice version, language, and timestamp) so they can be managed from the
+                  Privacy Settings page. Category: Essential.
                 </>
               ),
             },
@@ -191,8 +193,13 @@ export default function CookiePolicyPage() {
               id: "choices-settings",
               content: (
                 <>
-                  <strong className="font-semibold text-[var(--text-primary)]">Cookie settings.</strong> You can reopen your
-                  preferences at any time from the "Cookie Settings" link in the footer of our website.
+                  <strong className="font-semibold text-[var(--text-primary)]">Privacy Settings.</strong> If you are signed in, you
+                  can review and change your consent choices for each category — and see when they were last updated — from the{" "}
+                  <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+                    Privacy Settings
+                  </Link>{" "}
+                  page in your dashboard. You can also reopen your preferences at any time from the "Cookie Settings" link in the
+                  footer of our website.
                 </>
               ),
             },
@@ -213,8 +220,14 @@ export default function CookiePolicyPage() {
       <LegalSection id="consent" number="07" title="Consent & Withdrawal">
         <LegalP>
           For non-essential cookies, we request your consent before setting them. If you accept, you can change your mind at any
-          time by using the Cookie Settings link in the footer or by clearing cookies in your browser. Withdrawing consent does not
-          affect the lawfulness of processing based on consent before its withdrawal.
+          time from the{" "}
+          <Link href="/dashboard/privacy" className="font-semibold text-brand-600 hover:underline">
+            Privacy Settings
+          </Link>{" "}
+          page (if signed in), through the Cookie Settings link in the footer, or by clearing cookies in your browser. Each
+          change you make as a signed-in user is recorded on your account along with the consent notice version and language.
+          Withdrawing consent does not affect the lawfulness of processing based on consent before its withdrawal, and we will
+          cease associated background processing promptly.
         </LegalP>
       </LegalSection>
 
@@ -237,10 +250,10 @@ export default function CookiePolicyPage() {
       <LegalSection id="contact" number="10" title="Contact Us">
         <LegalP>
           Questions about this Cookie Policy or your cookie choices? Email us at{" "}
-          <Link href="mailto:support@resumatch.ai" className="font-semibold text-brand-600 hover:underline">
-            support@resumatch.ai
+          <Link href="mailto:support@careeramp.ai" className="font-semibold text-brand-600 hover:underline">
+            support@careeramp.ai
           </Link>
-          . ResuMatch AI, Mumbai, Maharashtra, India.
+          . CareerAmp, Mumbai, Maharashtra, India.
         </LegalP>
       </LegalSection>
     </LegalPage>

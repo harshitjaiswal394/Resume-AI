@@ -2760,7 +2760,7 @@ export default function AIResumeBuilder() {
 
           {/* Footer Branding (Subtle) */}
           <div className="p-8 md:p-12 border-t border-slate-50 text-center shrink-0">
-            <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ResuMatch AI • Nemotron Intelligence</p>
+            <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by CareerAmp • Nemotron Intelligence</p>
           </div>
           </Reorder.Group>
         </div>

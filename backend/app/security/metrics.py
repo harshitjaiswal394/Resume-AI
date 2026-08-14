@@ -72,6 +72,17 @@ try:
         "Chat / agent turn latency",
         buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0],
     )
+    HTTP_REQUESTS = Counter(
+        "resumatch_ai_http_requests_total",
+        "HTTP requests handled by method, templated path and status",
+        ["method", "path", "status"],
+    )
+    HTTP_REQUEST_DURATION = Histogram(
+        "resumatch_ai_http_request_duration_seconds",
+        "HTTP request handling latency",
+        ["method", "path"],
+        buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+    )
 except Exception:  # pragma: no cover - defensive
     _ENABLED = False
 
@@ -101,6 +112,8 @@ except Exception:  # pragma: no cover - defensive
     PROVIDER_FAILURES = _null
     TOKEN_USAGE = _null
     LATENCY = _null
+    HTTP_REQUESTS = _null
+    HTTP_REQUEST_DURATION = _null
 
 
 def metrics_enabled() -> bool:

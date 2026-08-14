@@ -2,14 +2,33 @@ import os
 import json
 import base64
 import asyncio
+import hashlib
 import logging
 import httpx
+from collections import OrderedDict
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 
 from app.services.json_utils import normalize_placeholders
 
 logger = logging.getLogger("nvidia-service")
+
+# Small in-process cache so repeated search queries don't re-pay embedding latency.
+# Values are (provider, vector) tuples so callers know the embedding space.
+_EMBEDDING_CACHE_MAX = 512
+_embedding_cache: "OrderedDict[str, tuple]" = OrderedDict()
+
+def _embedding_cache_get(key: str) -> Optional[tuple]:
+    if key in _embedding_cache:
+        _embedding_cache.move_to_end(key)
+        return _embedding_cache[key]
+    return None
+
+def _embedding_cache_set(key: str, provider: Optional[str], value: List[float]) -> None:
+    _embedding_cache[key] = (provider, value)
+    _embedding_cache.move_to_end(key)
+    if len(_embedding_cache) > _EMBEDDING_CACHE_MAX:
+        _embedding_cache.popitem(last=False)
 
 class NvidiaService:
     def __init__(self):
@@ -28,6 +47,35 @@ class NvidiaService:
         )
         
         self.rerank_url = "https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-nemotron-rerank-1b-v2/reranking"
+
+        # Provider health flags: once a provider is confirmed broken (timeout /
+        # auth failure) we stop calling it for the lifetime of the process so job
+        # search degrades instantly to the keyword path instead of waiting out the
+        # same slow failure on every request.
+        self._vertex_embedding_down = False
+        self._nvidia_embedding_down = False
+
+        # Reused Vertex client. Creating a fresh Client per call forces the slow
+        # (~40s) ADC/OAuth token setup on every request; keeping one instance
+        # means that cost is paid once, at startup warm-up.
+        self._vertex_client = None
+        self._vertex_init_lock = None
+
+        # Which provider produced the most recent embedding. Only "vertex" is a
+        # valid space for ranking stored job vectors; "nvidia" vectors are
+        # orthogonal to them and must not be used for vector search.
+        self.last_embedding_provider: Optional[str] = None
+
+        # Vertex is only attempted once the model is confirmed warm (a throwaway
+        # embedding succeeded at startup). This prevents the one-time ~12s cold
+        # model call from being killed by the query timeout and wrongly
+        # disabling Vertex. Consecutive timeouts still trip the fallback.
+        self._vertex_warm = False
+        self._vertex_consecutive_failures = 0
+        # Serialize Vertex embedding calls: parallel requests to the gemini
+        # endpoint queue and trip the query timeout. One at a time keeps each
+        # call fast and lets the in-process cache absorb repeat queries.
+        self._vertex_embed_sem = asyncio.Semaphore(1)
 
     def _clean_json(self, text: str) -> Dict[str, Any]:
         """Extract JSON from potential markdown blocks and clean it. Production-grade."""
@@ -284,16 +332,158 @@ Respond with ONLY the JSON object:"""
 
     async def generate_embedding(self, text: str) -> List[float]:
         """
+        Generate an embedding: Vertex AI Gemini via ADC first, NVIDIA nemotron fallback.
+        Both produce 2048-dim vectors so stored job vectors and query vectors match.
+
+        Provider calls are bounded so a slow/unauthenticated provider degrades to a
+        fast failure (returns the zero vector) instead of blocking the request for
+        minutes. Results are cached in-process by query text.
+        """
+        truncated = text[:512]
+        cache_key = hashlib.sha256(truncated.encode("utf-8", "ignore")).hexdigest()
+        cached = _embedding_cache_get(cache_key)
+        if cached is not None:
+            self.last_embedding_provider = cached[0]
+            return cached[1]
+
+        self.last_embedding_provider = None
+        embedding = None
+        if self._vertex_warm and not self._vertex_embedding_down:
+            try:
+                embedding = await asyncio.wait_for(
+                    self._generate_embedding_vertex(truncated), timeout=15.0
+                )
+                if embedding:
+                    self.last_embedding_provider = "vertex"
+                    self._vertex_consecutive_failures = 0
+            except asyncio.TimeoutError:
+                self._vertex_consecutive_failures += 1
+                if self._vertex_consecutive_failures >= 3:
+                    logger.warning("Vertex embedding timed out 3x in a row — marking down")
+                    self._vertex_embedding_down = True
+                else:
+                    logger.warning("Vertex embedding timed out after 15s (attempt %d)", self._vertex_consecutive_failures)
+            except Exception as exc:
+                logger.warning(f"Vertex embedding failed: {exc}")
+
+        if not embedding and not self._nvidia_embedding_down:
+            embedding = await self._generate_embedding_nvidia(truncated)
+            if embedding and any(v != 0.0 for v in embedding):
+                self.last_embedding_provider = "nvidia"
+
+        if embedding and any(v != 0.0 for v in embedding):
+            _embedding_cache_set(cache_key, self.last_embedding_provider, embedding)
+            return embedding
+
+        logger.warning("Embedding generation failed — returning zero vector fallback")
+        return [0.0] * 2048
+
+    def vertex_embedding_ready(self) -> bool:
+        """True when Vertex is warm enough to produce ranking-grade embeddings."""
+        return self._vertex_warm and not self._vertex_embedding_down and self._vertex_client is not None
+
+    async def _ensure_vertex_client(self) -> bool:
+        """
+        Create (once) the Vertex AI client and pre-fetch ADC credentials so the
+        slow ~40s OAuth/token setup happens at warm-up instead of on the first
+        search query. Concurrent callers share the same initialisation via lock.
+        """
+        if self._vertex_client is not None:
+            return True
+        if self._vertex_init_lock is None:
+            self._vertex_init_lock = asyncio.Lock()
+        async with self._vertex_init_lock:
+            if self._vertex_client is not None:
+                return True
+            try:
+                from google.genai import Client
+
+                project = os.getenv("GOOGLE_CLOUD_PROJECT")
+                if not project:
+                    self._vertex_embedding_down = True
+                    logger.warning("GOOGLE_CLOUD_PROJECT not set — Vertex disabled")
+                    return False
+
+                location = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
+
+                def _load_creds():
+                    from google.auth import default
+                    from google.auth.transport.requests import Request
+                    creds, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+                    creds.refresh(Request())
+                    return creds
+
+                # Token refresh is blocking/network-bound; keep the event loop free.
+                creds = await asyncio.to_thread(_load_creds)
+                self._vertex_client = Client(
+                    vertexai=True, project=project, location=location, credentials=creds
+                )
+                logger.info("Vertex client initialized (credentials refreshed)")
+                return True
+            except Exception as exc:
+                self._vertex_embedding_down = True
+                logger.warning(f"Vertex client init failed: {exc}")
+                return False
+
+    async def warm_vertex_client(self) -> None:
+        """Called in the background at startup so the first search is already fast."""
+        if not await self._ensure_vertex_client():
+            return
+        # The first embed_content of a process pays a one-time ~12s model/endpoint
+        # warm-up cost. Absorb it now with a throwaway embedding so real queries
+        # hit the fast path (~1s) from the very first search. Vertex stays
+        # "not warm" (keyword fallback) until this succeeds.
+        from google.genai import types
+        model = os.getenv("VERTEX_EMBEDDING_MODEL", "gemini-embedding-001")
+        for attempt in range(1, 4):
+            try:
+                await asyncio.wait_for(
+                    self._vertex_client.aio.models.embed_content(
+                        model=model,
+                        contents="warmup",
+                        config=types.EmbedContentConfig(output_dimensionality=2048),
+                    ),
+                    timeout=30.0,
+                )
+                self._vertex_warm = True
+                logger.info("Vertex embedding model warmed up")
+                return
+            except Exception as exc:
+                logger.warning(f"Vertex model warm-up attempt {attempt} failed: {exc}")
+                if attempt < 3:
+                    await asyncio.sleep(10)
+        self._vertex_embedding_down = True
+        logger.warning("Vertex model warm-up failed 3x — Vertex disabled for this process")
+
+    async def _generate_embedding_vertex(self, text: str) -> Optional[List[float]]:
+        if not await self._ensure_vertex_client():
+            return None
+        async with self._vertex_embed_sem:
+            try:
+                from google.genai import types
+
+                model = os.getenv("VERTEX_EMBEDDING_MODEL", "gemini-embedding-001")
+                result = await self._vertex_client.aio.models.embed_content(
+                    model=model,
+                    contents=text,
+                    config=types.EmbedContentConfig(output_dimensionality=2048),
+                )
+                if result.embeddings and result.embeddings[0].values:
+                    return result.embeddings[0].values
+            except Exception as exc:
+                logger.warning(f"Vertex embedding failed: {exc}")
+        return None
+
+    async def _generate_embedding_nvidia(self, text: str) -> List[float]:
+        """
         Generate embedding using llama-nemotron-embed-1b-v2.
-        Uses async httpx with 30s timeout to avoid 504 gateway hangs.
+        Uses async httpx with an 8s timeout so a dead key degrades fast instead of
+        blocking search for 30s+.
         """
         logger.info("Generating embedding using llama-nemotron-embed-1b-v2")
         
-        # Truncate to 512 chars for speed — embeddings don't need full text
-        truncated = text[:512]
-        
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=8.0) as client:
                 response = await client.post(
                     "https://integrate.api.nvidia.com/v1/embeddings",
                     headers={
@@ -301,7 +491,7 @@ Respond with ONLY the JSON object:"""
                         "Content-Type": "application/json"
                     },
                     json={
-                        "input": [truncated],
+                        "input": [text],
                         "model": os.getenv("NIM_MODEL_EMBEDDING", "nvidia/llama-nemotron-embed-1b-v2"),
                         "input_type": "query",
                         "truncate": "NONE"
@@ -313,6 +503,8 @@ Respond with ONLY the JSON object:"""
                     return data["data"][0]["embedding"]
                 else:
                     logger.error(f"Embedding API returned {response.status_code}: {response.text[:200]}")
+                    if response.status_code in (401, 403):
+                        self._nvidia_embedding_down = True
                     return [0.0] * 2048
                     
         except httpx.TimeoutException:

@@ -1,0 +1,38 @@
+# =============================================================================
+# Resume-AI Grafana provisioning overlay for kube-prometheus-stack
+# -----------------------------------------------------------------------------
+# Usage:  helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+#           -n monitoring -f kubernetes/persistent.yaml -f grafana/values-overlay.yaml
+#
+# Datasource:
+# - We do NOT provision a separate Prometheus datasource. The stack's built-in
+#   datasource ConfigMap (label grafana_datasource, uid `prometheus`, marked
+#   default) is consumed by the datasource sidecar and is the one our alert
+#   rules reference. Provisioning a second Prometheus datasource in another
+#   file made Grafana 13 fail with "data source not found" at startup.
+#
+# Dashboards / alerting:
+# - The dashboards sidecar picks up the Resume-AI dashboards
+#   (label grafana_dashboard).
+# - The alerting provisioning bundle is mounted straight into
+#   /etc/grafana/provisioning/alerting (alert rules + email template).
+# =============================================================================
+grafana:
+  # Stack's built-in Prometheus datasource (uid `prometheus`) must stay enabled;
+  # alert rules reference this UID.
+  defaultDatasourceEnabled: true
+
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+    datasources:
+      # Keeps the stack's datasource ConfigMap (uid `prometheus`) synced into
+      # /etc/grafana/provisioning/datasources/.
+      enabled: true
+      label: grafana_datasource
+  extraConfigmapMounts:
+    - name: grafana-resumatch-alerting
+      mountPath: /etc/grafana/provisioning/alerting
+      configMap: grafana-resumatch-alerting
+      readOnly: true

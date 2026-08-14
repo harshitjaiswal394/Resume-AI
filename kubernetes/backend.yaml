@@ -213,6 +213,13 @@ spec:
               name: resumatch-secrets
               key: CRON_SECRET
               optional: true
+        # Prometheus scrape token (guards /metrics and /api/security/status)
+        - name: METRICS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: resumatch-secrets
+              key: METRICS_TOKEN
+              optional: true
 
         livenessProbe:
           httpGet:
@@ -232,10 +239,13 @@ kind: Service
 metadata:
   name: backend-service
   namespace: resumatch-ai
+  labels:
+    app: backend
 spec:
   type: ClusterIP
   ports:
-  - port: 8090
+  - name: http
+    port: 8090
     targetPort: 8090
     protocol: TCP
   selector:

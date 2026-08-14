@@ -6,7 +6,7 @@ import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { Reveal } from "@/components/marketing/Reveal";
 
 export const metadata: Metadata = {
-  title: "How it Works | ResuMatch AI",
+  title: "How it Works | CareerAmp",
   description: "Upload your resume, let AI scan it against live jobs, and get an optimized, interview-ready resume in minutes.",
 };
 
