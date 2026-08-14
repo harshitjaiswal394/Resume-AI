@@ -230,10 +230,9 @@ resource "google_compute_health_check" "frontend_health" {
 }
 
 resource "google_compute_backend_service" "backend_service" {
-  name          = "resumatch-cf-backend-api-service"
-  protocol      = "HTTP"
-  port_name     = "http"
-  health_checks = [google_compute_health_check.backend_health.id]
+  name      = "resumatch-cf-backend-api-service"
+  protocol  = "HTTP"
+  port_name = "http"
 
   log_config {
     enable      = true
@@ -246,10 +245,9 @@ resource "google_compute_backend_service" "backend_service" {
 }
 
 resource "google_compute_backend_service" "frontend_service" {
-  name          = "resumatch-cf-frontend-app-service"
-  protocol      = "HTTP"
-  port_name     = "http"
-  health_checks = [google_compute_health_check.frontend_health.id]
+  name      = "resumatch-cf-frontend-app-service"
+  protocol  = "HTTP"
+  port_name = "http"
 
   backend {
     group = google_compute_region_network_endpoint_group.frontend_neg.id
