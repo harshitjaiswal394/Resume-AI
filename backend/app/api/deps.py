@@ -28,48 +28,66 @@ async def get_current_user_id(authorization: Optional[str] = Header(None)) -> st
     return result["user"]["id"]
 
 
-# Networks that may set X-Forwarded-For on our behalf. Defaults to loopback +
-# private ranges (typical nginx/docker gateways). Override with TRUSTED_PROXIES
-# (comma-separated IPs/CIDRs) for proxies running on public addresses.
+# Only trust loopback by default. Production proxy CIDRs must be configured
+# explicitly via TRUSTED_PROXIES.
 _DEFAULT_TRUSTED_PROXIES = [
-    "127.0.0.1",
-    "::1",
-    "10.0.0.0/8",
-    "172.16.0.0/12",
-    "192.168.0.0/16",
-    "169.254.0.0/16",
-    "fc00::/7",
+    "127.0.0.1/32",
+    "::1/128",
 ]
 
 
-def _peer_is_trusted_proxy(host: str) -> bool:
+
+def _normalize_ip(value: str):
     try:
-        peer = ipaddress.ip_address(host)
+        ip = ipaddress.ip_address(value.strip())
     except ValueError:
-        return False
-    # Normalize IPv4-mapped IPv6 (e.g. "::ffff:127.0.0.1") to IPv4.
-    if isinstance(peer, ipaddress.IPv6Address) and peer.ipv4_mapped:
-        peer = peer.ipv4_mapped
+        return None
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        return ip.ipv4_mapped
+    return ip
+
+
+def _trusted_proxy_networks():
     configured = os.getenv("TRUSTED_PROXIES", "").strip()
     candidates = [c.strip() for c in configured.split(",") if c.strip()] if configured else _DEFAULT_TRUSTED_PROXIES
     for candidate in candidates:
         try:
-            if peer in ipaddress.ip_network(candidate, strict=False):
-                return True
+            yield ipaddress.ip_network(candidate, strict=False)
         except ValueError:
             continue
-    return False
+
+
+def _peer_is_trusted_proxy(host: str) -> bool:
+    peer = _normalize_ip(host)
+    if not peer:
+        return False
+    return any(peer in network for network in _trusted_proxy_networks())
+
+
+def _extract_client_ip_from_forwarded(forwarded: str, peer: str) -> str:
+    trusted_networks = list(_trusted_proxy_networks())
+    chain = [entry.strip() for entry in forwarded.split(",") if entry.strip()]
+    peer_ip = _normalize_ip(peer)
+    if peer_ip:
+        chain.append(str(peer_ip))
+
+    for candidate in reversed(chain):
+        ip = _normalize_ip(candidate)
+        if not ip:
+            continue
+        if not any(ip in network for network in trusted_networks):
+            return str(ip)
+    return peer or "unknown"
 
 
 async def get_client_ip(request: Request) -> str:
     """Best-effort client IP for rate limiting / audit.
-
-    Honors X-Forwarded-For only when the immediate peer is a trusted proxy;
-    otherwise returns the direct peer address so clients cannot spoof the
-    forwarded header to rotate past per-IP rate limits.
+    Honors X-Forwarded-For only when the immediate peer is an explicitly
+    trusted proxy and extracts the last untrusted address from the forwarded
+    chain so prepended spoofed values are ignored.
     """
     peer = request.client.host if request.client else ""
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded and peer and _peer_is_trusted_proxy(peer):
-        return forwarded.split(",")[0].strip() or "unknown"
+        return _extract_client_ip_from_forwarded(forwarded, peer)
     return peer or "unknown"
