@@ -223,7 +223,7 @@ export default function JobsPage() {
     }
   };
 
-  const applyHref = (job: Job) => job.apply_url || job.apply_links?.linkedin || job.apply_links?.naukri || job.apply_links?.indeed || "#";
+  const applyHref = (job: Job) => job.apply_url || "#";
 
   const pageCount = Math.max(1, Math.ceil(total / limit));
 

@@ -152,7 +152,7 @@ function MatchCard({ match, isLocked, onUpgrade, onSave, onGenerateCoverLetter }
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-slate-400">Apply on portals:</span>
+          <span className="text-xs font-bold text-slate-400">Apply on portal:</span>
           {onGenerateCoverLetter && (
             <Button
               variant="ghost"
@@ -165,28 +165,17 @@ function MatchCard({ match, isLocked, onUpgrade, onSave, onGenerateCoverLetter }
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {match.apply_links && typeof match.apply_links === 'object' ? (
-            Object.entries(match.apply_links).map(([platform, url]) => (
-              <Button
-                key={platform}
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 text-xs font-bold rounded-lg capitalize border-slate-200"
-                onClick={() => window.open(url as string, '_blank')}
-              >
-                {platform} <ExternalLink className="ml-1 h-3 w-3" />
-              </Button>
-            ))
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-3 text-xs font-bold rounded-lg capitalize border-slate-200"
-              onClick={() => window.open(`https://linkedin.com/jobs/search/?keywords=${encodeURIComponent(match.job_title || match.role || '')}`, '_blank')}
-            >
-              LinkedIn <ExternalLink className="ml-1 h-3 w-3" />
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 text-xs font-bold rounded-lg border-slate-200"
+            onClick={() => {
+              const url = match.apply_url || match.apply_links?.linkedin || match.apply_links?.indeed || match.apply_links?.naukri || `https://linkedin.com/jobs/search/?keywords=${encodeURIComponent(match.job_title || match.role || '')}`;
+              window.open(url, '_blank');
+            }}
+          >
+            Apply <ExternalLink className="ml-1 h-3 w-3" />
+          </Button>
         </div>
       </div>
 

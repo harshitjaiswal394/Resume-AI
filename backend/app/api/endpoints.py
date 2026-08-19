@@ -480,9 +480,9 @@ async def process_resume_stream_generator(content: bytes, filename: str, user_id
         yield f"data: {json.dumps({'step': 'skills', 'status': 'done', 'label': 'Analysis complete'})}\n\n"
         yield f"data: {json.dumps({'step': 'suggestions', 'status': 'done', 'label': 'Suggestions generated'})}\n\n"
         
-        # 4. Enrichment
+        # 4. Enrichment — only add portal fallback links when no direct apply_url
         for match in (matches or []):
-            if isinstance(match, dict):
+            if isinstance(match, dict) and not match.get("apply_url"):
                 match["apply_links"] = job_portal_service.generate_links(
                     match.get("role", "Software Engineer"), 
                     parsed_data.get("skills", []) if hasattr(parsed_data, 'get') else [],
@@ -648,7 +648,7 @@ async def process_resume(
         matches = await ai_service.generate_job_matches(parsed_data, roles, filters=initial_filters)
         
         for match in matches:
-            if isinstance(match, dict):
+            if isinstance(match, dict) and not match.get("apply_url"):
                 match["apply_links"] = job_portal_service.generate_links(
                     match.get("role", "Software Engineer"), 
                     parsed_data.get("skills", []) if isinstance(parsed_data, dict) else [],

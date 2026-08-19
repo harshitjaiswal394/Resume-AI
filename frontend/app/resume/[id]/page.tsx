@@ -321,18 +321,18 @@ export default function ResumeView() {
 
                         <div className="pt-4 flex flex-wrap items-center justify-between gap-4">
                           <div className="flex flex-wrap gap-2">
-                            {match.apply_links && Object.entries(match.apply_links).map(([platform, url]) => (
-                              <Button 
-                                key={platform} 
-                                size="sm" 
-                                variant="secondary" 
-                                className="capitalize font-bold h-9 px-4 rounded-xl"
-                                onClick={() => window.open(url as string, '_blank')}
-                              >
-                                {platform === 'linkedin' ? <Linkedin className="mr-2 h-4 w-4" /> : <ExternalLink className="mr-2 h-4 w-4" />}
-                                {platform}
-                              </Button>
-                            ))}
+                            <Button 
+                              size="sm" 
+                              variant="secondary" 
+                              className="font-bold h-9 px-4 rounded-xl"
+                              onClick={() => {
+                                const url = match.apply_url || match.apply_links?.linkedin || match.apply_links?.indeed || match.apply_links?.naukri || `https://linkedin.com/jobs/search/?keywords=${encodeURIComponent(match.job_title || match.role || '')}`;
+                                window.open(url, '_blank');
+                              }}
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Apply
+                            </Button>
                           </div>
                           <Button 
                             variant="outline" 

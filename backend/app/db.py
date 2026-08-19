@@ -352,11 +352,11 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                         INSERT INTO job_matches (
                             resume_id, user_id, job_title, company, location,
                             match_score, matching_skills, missing_skills,
-                            ai_reasoning, apply_links, created_at
+                            ai_reasoning, apply_links, apply_url, created_at
                         ) VALUES (
                             :rid, :uid, :title, :company, :loc,
                             :score, :m_skills, :miss_skills,
-                            :reason, :links, NOW()
+                            :reason, :links, :apply_url, NOW()
                         )
                     """),
                     {
@@ -369,7 +369,8 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                         "m_skills": m.get("matching_skills") or m.get("matchingSkills") or [],
                         "miss_skills": m.get("missing_skills") or m.get("missingSkills") or [],
                         "reason": m.get("aiReasoning") or m.get("reasoning") or "Highly compatible matches.",
-                        "links": json.dumps(m.get("apply_links") or {})
+                        "links": json.dumps(m.get("apply_links") or {}),
+                        "apply_url": m.get("apply_url") or ""
                     }
                 )
 
