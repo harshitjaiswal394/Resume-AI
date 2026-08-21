@@ -5,10 +5,14 @@ const BACKEND_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKE
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    
-    if (!body.resume || !body.jobRole) {
+
+    const resume = body.resume || body.resumeData;
+    const jobRole = body.jobRole || body.job_role;
+    const jobDescription = body.jobDescription || body.job_description;
+
+    if (!resume) {
       return NextResponse.json(
-        { error: 'Resume data and job role are required' },
+        { error: 'Resume data is required' },
         { status: 400 }
       );
     }
@@ -17,8 +21,9 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        resume: body.resume,
-        jobRole: body.jobRole,
+        resume,
+        jobRole,
+        jobDescription,
       }),
     });
 

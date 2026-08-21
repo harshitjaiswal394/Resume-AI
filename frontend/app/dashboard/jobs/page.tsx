@@ -508,22 +508,20 @@ export default function JobsPage() {
                       </div>
                     )}
 
-                    {job.similarity !== undefined && (
-                      <div className="mt-3">
-                        <div className="flex items-center justify-between text-[11px] font-bold">
-                          <span className="text-slate-400">Match</span>
-                          <span className={job.similarity >= 0.5 ? "text-brand-600" : "text-amber-600"}>
-                            {Math.round(job.similarity * 100)}%
-                          </span>
-                        </div>
-                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-600"
-                            style={{ width: `${Math.min(100, Math.round(job.similarity * 100))}%` }}
-                          />
-                        </div>
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-slate-400">Match</span>
+                        <span className={job.similarity != null && job.similarity >= 0.5 ? "text-brand-600" : "text-amber-600"}>
+                          {job.similarity != null ? `${Math.round(job.similarity * 100)}%` : "Keyword match"}
+                        </span>
                       </div>
-                    )}
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-600"
+                          style={{ width: job.similarity != null ? `${Math.min(100, Math.round(job.similarity * 100))}%` : '100%' }}
+                        />
+                      </div>
+                    </div>
 
                     <div className="mt-4 flex items-center gap-2 border-t border-slate-50 pt-3.5">
                       <a

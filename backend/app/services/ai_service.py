@@ -49,6 +49,37 @@ class AIService:
             
         return None
 
+    @staticmethod
+    def _strip_reasoning(text: str) -> str:
+        """Remove chain-of-thought / reasoning preamble that some models emit."""
+        if not text:
+            return text
+        import re as _re
+        # Strip <thinking>...</thinking> blocks
+        text = _re.sub(r'<thinking>.*?</thinking>', '', text, flags=_re.DOTALL | _re.IGNORECASE)
+        # Strip lines that look like meta-commentary about writing the letter
+        lines = text.split('\n')
+        skip_patterns = [
+            r'^(we need|let.s craft|let.s draft|count words|word count|structure:|'
+            r'opening paragraph|body paragraph|closing paragraph|highlight|mention|'
+            r'we can|we.ll|ensure|make sure|avoid|provide concrete|describe a relevant|'
+            r'reaffirm|format as|no bullet|professional tone|each sentence|total sentences|'
+            r'approx|roughly|aim for|draft ~|write:|count manually|dear.*hiring manager.*,?\s*$)',
+        ]
+        result_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                result_lines.append(line)
+                continue
+            if any(_re.match(p, stripped, _re.IGNORECASE) for p in skip_patterns):
+                continue
+            result_lines.append(line)
+        text = '\n'.join(result_lines)
+        # Clean up multiple blank lines
+        text = _re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
+
     async def _call_ai_with_fallback(self, prompt: str, system_prompt: str = None, temperature: float = 0.5) -> str:
         """Hierarchical NVIDIA NIM fallback with deep logging."""
         from app.services.nvidia_service import nvidia_service
@@ -91,18 +122,31 @@ class AIService:
         logger.error(f"AI_PROCESS_CRITICAL - All models failed. Last error: {str(last_error)}")
         return ""
 
-    async def analyze_resume(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyzes profile and provides insights/score using Nemotron-3-Super."""
+    async def analyze_resume(self, resume_data: Dict[str, Any], target_role: str = None) -> Dict[str, Any]:
+        """Analyzes profile and provides insights/score using Nemotron-3-Super.
+        When target_role is provided, the analysis is role-specific — scoring
+        reflects how well the resume fits that particular role."""
+        role_context = ""
+        if target_role:
+            role_context = f"""
+        TARGET ROLE: {target_role}
+        Score this resume SPECIFICALLY for the "{target_role}" position.
+        Focus your weaknesses and recommendations on gaps relevant to THIS role.
+        The score should reflect role-fit, not just generic ATS compliance.
+        """
+
         prompt = f"""
         Analyze this resume profile for ATS compatibility and recruiter appeal.
+        {role_context}
         Return ONLY a VALID JSON object with:
         {{
-            "score": int (0-100),
+            "score": int (0-100, role-fit score if target role provided),
             "atsScore": int (0-100),
             "keywordScore": int (0-100),
             "readabilityScore": int (0-100),
-            "weaknesses": ["Issue 1", "Issue 2"],
-            "recommendations": ["Action 1", "Action 2"],
+            "roleFitSummary": "One sentence explaining how well this resume fits the target role and why",
+            "weaknesses": ["Issue 1 (role-specific if target role given)"],
+            "recommendations": ["Action 1 (role-specific if target role given)"],
             "suggestedRoles": ["Role 1", "Role 2"],
             "insights": {{
                "strengths": ["Item 1"],
@@ -134,6 +178,7 @@ class AIService:
                 parsed.setdefault("weaknesses", [])
                 parsed.setdefault("recommendations", [])
                 parsed.setdefault("suggestedRoles", ["Software Engineer"])
+                parsed.setdefault("roleFitSummary", "Resume analyzed for general ATS compatibility.")
                 
                 # Ensure resume_score is always present for the gauge
                 parsed["resume_score"] = parsed.get("score", 75)
@@ -148,6 +193,7 @@ class AIService:
                 "atsScore": 70, 
                 "keywordScore": 80,
                 "readabilityScore": 85,
+                "roleFitSummary": "Analysis timed out. Showing cached score.",
                 "weaknesses": ["Analysis timed out"], 
                 "recommendations": ["Try again later"], 
                 "suggestedRoles": ["Software Engineer"],
@@ -188,42 +234,259 @@ class AIService:
         profile_text = ' '.join(profile_parts)
         embedding = await nvidia_service.generate_embedding(profile_text)
         
-        # 2. Vector Similarity Search from Knowledge Base (Top 50)
-        candidates = await asyncio.to_thread(execute_vector_search, embedding, limit=50, filters=filters)
+        # 2. Vector Similarity Search from Knowledge Base
+        candidates = await asyncio.to_thread(execute_vector_search, embedding, limit=200, filters=filters)
         
+        # Fallback: if vector search returns nothing, try keyword search
         if not candidates:
-            logger.warning("No job candidates found in Knowledge Base.")
-            return []
+            logger.info("Vector search returned 0 candidates, falling back to keyword search")
+            from app.db import execute_keyword_search
+            kw_filters = {k: v for k, v in (filters or {}).items() if v}
+            kw_filters["q"] = roles[0] if roles else ""
+            kw_results, _ = await asyncio.to_thread(execute_keyword_search, kw_filters, limit=200)
+            if kw_results:
+                logger.info(f"Keyword fallback found {len(kw_results)} candidates")
+                candidates = kw_results
+            else:
+                logger.warning("No job candidates found in Knowledge Base (both vector and keyword search empty).")
+                return []
 
         # 3. Native Skill-Gap Analysis & Scoring
         # We calculate this in Python to provide instant results for 50 jobs
-        user_skills = set([s.lower() for s in resume_data.get('skills', [])])
+        user_skills_raw = [s.lower() for s in resume_data.get('skills', [])]
         
+        # Expand category skills into core tech keywords (conservative — no false positives)
+        CATEGORY_MAP = {
+            # DevOps / Platform
+            "ci/cd & devops": ["jenkins", "github actions", "ci/cd", "devops", "argocd", "helm"],
+            "containers & k8s": ["docker", "kubernetes", "k8s", "helm", "eks", "aks"],
+            "iac & cloud": ["terraform", "ansible", "aws", "azure", "gcp", "cloud", "infrastructure"],
+            "observability": ["prometheus", "grafana", "datadog", "splunk", "monitoring", "opentelemetry"],
+            "registries": ["artifactory", "nexus", "ecr", "acr"],
+            # Security
+            "security": ["security", "oauth", "jwt", "ssl", "vault", "iam", "sso", "firewall"],
+            "cyber security": ["penetration testing", "vulnerability assessment", "incident response", "siem", "compliance"],
+            # Languages / General
+            "languages": [],
+            "programming": [],
+            # Data / ML / AI
+            "data science": ["machine learning", "deep learning", "data science", "statistics", "nlp", "computer vision", "tensorflow", "pytorch", "pandas", "numpy", "scikit-learn", "matplotlib"],
+            "machine learning": ["machine learning", "deep learning", "tensorflow", "pytorch", "keras", "scikit-learn", "xgboost", "neural network", "cnn", "rnn", "transformer", "bert", "gpt", "llm"],
+            "data engineering": ["spark", "hadoop", "airflow", "etl", "data pipeline", "kafka", "flink", "dbt", "snowflake", "databricks", "redshift", "bigquery"],
+            "data analytics": ["sql", "tableau", "power bi", "excel", "looker", "analytics", "reporting", "dashboard", "kpi", "a/b testing"],
+            "big data": ["hadoop", "spark", "kafka", "flink", "hive", "pig", "cassandra", "hbase", "elasticsearch", "data lake"],
+            "ai": ["artificial intelligence", "machine learning", "deep learning", "nlp", "computer vision", "reinforcement learning", "generative ai", "llm", "rag", "fine-tuning"],
+            "generative ai": ["generative ai", "genai", "llm", "large language model", "gpt", "chatgpt", "openai", "anthropic", "claude", "gemini", "prompt engineering", "langchain", "llamaindex", "huggingface", "diffusers", "stable diffusion", "midjourney", "dall-e", "text-to-image", "text-to-video", "vector database", "embeddings", "openai api", "azure openai"],
+            "agentic ai": ["agentic ai", "ai agent", "autonomous agent", "langchain agents", "langgraph", "autogen", "crewai", "tool use", "function calling", "mcp", "model context protocol", "multi-agent", "agent framework", "planning", "reasoning", "chain of thought", "tree of thought", "retrieval augmented"],
+            "rag": ["rag", "retrieval augmented generation", "vector database", "embeddings", "semantic search", "pinecone", "weaviate", "milvus", "chromadb", "qdrant", "faiss", "langchain", "llamaindex", "chunking", "document retrieval", "knowledge base", "vector store", "similarity search"],
+            "llmops": ["llmops", "model serving", "vllm", "triton", "tensorrt", "quantization", "fine-tuning", "rlhf", "dpo", "lora", "peft", "qlora", "model deployment", "inference optimization", "model monitoring", "prompt management", "guardrails", "evaluation"],
+            "mlops": ["mlops", "mlflow", "wandb", "kubeflow", "sagemaker", "vertex ai", "model registry", "feature store", "experiment tracking", "model versioning", "a/b testing", "data drift", "model drift", "pipeline orchestration"],
+            "computer vision": ["computer vision", "opencv", "yolo", "yolov8", "object detection", "image segmentation", "image classification", "ocr", "image generation", "video analysis", "3d vision", "depth estimation", "pose estimation"],
+            "nlp": ["nlp", "natural language processing", "transformers", "tokenization", "named entity recognition", "sentiment analysis", "text classification", "text generation", "summarization", "question answering", "chatbot", "speech recognition", "text-to-speech", "whisper"],
+            "deep learning": ["deep learning", "neural network", "cnn", "rnn", "lstm", "transformer", "attention mechanism", "gan", "vae", "diffusion model", "graph neural network", "autoencoder", "pytorch", "tensorflow", "keras", "jax"],
+            "reinforcement learning": ["reinforcement learning", "rl", "q-learning", "policy gradient", "dqn", "ppo", "openai gym", "mujoco", "multi-agent rl", "inverse rl"],
+            # Frontend
+            "frontend": ["react", "angular", "vue", "html", "css", "javascript", "typescript", "next.js", "nuxt", "svelte", "tailwind", "sass", "webpack", "vite"],
+            "web development": ["html", "css", "javascript", "react", "angular", "vue", "node.js", "express", "django", "flask", "spring"],
+            "ui/ux": ["figma", "sketch", "adobe xd", "design system", "wireframe", "prototype", "user research", "usability"],
+            "mobile development": ["react native", "flutter", "swift", "kotlin", "ios", "android", "dart", "xamarin", "ionic"],
+            # Backend
+            "backend": ["node.js", "express", "django", "flask", "fastapi", "spring", "spring boot", "rails", "laravel", ".net", "graphql", "rest api", "grpc"],
+            "api development": ["rest api", "graphql", "grpc", "swagger", "openapi", "postman", "api gateway"],
+            "microservices": ["microservices", "kubernetes", "docker", "service mesh", "istio", "envoy", "grpc", "event driven"],
+            "full stack": ["react", "angular", "vue", "node.js", "express", "django", "flask", "fastapi", "spring", "html", "css", "javascript", "typescript", "postgresql", "mongodb"],
+            # Databases
+            "databases": ["sql", "postgresql", "mysql", "oracle", "mongodb", "redis", "cassandra", "dynamodb", "elasticsearch"],
+            "sql": ["sql", "postgresql", "mysql", "oracle"],
+            "nosql": ["mongodb", "redis", "cassandra", "dynamodb", "neo4j", "elasticsearch"],
+            # Cloud
+            "cloud": ["aws", "azure", "gcp", "cloud", "serverless", "lambda", "ec2", "s3"],
+            "aws": ["ec2", "s3", "lambda", "rds", "dynamodb", "iam", "ecs", "eks"],
+            "azure": ["azure devops", "azure functions", "azure sql", "cosmos db"],
+            "gcp": ["gke", "cloud functions", "bigquery", "cloud run"],
+            "serverless": ["lambda", "cloud functions", "azure functions"],
+            # Networking / Infra
+            "networking": ["tcp/ip", "dns", "http", "vpn", "nginx", "load balancer"],
+            "infrastructure": ["linux", "bash", "terraform", "ansible", "kubernetes", "docker", "ci/cd"],
+            "linux": ["linux", "bash", "shell", "nginx"],
+            # Testing
+            "testing": ["selenium", "jest", "cypress", "junit", "pytest", "tdd", "unit testing"],
+            "qa": ["selenium", "cypress", "appium", "jira", "regression testing", "automation testing"],
+            "automation": ["selenium", "cypress", "robot framework", "jenkins", "python", "bash"],
+            # Dev Tools
+            "dev tools": ["git", "jira", "confluence", "github", "gitlab"],
+            "version control": ["git", "github", "gitlab", "bitbucket"],
+            "agile": ["agile", "scrum", "kanban", "sprint", "jira"],
+            # Project / Management
+            "leadership": ["leadership", "team management", "project management", "mentoring"],
+            "communication": ["communication", "documentation", "stakeholder management"],
+            "problem solving": ["problem solving", "debugging", "troubleshooting"],
+            # Blockchain / Web3
+            "blockchain": ["blockchain", "web3", "solidity", "ethereum", "smart contract"],
+            # Embedded / IoT
+            "iot": ["iot", "embedded", "raspberry pi", "arduino", "mqtt"],
+            # Game Dev
+            "game development": ["unity", "unreal engine", "c++", "game design"],
+            # CRM / ERP
+            "salesforce": ["salesforce", "apex", "lightning", "crm"],
+            # Other common categories
+            "devops": ["devops", "ci/cd", "jenkins", "docker", "kubernetes", "terraform"],
+            "cloud computing": ["aws", "azure", "gcp", "cloud", "serverless"],
+            "information technology": ["networking", "linux", "windows server", "vmware"],
+            # SRE / Platform Engineering
+            "site reliability": ["sre", "slo", "incident management", "chaos engineering", "monitoring"],
+            "platform engineering": ["platform engineering", "backstage", "developer experience"],
+            # Additional AI roles
+            "ai engineer": ["ai engineer", "ml engineer", "model deployment", "inference", "mlops"],
+            "data engineer": ["data engineer", "etl", "airflow", "spark", "kafka", "dbt"],
+            "ai research": ["ai research", "research scientist", "paper implementation"],
+            "prompt engineering": ["prompt engineering", "chain of thought", "instruction tuning"],
+            # Enterprise / Business
+            "sap": ["sap", "abap", "fiori", "s/4hana", "erp"],
+            "erp": ["erp", "sap", "dynamics 365"],
+            "power platform": ["power automate", "power apps", "power bi", "dynamics 365"],
+            "technical writing": ["technical writing", "documentation", "api documentation"],
+            "product management": ["product management", "roadmap", "user stories", "okr"],
+            # Specialized
+            "robotics": ["ros", "ros2", "robotics", "plc", "scada"],
+            "ar/vr": ["ar", "vr", "mixed reality", "arkit", "arcore", "unity3d"],
+            "gis": ["gis", "geospatial", "arcgis", "postgis"],
+            "quantum computing": ["quantum computing", "qiskit"],
+            "mainframe": ["mainframe", "cobol", "jcl", "cics"],
+            "bi": ["business intelligence", "data warehouse", "etl", "reporting", "dashboard"],
+        }
+        expanded_skills = set()
+        for s in user_skills_raw:
+            expanded_skills.add(s)
+            expanded = CATEGORY_MAP.get(s, [])
+            expanded_skills.update(expanded)
+        user_skills = expanded_skills
+        
+        # Word-boundary matcher to prevent false positives (e.g. "scala" from "scalable")
+        import re as _re
+        def _has_skill(text: str, skill: str) -> bool:
+            return bool(_re.search(r'\b' + _re.escape(skill) + r'\b', text))
+        
+        # Comprehensive tech skill dictionary for extracting ALL skills from job descriptions
+        TECH_SKILLS = {
+            # DevOps / Platform
+            "jenkins", "github actions", "ci/cd", "devops", "argocd", "helm",
+            "docker", "kubernetes", "k8s", "eks", "aks", "openshift",
+            "terraform", "ansible", "aws lambda", "ec2", "s3", "rds", "ecs", "cloudformation", "cloudwatch",
+            "azure devops", "azure monitor", "azure active directory",
+            "gke", "cloud build",
+            "prometheus", "grafana", "datadog", "splunk", "opentelemetry", "new relic",
+            "artifactory", "nexus", "ecr", "acr",
+            "vault", "consul", "nomad", "iam", "sso", "devsecops",
+            "puppet", "chef",
+            "service mesh", "istio", "envoy",
+            "sre", "incident management", "chaos engineering", "blameless", "postmortem",
+            "gitops", "infrastructure as code",
+            "containerization", "virtualization", "vmware",
+            "backup", "disaster recovery",
+            "configuration management",
+            "site reliability", "platform engineering",
+            "cncf", "cloud native", "12 factor",
+            "sonarqube", "fortify", "checkmarx", "veracode",
+            "load balancer", "nginx",
+            # AI / ML / Data Science
+            "pytorch", "tensorflow", "keras", "scikit-learn", "xgboost", "lightgbm",
+            "hugging face", "transformers", "langchain", "llamaindex",
+            "openai", "gpt", "bert", "llm", "rag", "vector database",
+            "pinecone", "weaviate", "milvus", "chromadb", "faiss",
+            "mlflow", "wandb", "kubeflow", "airflow", "ml pipeline",
+            "pandas", "numpy", "scipy", "matplotlib", "seaborn",
+            "spark", "hadoop", "kafka", "flink", "dbt",
+            "snowflake", "databricks", "bigquery", "redshift",
+            "tableau", "power bi", "looker",
+            "computer vision", "nlp", "deep learning", "machine learning",
+            "neural network", "cnn", "rnn", "lstm", "transformer",
+            "reinforcement learning", "generative ai", "gen ai", "mlops",
+            "data pipeline", "etl", "feature engineering",
+            # Programming
+            "python", "java", "javascript", "typescript", "golang", "go", "rust",
+            "scala", "r", "sql", "nosql", "c++", "c#", ".net",
+            # Web / Mobile
+            "react", "angular", "vue", "next.js", "node.js", "express",
+            "spring", "spring boot", "django", "flask", "fastapi",
+            "graphql", "rest api", "grpc", "microservices",
+            "react native", "flutter", "swift", "kotlin",
+            # Data / Analytics
+            "mongodb", "postgresql", "mysql", "redis", "elasticsearch", "dynamodb",
+            "cassandra", "neo4j", "couchdb",
+            # Security
+            "oauth", "jwt", "ssl", "firewall", "siem", "penetration testing",
+            "vulnerability assessment", "compliance",
+        }
+
+        # Dynamic role-relevance: derive keywords from the requested role(s)
+        # instead of a hardcoded whitelist that drops entire job families.
+        role_keywords = set()
+        for r in roles:
+            r_lower = r.lower().strip()
+            role_keywords.add(r_lower)
+            # Add individual significant words (min 3 chars) from the role
+            for word in r_lower.split():
+                if len(word) >= 3:
+                    role_keywords.add(word)
+
         processed_matches = []
         for job in candidates:
+            title_lower = (job.get('title', '') or '').lower()
+            domain_lower = (job.get('domain', '') or '').lower()
+
+            # Job is relevant if its title or domain contains ANY of the role keywords
+            title_relevant = any(kw in title_lower or kw in domain_lower for kw in role_keywords)
+            if not title_relevant:
+                continue
+
             job_skills = set([s.lower() for s in job.get('skills', [])])
+
+            # Extract skills from job description
+            searchable = " ".join(filter(None, [
+                job.get('title', ''),
+                job.get('description', ''),
+            ])).lower()
+
+            desc_skills = set()
+            for skill in TECH_SKILLS:
+                if _has_skill(searchable, skill):
+                    desc_skills.add(skill)
+
+            # Merge DB-stored skills with extracted skills
+            all_job_skills = job_skills | desc_skills
+
+            # matching = user's skills the job mentions; missing = job needs but user lacks
+            matching = sorted(list(all_job_skills.intersection(user_skills)))
+            missing = sorted(list(all_job_skills.difference(user_skills)))
+
+            # Require at least 1 skill match (relaxed — vector similarity already ranks relevance)
+            if len(matching) < 1:
+                continue
             
-            # Intersection for matching
-            matching = list(job_skills.intersection(user_skills))
-            missing = list(job_skills.difference(user_skills))
-            
-            # Calculate a blended match score (60% vector similarity, 40% keyword match)
-            keyword_score = (len(matching) / len(job_skills)) * 100 if job_skills else 0
+            # Calculate a blended match score (70% vector similarity, 30% keyword match)
+            # Vector similarity is the primary ranking signal; keyword overlap is supplementary
+            keyword_score = (len(matching) / len(all_job_skills)) * 100 if all_job_skills else 0
             
             # Defensive check for similarity type (SQL similarity vs potential sequence bug)
+            import math as _math
             raw_similarity = job.get('similarity', 0.5)
             if isinstance(raw_similarity, (list, tuple)):
                 raw_similarity = raw_similarity[0] if raw_similarity else 0.5
-            
-            vector_score = float(raw_similarity) * 100
+            try:
+                vector_score = float(raw_similarity) * 100
+            except (TypeError, ValueError):
+                vector_score = 50.0
+            if _math.isnan(vector_score) or _math.isinf(vector_score):
+                vector_score = 50.0
             
             final_score = int((vector_score * 0.7) + (keyword_score * 0.3))
             
             job.update({
                 "match_score": min(final_score, 100),
-                "matching_skills": matching[:10],
-                "missing_skills": missing[:10],
-                "reasoning": f"Strong match for {job['title']} based on your background in {', '.join(matching[:2])}." if matching else f"Potential match for {job['title']} in {job['location']}."
+                "matching_skills": matching[:20],
+                "missing_skills": missing[:20],
+                "reasoning": f"Strong match for {job['title']} based on your background in {', '.join(matching[:3])}." if matching else f"Potential match for {job['title']} in {job['location']}."
             })
             processed_matches.append(job)
         
@@ -233,59 +496,32 @@ class AIService:
         return processed_matches
 
     async def generate_cover_letter(self, resume_data: Dict[str, Any], job_role: str) -> str:
-        """Uses Nemotron-3-Super for high-quality professional content."""
+        """Generate a professional cover letter from resume data and job role."""
         try:
             from app.services.nvidia_service import nvidia_service
-            prompt = f"Create a cover letter for {job_role} based on: {json.dumps(resume_data)}"
-            response = await asyncio.to_thread(
-                nvidia_service.client.chat.completions.create,
-                model=os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2048
+            
+            pruned = {
+                "name": resume_data.get("name", resume_data.get("fullName", "Candidate")),
+                "summary": resume_data.get("summary", ""),
+                "skills": resume_data.get("skills", [])[:15],
+                "experience": [
+                    {"title": e.get("title", ""), "company": e.get("company", ""), "description": e.get("description", [])[:3]}
+                    for e in resume_data.get("experience", [])[:3]
+                ],
+            }
+
+            system_prompt = (
+                "You write professional cover letters. "
+                "Return ONLY the letter. No planning, no analysis, no reasoning, no commentary."
             )
-            content = self._get_completion_content(response)
-            return content if content else "Failed to generate cover letter. Please check your API configuration."
-        except Exception as e:
-            logger.error(f"Cover letter failed: {str(e)}")
-            return "Professional Cover Letter: [Generation error, original text preserved]"
+            user_prompt = f"""Write a professional cover letter (250-350 words) for {job_role}.
 
-    async def generate_smart_cover_letter(self, resume_data: Dict[str, Any], jd_text: str) -> str:
-        """Generates a tailored letter matching candidate skills with JD using 8B model for speed."""
-        
-        # Optimization: Prune payload to only include essentials (fullName, summary, top skills, top 2 exp)
-        pruned_resume = {
-            "fullName": resume_data.get("fullName", "Candidate"),
-            "summary": resume_data.get("summary", ""),
-            "skills": resume_data.get("skills", [])[:15],
-            "experience": [
-                {
-                    "title": exp.get("title", ""),
-                    "company": exp.get("company", ""),
-                    "description": exp.get("description", [])[:3]
-                } for exp in resume_data.get("experience", [])[:2]
-            ]
-        }
+CANDIDATE:
+{json.dumps(pruned)}
 
-        system_prompt = "You are a professional, high-impact cover letter generator. Your goal is to return ONLY the final text of the cover letter. Absolutely no preamble, no word counts, no internal reasoning, and no commentary. Start directly with the greeting."
-        
-        user_prompt = f"""
-        Generate a tailored cover letter (150-200 words) using the candidate and job details below.
-        
-        CANDIDATE DATA:
-        {json.dumps(pruned_resume)}
-        
-        JOB DESCRIPTION:
-        {jd_text[:3000]}
-        
-        Requirements:
-        - Professional and concise tone.
-        - Highlight specific achievements that match the JD.
-        - Output ONLY the final letter text.
-        """
-        
-        try:
-            start_time = time.time()
-            from app.services.nvidia_service import nvidia_service
+Start with "Dear Hiring Manager," and end with "Sincerely," plus the candidate name.
+No bullet points. No labels. No thinking or planning text. Just the letter itself."""
+
             response = await asyncio.to_thread(
                 nvidia_service.client.chat.completions.create,
                 model="meta/llama-3.1-8b-instruct",
@@ -293,10 +529,74 @@ class AIService:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.1, # Extremely low temp for strict instruction adherence
-                max_tokens=1000
+                temperature=0.3,
+                max_tokens=2048
             )
             content = self._get_completion_content(response)
+            content = self._strip_reasoning(content)
+            return content.strip() if content else "Failed to generate cover letter."
+        except Exception as e:
+            logger.error(f"Cover letter failed: {str(e)}")
+            return "Failed to generate cover letter. Please try again."
+
+    async def generate_smart_cover_letter(self, resume_data: Dict[str, Any], jd_text: str) -> str:
+        """Generates a tailored letter matching candidate skills with JD using 8B model for speed."""
+        
+        # Optimization: Prune payload to only include essentials (fullName, summary, top skills, top 2 exp)
+        pruned_resume = {
+            "name": resume_data.get("name", resume_data.get("fullName", "Candidate")),
+            "summary": resume_data.get("summary", ""),
+            "skills": resume_data.get("skills", [])[:15],
+            "experience": [
+                {
+                    "title": exp.get("title", ""),
+                    "company": exp.get("company", ""),
+                    "description": exp.get("description", [])[:3]
+                } for exp in resume_data.get("experience", [])[:3]
+            ]
+        }
+
+        system_prompt = (
+            "You write professional cover letters. "
+            "Return ONLY the finished letter. No planning, no analysis, no reasoning, no step-by-step thinking, no commentary."
+        )
+        
+        user_prompt = f"""Write a professional cover letter (250-350 words) tailored to this specific job.
+
+CANDIDATE PROFILE:
+{json.dumps(pruned_resume)}
+
+JOB DESCRIPTION:
+{jd_text[:3000]}
+
+The letter must follow this structure:
+1. Opening paragraph: Name the exact role and company. Express genuine enthusiasm and briefly state years of experience and primary domain (2-3 sentences).
+2. Body paragraph 1: Pick the TOP 3 requirements from the JD and directly map each to a specific skill, tool, or achievement from the candidate's background. Be precise — name technologies, frameworks, methodologies (4-5 sentences).
+3. Body paragraph 2: Describe a concrete project or accomplishment that demonstrates the candidate's ability to deliver results in a similar context. Use metrics — performance gains, team sizes, system uptime, deployment frequency, cost savings (3-4 sentences).
+4. Closing paragraph: Reiterate what makes this candidate uniquely suited for THIS role. Express eagerness to contribute and discuss further (2-3 sentences).
+
+Rules:
+- Start with "Dear Hiring Manager,"
+- End with "Sincerely," followed by the candidate name from the profile.
+- Professional, confident tone. No bullet points. No generic filler.
+- Every sentence must reference something specific from either the resume or the JD.
+- Do NOT invent skills or experiences not present in the candidate profile."""
+        
+        try:
+            start_time = time.time()
+            from app.services.nvidia_service import nvidia_service
+            response = await asyncio.to_thread(
+                nvidia_service.client.chat.completions.create,
+                model="meta/llama-3.1-70b-instruct",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=2048
+            )
+            content = self._get_completion_content(response)
+            content = self._strip_reasoning(content)
             latency = time.time() - start_time
             
             if content:

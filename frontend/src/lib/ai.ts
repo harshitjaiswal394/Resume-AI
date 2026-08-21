@@ -51,11 +51,11 @@ export async function generateJobMatches(resume: ParsedResume, roles: string[]) 
   return response.json();
 }
 
-export async function generateCoverLetter(resume: ParsedResume, jobRole: string) {
+export async function generateCoverLetter(resume: ParsedResume, jobRole: string, jobDescription?: string) {
   const response = await fetch('/api/resume/cover-letter', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resume, jobRole })
+    body: JSON.stringify({ resume, jobRole, jobDescription })
   });
   if (!response.ok) throw new Error('Failed to generate cover letter');
   const data = await response.json();

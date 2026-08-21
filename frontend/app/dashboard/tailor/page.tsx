@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -837,6 +837,7 @@ function downloadResumePdf(data: any, filename?: string) {
 
 export default function TailorPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
 
@@ -881,6 +882,15 @@ export default function TailorPage() {
   useEffect(() => {
     if (user) fetchResumes();
   }, [user, fetchResumes]);
+
+  // Auto-fetch JD URL from query params (from MatchCard Tailor Resume button)
+  const hasUrlParam = searchParams.get('jdUrl') || searchParams.get('hasJd');
+  useEffect(() => {
+    const urlFromParams = searchParams.get('jdUrl');
+    if (urlFromParams && !jdUrl && !isFetching && !isTailoring) {
+      setJdUrl(urlFromParams);
+    }
+  }, [searchParams]);
 
   const getToken = async (): Promise<string> => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -944,11 +954,41 @@ export default function TailorPage() {
       }
     } catch (e: any) {
       console.error("JD Fetch Error:", e);
-      toast.error(e.message || "Could not fetch Job Description. Please paste it manually below.");
+      // Fallback: use JD from DB (stored in sessionStorage by MatchCard)
+      const fallbackJd = sessionStorage.getItem('tailor_jd_fallback');
+      if (fallbackJd) {
+        setJdText(fallbackJd);
+        sessionStorage.removeItem('tailor_jd_fallback');
+        toast.success("Using job description from database (URL fetch blocked by job board)");
+      } else {
+        toast.error(e.message || "Could not fetch Job Description. Please paste it manually below.");
+      }
     } finally {
       setIsFetching(false);
     }
   };
+
+  // Auto-fetch JD from URL when arrived from MatchCard (one-shot)
+  const autoFetchTriggeredRef = React.useRef(false);
+  useEffect(() => {
+    const urlFromParams = searchParams.get('jdUrl');
+    const hasFallback = searchParams.get('hasJd') === '1' && sessionStorage.getItem('tailor_jd_fallback');
+    if (resumes.length > 0 && selectedResumeId && !autoFetchTriggeredRef.current) {
+      if (urlFromParams && jdUrl) {
+        autoFetchTriggeredRef.current = true;
+        handleFetchJD();
+      } else if (hasFallback) {
+        // No URL available, use DB fallback directly
+        autoFetchTriggeredRef.current = true;
+        const fallbackJd = sessionStorage.getItem('tailor_jd_fallback');
+        if (fallbackJd) {
+          setJdText(fallbackJd);
+          sessionStorage.removeItem('tailor_jd_fallback');
+          toast.success("Using job description from database");
+        }
+      }
+    }
+  }, [resumes, selectedResumeId, jdUrl, searchParams]);
 
   const handleTailor = async () => {
     if (!selectedResumeId) {
@@ -996,6 +1036,16 @@ export default function TailorPage() {
       setIsTailoring(false);
     }
   };
+
+  // Auto-tailor once JD text is fetched from URL params
+  const autoTailorTriggeredRef = React.useRef(false);
+  useEffect(() => {
+    const urlFromParams = searchParams.get('jdUrl');
+    if (urlFromParams && jdText && selectedResumeId && !isTailoring && !result && !autoTailorTriggeredRef.current) {
+      autoTailorTriggeredRef.current = true;
+      handleTailor();
+    }
+  }, [jdText, selectedResumeId, searchParams]);
 
   const handleDeleteResume = async () => {
     if (!selectedResumeId) return;

@@ -25,6 +25,42 @@ interface PersonalizationCardProps {
 const EXPERIENCE_LEVELS = ["Entry level", "Mid-Senior", "Director", "Executive"];
 const WORK_MODES = ["Remote", "On-site", "Hybrid"];
 
+const CURATED_ROLES = [
+  "Software Engineer", "Senior Software Engineer", "Full Stack Developer",
+  "Frontend Developer", "Backend Developer", "Mobile Developer",
+  "DevOps Engineer", "Platform Engineer", "Site Reliability Engineer",
+  "Cloud Engineer", "Infrastructure Engineer",
+  "Data Scientist", "Data Engineer", "Data Analyst", "ML Engineer",
+  "AI Engineer", "Machine Learning Engineer",
+  "QA Engineer", "SDET", "Test Engineer",
+  "Cyber Security Engineer", "Security Analyst",
+  "Product Manager", "Technical Program Manager", "Project Manager",
+  "Business Analyst", "Solutions Architect", "Technical Lead",
+  "Engineering Manager", "Scrum Master",
+  "UI/UX Designer", "React Developer", "Python Developer",
+  "Java Developer", "Go Developer", ".NET Developer",
+  "Database Administrator", "Network Engineer", "System Administrator",
+];
+
+const POPULAR_LOCATIONS = [
+  "Bangalore", "Hyderabad", "Pune", "Mumbai", "Delhi NCR", "Chennai",
+  "Gurgaon", "Noida", "Kolkata", "Ahmedabad", "Jaipur", "Kochi",
+  "Remote", "Singapore", "Dubai", "London", "New York", "San Francisco",
+  "Toronto", "Berlin", "Amsterdam", "Sydney", "Melbourne",
+];
+
+function matchScore(query: string, option: string): number {
+  if (!query) return 0;
+  const q = query.toLowerCase();
+  const o = option.toLowerCase();
+  if (o === q) return 100;
+  if (o.startsWith(q)) return 90;
+  if (o.includes(q)) return 70;
+  const qWords = q.split(/\s+/);
+  const matchCount = qWords.filter(w => o.includes(w)).length;
+  return (matchCount / qWords.length) * 60;
+}
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
 export function PersonalizationCard({ onApply, isLoading, initialPreferences }: PersonalizationCardProps) {
@@ -72,7 +108,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch domains from backend with debounce
+  // Fetch domains from backend and merge with curated roles
   const fetchDomains = useCallback((query: string) => {
     if (roleDebounceRef.current) clearTimeout(roleDebounceRef.current);
     roleDebounceRef.current = setTimeout(async () => {
@@ -80,16 +116,35 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
       try {
         const res = await fetch(`${BACKEND_URL}/api/resume/domains?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-        setRoleSuggestions((data.domains || []).filter((d: string) => d !== role));
+        const dbDomains = (data.domains || []).filter((d: string) => d !== role);
+        // Merge curated + DB, dedupe, rank by relevance
+        const seen = new Set<string>();
+        const merged: { role: string; score: number }[] = [];
+        const add = (r: string) => {
+          const key = r.toLowerCase().trim();
+          if (seen.has(key)) return;
+          seen.add(key);
+          merged.push({ role: r, score: matchScore(query, r) });
+        };
+        CURATED_ROLES.forEach(add);
+        dbDomains.forEach(add);
+        if (query) {
+          merged.sort((a, b) => b.score - a.score);
+          setRoleSuggestions(merged.filter(r => r.score > 0).slice(0, 15).map(r => r.role));
+        } else {
+          setRoleSuggestions(merged.slice(0, 10).map(r => r.role));
+        }
       } catch {
-        setRoleSuggestions([]);
+        // Fallback to curated only
+        const fallback = CURATED_ROLES.filter(r => matchScore(query, r) > 0).slice(0, 15);
+        setRoleSuggestions(fallback.length > 0 ? fallback : CURATED_ROLES.slice(0, 10));
       } finally {
         setIsLoadingRoles(false);
       }
     }, 300);
   }, [role]);
 
-  // Fetch locations from backend with debounce
+  // Fetch locations from backend and merge with popular cities
   const fetchLocations = useCallback((query: string) => {
     if (locDebounceRef.current) clearTimeout(locDebounceRef.current);
     locDebounceRef.current = setTimeout(async () => {
@@ -97,20 +152,31 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
       try {
         const res = await fetch(`${BACKEND_URL}/api/resume/locations?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-        setLocationSuggestions((data.locations || []).filter((l: string) => !locations.includes(l)));
+        const dbLocations = data.locations || [];
+        const seen = new Set<string>();
+        const merged: { loc: string; score: number }[] = [];
+        const add = (l: string) => {
+          const key = l.toLowerCase().trim();
+          if (seen.has(key) || locations.some(il => il.toLowerCase() === key)) return;
+          seen.add(key);
+          merged.push({ loc: l, score: matchScore(query, l) });
+        };
+        POPULAR_LOCATIONS.forEach(add);
+        dbLocations.forEach(add);
+        if (query) {
+          merged.sort((a, b) => b.score - a.score);
+          setLocationSuggestions(merged.filter(r => r.score > 0).slice(0, 12).map(r => r.loc));
+        } else {
+          setLocationSuggestions(merged.slice(0, 8).map(r => r.loc));
+        }
       } catch {
-        setLocationSuggestions([]);
+        const fallback = POPULAR_LOCATIONS.filter(l => !locations.includes(l) && matchScore(query, l) > 0).slice(0, 12);
+        setLocationSuggestions(fallback.length > 0 ? fallback : POPULAR_LOCATIONS.filter(l => !locations.includes(l)).slice(0, 8));
       } finally {
         setIsLoadingLocations(false);
       }
     }, 300);
   }, [locations]);
-
-  // Load initial suggestions on mount
-  useEffect(() => {
-    fetchDomains('');
-    fetchLocations('');
-  }, []);
 
   const toggleItem = (list: string[], setList: (l: string[]) => void, item: string) => {
     if (list.includes(item)) {
@@ -184,7 +250,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
             </label>
             <div className="relative">
               <Input
-                placeholder="search roles..."
+                placeholder="e.g. DevOps Engineer"
                 value={role}
                 onChange={(e) => {
                   setRole(e.target.value);
@@ -210,18 +276,26 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                         <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                       </div>
                     ) : (
-                      (roleSuggestions || []).map((r) => (
-                        <div
-                          key={r}
-                          onClick={() => {
-                            setRole(r);
-                            setShowRoleSuggestions(false);
-                          }}
-                          className="p-4 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0"
-                        >
-                          {r}
-                        </div>
-                      ))
+                      <>
+                        {!role && (
+                          <div className="px-4 pt-3 pb-1 text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                            Popular Roles
+                          </div>
+                        )}
+                        {(roleSuggestions || []).map((r) => (
+                          <div
+                            key={r}
+                            onClick={() => {
+                              setRole(r);
+                              setShowRoleSuggestions(false);
+                            }}
+                            className="px-4 py-3 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0 flex items-center gap-2"
+                          >
+                            <Briefcase className="h-3 w-3 text-slate-300 shrink-0" />
+                            {r}
+                          </div>
+                        ))}
+                      </>
                     )}
                   </motion.div>
                 )}
@@ -300,7 +374,7 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
             </label>
             <div className="relative group">
               <Input
-                placeholder="search cities..."
+                placeholder="e.g. Bangalore, Remote"
                 value={locationInput}
                 onChange={(e) => {
                   setLocationInput(e.target.value);
@@ -330,20 +404,28 @@ export function PersonalizationCard({ onApply, isLoading, initialPreferences }: 
                     exit={{ opacity: 0, scale: 0.95 }}
                     className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden max-h-[240px] overflow-y-auto"
                   >
-                    {isLoadingLocations ? (
+                    {isLoadingLocations && locationSuggestions.length === 0 ? (
                       <div className="p-4 flex items-center justify-center text-slate-400">
                         <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                       </div>
                     ) : (
-                      (locationSuggestions || []).map((l) => (
-                        <div
-                          key={l}
-                          onClick={() => addLocation(l)}
-                          className="p-4 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0"
-                        >
-                          {l}
-                        </div>
-                      ))
+                      <>
+                        {!locationInput && (
+                          <div className="px-4 pt-3 pb-1 text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                            Popular Cities
+                          </div>
+                        )}
+                        {(locationSuggestions || []).map((l) => (
+                          <div
+                            key={l}
+                            onClick={() => addLocation(l)}
+                            className="px-4 py-3 hover:bg-indigo-50 cursor-pointer font-bold text-sm text-slate-600 transition-colors border-b border-slate-50 last:border-0 flex items-center gap-2"
+                          >
+                            <MapPin className="h-3 w-3 text-slate-300 shrink-0" />
+                            {l}
+                          </div>
+                        ))}
+                      </>
                     )}
                   </motion.div>
                 )}

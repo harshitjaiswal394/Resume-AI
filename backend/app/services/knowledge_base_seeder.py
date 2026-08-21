@@ -19,7 +19,7 @@ class KnowledgeBaseSeeder:
             "Mobile App Developer", "Android Developer", "iOS Developer",
             "React Developer", "Angular Developer", "Vue.js Developer", "Node.js Developer",
             "Python Developer", "Java Developer", "Golang Developer", "PHP Developer",
-            " .NET Developer", "Ruby on Rails Developer",
+            ".NET Developer", "Ruby on Rails Developer",
             
             # DevOps & Infrastructure
             "DevOps Engineer", "Senior DevOps Engineer", "Site Reliability Engineer",

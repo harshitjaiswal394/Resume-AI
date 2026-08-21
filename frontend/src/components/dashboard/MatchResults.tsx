@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   MapPin,
   Clock,
@@ -9,7 +9,8 @@ import {
   ChevronRight,
   Sparkles,
   Lock,
-  Briefcase
+  Briefcase,
+  Building2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,21 +30,46 @@ export function MatchResults({
   onSave,
   onGenerateCoverLetter
 }: MatchResultsProps) {
+  const [locationFilter, setLocationFilter] = useState<'all' | 'india' | 'international'>('all');
+
+  const INDIA_KEYWORDS = ['india', 'bangalore', 'bengaluru', 'hyderabad', 'pune', 'mumbai', 'chennai', 'delhi', 'noida', 'gurgaon', 'gurugram', 'kolkata', 'coimbatore', 'ahmedabad', 'jaipur', 'lucknow', 'indore', 'bhopal', 'chandigarh', 'mysore', 'visakhapatnam', 'patna', 'kochi', 'thiruvananthapuram', 'in,', 'in |', ', in', 'bangalore', 'south asia'];
+
+  const filteredMatches = (matches || []).filter((match: any) => {
+    if (locationFilter === 'all') return true;
+    const loc = (match.location || '').toLowerCase();
+    const isIndia = INDIA_KEYWORDS.some(kw => loc.includes(kw));
+    return locationFilter === 'india' ? isIndia : !isIndia;
+  });
+
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-[28px] font-black tracking-tight text-slate-900">Job Matches</h2>
           <p className="text-slate-500 font-medium">Based on your resume skills and target role — sorted by match %</p>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-slate-400 font-bold">Showing {matches.length} matches</span>
-          <Button variant="link" className="text-indigo-600 font-black p-0 uppercase text-xs tracking-widest">Upgrade for all</Button>
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-xl border border-slate-200 bg-white overflow-hidden">
+            {(['all', 'india', 'international'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setLocationFilter(f)}
+                className={`px-4 py-2 text-[12px] font-bold transition-colors ${
+                  locationFilter === f
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {f === 'all' ? 'All' : f === 'india' ? 'India' : 'International'}
+              </button>
+            ))}
+          </div>
+          <span className="text-slate-400 font-bold text-sm">{filteredMatches.length} matches</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {(matches || []).map((match, idx) => (
+        {filteredMatches.map((match: any, idx: number) => (
           <MatchCard
             key={idx}
             match={match}
@@ -58,11 +84,14 @@ export function MatchResults({
   );
 }
 
-import { useState } from 'react';
-import { Bookmark, BookmarkCheck } from 'lucide-react';
+import { Bookmark, BookmarkCheck, Wand2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 function MatchCard({ match, isLocked, onUpgrade, onSave, onGenerateCoverLetter }: any) {
   const [isSaving, setIsSaving] = useState(false);
+  const [showAllMatching, setShowAllMatching] = useState(false);
+  const [showAllMissing, setShowAllMissing] = useState(false);
+  const router = useRouter();
 
   const handleSave = async () => {
     if (onSave) {
@@ -88,64 +117,96 @@ function MatchCard({ match, isLocked, onUpgrade, onSave, onGenerateCoverLetter }
           </div>
 
           <div className="flex items-center gap-2 text-slate-400 font-bold text-[13px] flex-wrap">
+            {match.company && (
+              <>
+                <Building2 className="h-3 w-3" />
+                <span className="text-slate-600">{match.company}</span>
+                <span className="w-1 h-1 rounded-full bg-slate-200" />
+              </>
+            )}
             <MapPin className="h-3 w-3" />
             <span>{match.location || 'Remote'}</span>
             <span className="w-1 h-1 rounded-full bg-slate-200" />
-            <Briefcase className="h-3 w-3" />
-            <span>{match.domain || 'Tech'}</span>
-            <span className="w-1 h-1 rounded-full bg-slate-200" />
-            <Clock className="h-3 w-3" />
-            <span>{match.work_mode || 'Full-time'}</span>
+            <span>{match.domain || match.source || 'Tech'}</span>
           </div>
 
           <div className="flex items-center gap-3 mt-2">
-            {(match.salary_min || match.salary_range) && (
+            {match.salary_range && (
               <div className="flex items-center gap-1 text-emerald-600 font-bold text-xs">
                 <IndianRupee className="h-3 w-3" />
-                <span>{match.salaryRange || match.salary_range}</span>
+                <span>{match.salary_range}</span>
               </div>
-            )}
-            {match.source && (
-              <Badge className="bg-slate-100 text-slate-500 border-none px-2 py-0 h-5 font-black text-[9px] uppercase tracking-tighter">
-                Source: {match.source}
-              </Badge>
             )}
           </div>
         </div>
 
         <div className={`
             shrink-0 h-14 w-14 rounded-[20px] flex items-center justify-center font-black text-base shadow-inner border border-white/50
-            ${(match.matchScore || match.match_score) > 80 ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}
+            ${(match.matchScore ?? match.match_score ?? 0) > 80 ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}
           `}>
-          {match.matchScore || match.match_score}%
+          {match.matchScore ?? match.match_score ?? 0}%
         </div>
       </div>
 
       <div className="space-y-4 mb-6">
         <div className="flex justify-between items-end">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Match strength</p>
-          {match.similarity && (
+          {match.similarity != null && (
             <p className="text-[10px] font-black text-indigo-300">Vector Similarity: {(match.similarity * 100).toFixed(1)}%</p>
           )}
         </div>
         <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
           <div
-            className={`h-full transition-all duration-1000 ${(match.matchScore || match.match_score) > 80 ? 'bg-emerald-500' : 'bg-indigo-600'}`}
-            style={{ width: `${match.matchScore || match.match_score}%` }}
+            className={`h-full transition-all duration-1000 ${(match.matchScore ?? match.match_score ?? 0) > 80 ? 'bg-emerald-500' : 'bg-indigo-600'}`}
+            style={{ width: `${match.matchScore ?? match.match_score ?? 0}%` }}
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {(match.matchingSkills || match.matching_skills || []).map((skill: string) => (
-            <Badge key={`m-${skill}`} className="bg-emerald-50 text-emerald-600 border-none px-3 py-1 font-bold text-[11px] rounded-lg">
-              ✓ {skill}
-            </Badge>
-          ))}
-          {(match.missingSkills || match.missing_skills || []).map((skill: string) => (
-            <Badge key={`mis-${skill}`} className="bg-rose-50 text-rose-500 border-none px-3 py-1 font-bold text-[11px] rounded-lg">
-              + {skill}
-            </Badge>
-          ))}
+        <div className="space-y-2">
+          {(match.matchingSkills || match.matching_skills || []).length > 0 && (
+            <div>
+              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Matching</span>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {(match.matchingSkills || match.matching_skills || []).slice(0, showAllMatching ? undefined : 6).map((skill: string) => (
+                  <Badge key={`m-${skill}`} className="bg-emerald-50 text-emerald-600 border-none px-2.5 py-0.5 font-bold text-[10px] rounded-md">
+                    ✓ {skill}
+                  </Badge>
+                ))}
+                {(match.matchingSkills || match.matching_skills || []).length > 6 && !showAllMatching && (
+                  <button onClick={() => setShowAllMatching(true)} className="text-[10px] font-bold text-emerald-400 hover:text-emerald-600 self-center transition-colors cursor-pointer">
+                    +{(match.matchingSkills || match.matching_skills || []).length - 6} more
+                  </button>
+                )}
+                {showAllMatching && (match.matchingSkills || match.matching_skills || []).length > 6 && (
+                  <button onClick={() => setShowAllMatching(false)} className="text-[10px] font-bold text-emerald-400 hover:text-emerald-600 self-center transition-colors cursor-pointer">
+                    show less
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {(match.missingSkills || match.missing_skills || []).length > 0 && (
+            <div>
+              <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Missing</span>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {(match.missingSkills || match.missing_skills || []).slice(0, showAllMissing ? undefined : 4).map((skill: string) => (
+                  <Badge key={`mis-${skill}`} className="bg-rose-50 text-rose-500 border-none px-2.5 py-0.5 font-bold text-[10px] rounded-md">
+                    + {skill}
+                  </Badge>
+                ))}
+                {(match.missingSkills || match.missing_skills || []).length > 4 && !showAllMissing && (
+                  <button onClick={() => setShowAllMissing(true)} className="text-[10px] font-bold text-rose-400 hover:text-rose-600 self-center transition-colors cursor-pointer">
+                    +{(match.missingSkills || match.missing_skills || []).length - 4} more
+                  </button>
+                )}
+                {showAllMissing && (match.missingSkills || match.missing_skills || []).length > 4 && (
+                  <button onClick={() => setShowAllMissing(false)} className="text-[10px] font-bold text-rose-400 hover:text-rose-600 self-center transition-colors cursor-pointer">
+                    show less
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -153,16 +214,38 @@ function MatchCard({ match, isLocked, onUpgrade, onSave, onGenerateCoverLetter }
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-400">Apply on portal:</span>
-          {onGenerateCoverLetter && (
+          <div className="flex gap-1">
+            {onGenerateCoverLetter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50"
+                onClick={() => onGenerateCoverLetter(match)}
+              >
+                <Sparkles className="mr-1 h-3 w-3" /> Cover Letter
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50"
-              onClick={() => onGenerateCoverLetter(match)}
+              className="h-7 px-2 text-[10px] font-bold text-violet-600 hover:bg-violet-50"
+              onClick={() => {
+                const jdUrl = match.apply_url || match.apply_links?.linkedin || match.apply_links?.indeed || match.apply_links?.naukri || '';
+                const params = new URLSearchParams();
+                if (jdUrl) params.set('jdUrl', jdUrl);
+                if (match.job_title || match.role) params.set('title', match.job_title || match.role);
+                if (match.company) params.set('company', match.company);
+                const jdFallback = match.jd_text || match.description || '';
+                if (jdFallback) {
+                  sessionStorage.setItem('tailor_jd_fallback', jdFallback);
+                  params.set('hasJd', '1');
+                }
+                router.push(`/dashboard/tailor?${params.toString()}`);
+              }}
             >
-              <Sparkles className="mr-1 h-3 w-3" /> Cover Letter
+              <Wand2 className="mr-1 h-3 w-3" /> Tailor Resume
             </Button>
-          )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

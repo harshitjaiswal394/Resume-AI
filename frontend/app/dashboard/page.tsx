@@ -39,7 +39,9 @@ import {
   GraduationCap,
   Award,
   Wand2,
-  ShieldCheck
+  ShieldCheck,
+  Target,
+  TrendingUp
 } from 'lucide-react';
 import { AuthModal } from '@/components/common/AuthModal';
 import { ScoreGauge } from '@/components/resume/ScoreGauge';
@@ -156,6 +158,8 @@ export default function Dashboard() {
     experienceLevel: '1-3 years',
     location: ['Bangalore', 'Remote']
   });
+  const [keywordGap, setKeywordGap] = useState<any>(null);
+  const [reanalyzeRole, setReanalyzeRole] = useState<string>('');
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -373,13 +377,20 @@ export default function Dashboard() {
 
     setIsTailoring(true);
     setPreferences(newPrefs);
+    setReanalyzeRole(newPrefs.target_role || newPrefs.targetRole || '');
 
-    // Removed redundant toast loading as per user request
+    const loadingToast = toast.loading(`Analyzing resume for ${newPrefs.target_role || newPrefs.targetRole || 'role'}...`);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const response = await fetch(`${backendUrl}/api/resume/tailor`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           resumeId: selectedResume.id,
           userId: user?.id,
@@ -395,6 +406,8 @@ export default function Dashboard() {
       });
 
       const result = await response.json();
+      toast.dismiss(loadingToast);
+
       if (result.success) {
         const updatedResume = {
           ...selectedResume,
@@ -404,19 +417,21 @@ export default function Dashboard() {
 
         setSelectedResume(updatedResume);
 
-        // Sort matches by match_score descending
         const sortedMatches = [...(result.data.matches || [])].sort(
           (a: any, b: any) => (b.match_score || b.matchScore || 0) - (a.match_score || a.matchScore || 0)
         );
         setJobMatches(sortedMatches);
+        setKeywordGap(result.data.keyword_gap || null);
 
-        toast.success('Analysis updated successfully!', {
-          description: `Found ${sortedMatches.length} tailored job matches`,
+        const roleLabel = result.data.target_role || newPrefs.target_role || newPrefs.targetRole || '';
+        toast.success(`Re-analyzed for ${roleLabel}!`, {
+          description: `Score: ${result.data.analysis.score}/100 · ${sortedMatches.length} matches · ${result.data.keyword_gap?.top_missing?.length || 0} skill gaps found`,
         });
       } else {
         toast.error('Failed to update analysis');
       }
     } catch (err) {
+      toast.dismiss(loadingToast);
       toast.error('Failed to update analysis. Please try again.');
     } finally {
       setIsTailoring(false);
@@ -686,7 +701,11 @@ export default function Dashboard() {
               className="h-10 md:h-11 px-4 md:px-6 rounded-xl border-slate-200 font-bold text-xs md:text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all disabled:opacity-50 gap-2 flex-grow sm:flex-grow-0"
             >
               {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isTailoring ? 'Analysing...' : 'Re-analyze'}
+              {isTailoring
+                ? `Analyzing for ${preferences.target_role || preferences.targetRole || 'role'}...`
+                : (preferences.target_role || preferences.targetRole)
+                  ? `Re-analyze for ${preferences.target_role || preferences.targetRole}`
+                  : 'Re-analyze'}
             </Button>
             <Button
               onClick={() => router.push('/dashboard/builder')}
@@ -752,6 +771,65 @@ export default function Dashboard() {
                   />
                 </div>
               </div>
+
+              {/* Role Fit Summary (shown after Re-analyze) */}
+              {activeAnalysis?.roleFitSummary && reanalyzeRole && (
+                <div className="bg-gradient-to-r from-indigo-50 to-violet-50 rounded-[24px] p-6 border border-indigo-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-8 w-8 rounded-xl bg-indigo-100 flex items-center justify-center">
+                      <Target className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900">Role Fit: {reanalyzeRole}</h4>
+                      <p className="text-xs font-bold text-indigo-500">{activeScore}/100</p>
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-700 leading-relaxed">{activeAnalysis.roleFitSummary}</p>
+                </div>
+              )}
+
+              {/* Keyword Gap Panel (shown after Re-analyze) */}
+              {keywordGap && keywordGap.top_missing?.length > 0 && (
+                <div className="bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-indigo-600" />
+                      Keyword Gap Analysis
+                    </h4>
+                    <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-bold text-[10px]">
+                      {keywordGap.coverage_pct}% coverage ({keywordGap.total_covered}/{keywordGap.total_demanded})
+                    </Badge>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-4">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                      style={{ width: `${keywordGap.coverage_pct}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Missing from your resume</span>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {keywordGap.top_missing.map((item: any) => (
+                          <Badge key={item.skill} className="bg-rose-50 text-rose-500 border-none px-2 py-0.5 font-bold text-[10px] rounded-md">
+                            + {item.skill} <span className="text-rose-300 ml-1">×{item.demand_count}</span>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Already in your resume</span>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {keywordGap.top_found.map((item: any) => (
+                          <Badge key={item.skill} className="bg-emerald-50 text-emerald-600 border-none px-2 py-0.5 font-bold text-[10px] rounded-md">
+                            ✓ {item.skill} <span className="text-emerald-300 ml-1">×{item.demand_count}</span>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -29,12 +29,18 @@ export function CoverLetterModal({ isOpen, onClose, resume, jobMatch }: CoverLet
   const [coverLetter, setCoverLetter] = useState<string>('');
   const [isCopied, setIsCopied] = useState(false);
 
+  useEffect(() => {
+    setCoverLetter('');
+    setIsCopied(false);
+  }, [jobMatch?.id]);
+
   const handleGenerate = async () => {
     if (!resume || !jobMatch) return;
     
     setIsGenerating(true);
     try {
-      const letter = await generateCoverLetter(resume.parsed_data as ParsedResume, jobMatch.job_title);
+      const resumeData = resume.parsed_data || resume;
+      const letter = await generateCoverLetter(resumeData as ParsedResume, jobMatch.job_title, jobMatch.job_description);
       setCoverLetter(letter);
       
       // Save to database
