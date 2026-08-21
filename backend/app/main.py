@@ -1,6 +1,8 @@
 import uvicorn
 from dotenv import load_dotenv
 import os
+import uuid
+from contextvars import ContextVar
 
 # Load environment variables before any other imports
 load_dotenv() # checks backend/.env
@@ -10,17 +12,40 @@ import logging
 import asyncio
 import secrets
 import time
+import traceback
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-# Configure deep logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
-    handlers=[logging.StreamHandler()]
+# ── Context variable for per-request request_id (coroutine-safe) ─────────────
+_request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+# ── Structured Logging ────────────────────────────────────────────────────────
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+
+class _SafeFormatter(logging.Formatter):
+    """Formatter that reads request_id from a contextvar and defaults to '-'."""
+
+    def format(self, record):
+        record.request_id = _request_id_var.get("-")
+        return super().format(record)
+
+
+_formatter = _SafeFormatter(
+    fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(request_id)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
+_handler = logging.StreamHandler()
+_handler.setFormatter(_formatter)
+
+logging.root.handlers.clear()
+logging.root.addHandler(_handler)
+logging.root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+
 logger = logging.getLogger("resumatch-api")
 
 from app.api.endpoints import resume_router
@@ -46,10 +71,46 @@ app = FastAPI(
 instrument_app(app)
 
 
+# ── Global Exception Handler ──────────────────────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    req_id = getattr(request.state, "request_id", "-")
+    # Always log the full traceback server-side
+    logger.error("UNHANDLED %s %s | err=%s\n%s",
+                 request.method, request.url.path, exc, traceback.format_exc(),
+                 extra={"request_id": req_id})
+    # Never leak internals to the client
+    detail = "Internal server error"
+    status = 500
+    if isinstance(exc, HTTPException):
+        status = exc.status_code
+        detail = exc.detail
+    return JSONResponse(status_code=status, content={"detail": detail, "request_id": req_id})
+
+
 # Setup Background Scheduler
 scheduler = BackgroundScheduler()
 
 from app.security.metrics import HTTP_REQUESTS, HTTP_REQUEST_DURATION
+
+# ── Request ID + Security Headers Middleware ──────────────────────────────────
+@app.middleware("http")
+async def request_id_and_security_headers(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", "") or uuid.uuid4().hex[:12]
+    request.state.request_id = request_id
+    token = _request_id_var.set(request_id)
+    try:
+        response = await call_next(request)
+    finally:
+        _request_id_var.reset(token)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if _env == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
 
 
 @app.middleware("http")
@@ -286,6 +347,19 @@ async def security_status(request: Request):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.get("/health/ready")
+async def readiness_check():
+    """Readiness probe — confirms DB is reachable."""
+    from app.db import engine
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ready", "db": "ok"}
+    except Exception as e:
+        logger.error("READINESS_CHECK_FAILED | err=%s", e)
+        return JSONResponse(status_code=503, content={"status": "not_ready", "db": "unreachable"})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

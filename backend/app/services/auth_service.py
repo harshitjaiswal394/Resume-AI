@@ -69,7 +69,7 @@ class AuthService:
             return {"success": False, "error": "Auth service not configured"}
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
                     f"{self.supabase_url}/auth/v1/otp",
                     headers=self._anon_headers(),
@@ -96,7 +96,7 @@ class AuthService:
             return {"success": False, "error": "Auth service not configured"}
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
                     f"{self.supabase_url}/auth/v1/otp",
                     headers=self._anon_headers(),
@@ -128,7 +128,7 @@ class AuthService:
             else:
                 return {"success": False, "error": "Must provide email or phone"}
 
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
                     f"{self.supabase_url}/auth/v1/verify",
                     headers=self._anon_headers(),
@@ -163,7 +163,7 @@ class AuthService:
 
         try:
             redirect_url = os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000") + "/reset-password"
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
                     f"{self.supabase_url}/auth/v1/recover",
                     headers=self._anon_headers(),
@@ -185,7 +185,7 @@ class AuthService:
             return {"success": False, "error": "Auth service not configured"}
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(
                     f"{self.supabase_url}/auth/v1/user",
                     headers={

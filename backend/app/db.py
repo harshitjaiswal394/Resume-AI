@@ -13,7 +13,10 @@ logger = logging.getLogger("resumatch-api.db")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    logger.warning("DATABASE_URL not found. Using SQLite test database.")
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        logger.critical("DATABASE_URL not set in production — refusing to start")
+        raise RuntimeError("DATABASE_URL is required in production")
+    logger.warning("DATABASE_URL not found. Using SQLite test database (development only).")
     DATABASE_URL = "sqlite:///./test.db"
 
 engine_kwargs = {}
@@ -22,10 +25,18 @@ if DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {
         "check_same_thread": False
     }
+else:
+    # Connection pool tuning for PostgreSQL
+    engine_kwargs.update({
+        "pool_size": int(os.getenv("DB_POOL_SIZE", "10")),
+        "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "20")),
+        "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+        "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
+        "pool_pre_ping": True,
+    })
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
     future=True,
     **engine_kwargs,
 )
@@ -104,20 +115,26 @@ def execute_vector_search(embedding: list[float], limit: int = 50, filters: dict
                 clauses = []
                 for i, v in enumerate(val):
                     p_key = f"{key}_{i}"
-                    if column == "location":
+                    if column in ("location", "location_country"):
                         clauses.append(f"(location ILIKE :{p_key} OR location_country ILIKE :{p_key})")
                         params[p_key] = f"%{v}%"
+                    elif column == "domain":
+                        clauses.append(f"domain ILIKE :{p_key}")
+                        params[p_key] = f"%{v}%"
                     else:
-                        clauses.append(f"{column} = :{p_key}")
-                        params[p_key] = v
+                        clauses.append(f"{column} ILIKE :{p_key}")
+                        params[p_key] = f"%{v}%"
                 base_query += f" AND ({' OR '.join(clauses)}) "
             else:
-                if column == "location":
+                if column in ("location", "location_country"):
                     base_query += f" AND (location ILIKE :{key} OR location_country ILIKE :{key}) "
                     params[key] = f"%{val}%"
+                elif column == "domain":
+                    base_query += f" AND domain ILIKE :{key} "
+                    params[key] = f"%{val}%"
                 else:
-                    base_query += f" AND {column} = :{key} "
-                    params[key] = val
+                    base_query += f" AND {column} ILIKE :{key} "
+                    params[key] = f"%{val}%"
 
         add_filter("domain", "domain", filters.get("domain"))
         add_filter("work_mode", "work_mode", filters.get("work_mode"))
@@ -170,7 +187,7 @@ def execute_keyword_search(filters: dict = None, limit: int = 20, offset: int = 
     Returns a tuple (jobs, total).
     """
     filters = filters or {}
-    limit = max(1, min(int(limit), 50))
+    limit = max(1, min(int(limit), 200))
     offset = max(0, int(offset))
 
     base_query = """
@@ -191,7 +208,7 @@ def execute_keyword_search(filters: dict = None, limit: int = 20, offset: int = 
         """
         params["q"] = f"%{q}%"
 
-    def add_filter(column, key, val, exact=True):
+    def add_filter(column, key, val, exact=False):
         nonlocal base_query
         if not val:
             return
@@ -352,11 +369,11 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                         INSERT INTO job_matches (
                             resume_id, user_id, job_title, company, location,
                             match_score, matching_skills, missing_skills,
-                            ai_reasoning, apply_links, apply_url, created_at
+                            ai_reasoning, apply_links, apply_url, jd_text, created_at
                         ) VALUES (
                             :rid, :uid, :title, :company, :loc,
                             :score, :m_skills, :miss_skills,
-                            :reason, :links, :apply_url, NOW()
+                            :reason, :links, :apply_url, :jd_text, NOW()
                         )
                     """),
                     {
@@ -370,7 +387,8 @@ def persist_pipeline_results(user_id: str, resume_id: str, data: dict):
                         "miss_skills": m.get("missing_skills") or m.get("missingSkills") or [],
                         "reason": m.get("aiReasoning") or m.get("reasoning") or "Highly compatible matches.",
                         "links": json.dumps(m.get("apply_links") or {}),
-                        "apply_url": m.get("apply_url") or ""
+                        "apply_url": m.get("apply_url") or "",
+                        "jd_text": (m.get("description") or "")[:10000]
                     }
                 )
 

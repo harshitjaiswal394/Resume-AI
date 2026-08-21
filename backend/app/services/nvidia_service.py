@@ -43,7 +43,8 @@ class NvidiaService:
         
         self.client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
-            api_key=self.api_key_reasoning or "missing_key"
+            api_key=self.api_key_reasoning or "missing_key",
+            timeout=120.0,
         )
         
         self.rerank_url = "https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-nemotron-rerank-1b-v2/reranking"
@@ -535,7 +536,7 @@ Respond with ONLY the JSON object:"""
             "passages": passages
         }
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(self.rerank_url, headers=headers, json=payload, timeout=30.0)
                 response.raise_for_status()

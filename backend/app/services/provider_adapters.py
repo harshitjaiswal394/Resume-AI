@@ -299,7 +299,7 @@ class OpenAIProvider(BaseProvider):
     def __init__(self, model: str = "gpt-4o-mini"):
         super().__init__("openai", model)
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self.client = AsyncOpenAI(api_key=self.api_key) if self.api_key else None
+        self.client = AsyncOpenAI(api_key=self.api_key, timeout=120.0) if self.api_key else None
 
     async def complete(self, request: GatewayRequest) -> str:
         if not self.client:
@@ -383,7 +383,7 @@ class NvidiaProvider(BaseProvider):
         super().__init__("nvidia", model)
         self.api_key = os.getenv("NVIDIA_API_KEY_REASONING") or os.getenv("NVIDIA_API_KEY")
         self.base_url = os.getenv("NVIDIA_API_BASE", "https://integrate.api.nvidia.com/v1")
-        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url) if self.api_key else None
+        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url, timeout=120.0) if self.api_key else None
 
     async def complete(self, request: GatewayRequest) -> str:
         if not self.client:

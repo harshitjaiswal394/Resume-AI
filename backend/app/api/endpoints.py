@@ -116,10 +116,53 @@ async def _enforce_rate_limit(request: Request, user_id: Optional[str]) -> None:
         )
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
 
+
+def _compute_keyword_gap(matches: list, parsed_data: dict) -> dict:
+    """Compute keyword gap analysis from top matches vs user resume."""
+    if not matches:
+        return {"top_missing": [], "top_found": [], "coverage_pct": 0}
+
+    from collections import Counter
+    skill_freq = Counter()
+    for m in matches[:20]:
+        for s in (m.get("missing_skills") or []):
+            skill_freq[s.lower()] += 1
+
+    user_skills = set(s.lower() for s in (parsed_data.get("skills") or []))
+
+    top_missing = []
+    for skill, count in skill_freq.most_common(30):
+        if skill not in user_skills:
+            top_missing.append({"skill": skill, "demand_count": count})
+            if len(top_missing) >= 10:
+                break
+
+    # Skills the user already has that top jobs require
+    top_found = []
+    for skill, count in skill_freq.most_common(30):
+        if skill in user_skills:
+            top_found.append({"skill": skill, "demand_count": count})
+            if len(top_found) >= 10:
+                break
+
+    total_demanded = len(skill_freq)
+    covered = sum(1 for s in skill_freq if s in user_skills)
+    coverage_pct = int((covered / total_demanded) * 100) if total_demanded > 0 else 0
+
+    return {
+        "top_missing": top_missing,
+        "top_found": top_found,
+        "coverage_pct": coverage_pct,
+        "total_demanded": total_demanded,
+        "total_covered": covered,
+    }
+
+
 @resume_router.post("/tailor")
 async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = None, authorization: Optional[str] = Header(None)):
     """
-    Re-analyzes and re-matches based on user personalization (role, exp, location)
+    Role-aware re-analysis: re-scores the resume for a specific target role,
+    re-matches against the job DB with updated filters, and computes keyword gaps.
     """
     resume_id = payload.get("resumeId")
     authed_user_id = await _optional_user_id(authorization)
@@ -128,9 +171,6 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
         user_id = authed_user_id
     preferences = payload.get("preferences", {})
     parsed_data = payload.get("parsedData")
-    # Optional: the analysis already produced for this resume (e.g. the guest run).
-    # When present we skip the expensive re-analysis and only refresh matches.
-    existing_analysis = payload.get("existingAnalysis")
     existing_raw_text = payload.get("existingRawText") or ""
 
     _validate_payload_bytes(payload)
@@ -141,10 +181,9 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
     await _enforce_rate_limit(request, user_id)
 
     target_role = preferences.get("target_role") or preferences.get("targetRole") or "Software Engineer"
-    logger.info(f"Tailoring results for Resume: {resume_id}, Role: {target_role}")
+    logger.info(f"Re-analyzing for Resume: {resume_id}, Role: {target_role}")
     
     try:
-        # Define roles for matching
         roles = [target_role]
 
         filters = {
@@ -155,17 +194,13 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
             "days_old": preferences.get("days_old") or preferences.get("daysOld") or 25
         }
 
+        # Always run role-aware analysis + matching in parallel
+        analysis_task = asyncio.ensure_future(ai_service.analyze_resume(parsed_data, target_role=target_role))
         matches_task = asyncio.ensure_future(ai_service.generate_job_matches(parsed_data, roles, filters=filters))
-
-        if existing_analysis and isinstance(existing_analysis, dict):
-            logger.info(f"Reusing existing analysis (skipping expensive re-analysis) for Resume: {resume_id}")
-            analysis = existing_analysis
-            matches = await matches_task
-        else:
-            logger.info(f"Triggering parallel AI pipeline for Resume: {resume_id}")
-            analysis_task = asyncio.ensure_future(ai_service.analyze_resume(parsed_data))
-            # Await both simultaneously
-            analysis, matches = await asyncio.gather(analysis_task, matches_task)
+        analysis, matches = await asyncio.gather(analysis_task, matches_task)
+        
+        # Compute keyword gap analysis from top matches
+        keyword_gap = _compute_keyword_gap(matches, parsed_data)
         
         # Determine plan-based limit
         match_limit = 15
@@ -175,11 +210,11 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
                 with engine.connect() as conn:
                     from sqlalchemy import text
                     user_plan = conn.execute(text("SELECT plan FROM users WHERE id = :uid"), {"uid": user_id}).scalar()
-                    match_limit = 50 if user_plan == 'pro' else 15
+                    match_limit = 200 if user_plan == 'pro' else 50
             except:
-                pass # Fallback to 15
+                pass
         
-        # 3. Consolidate persistence
+        # Persistence
         if resume_id and resume_id != "guest":
             persist_pipeline_results(user_id, resume_id, {
                 "parsed_data": parsed_data,
@@ -192,11 +227,13 @@ async def tailor_resume(payload: Dict[str, Any] = Body(...), request: Request = 
             "success": True,
             "data": {
                 "analysis": analysis,
-                "matches": matches[:match_limit]
+                "matches": matches[:match_limit],
+                "keyword_gap": keyword_gap,
+                "target_role": target_role
             }
         }
     except Exception as e:
-        logger.error(f"Tailoring failed: {str(e)}")
+        logger.error(f"Re-analyze failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @resume_router.post("/cover-letter")
@@ -204,6 +241,7 @@ async def generate_cover_letter(payload: Dict[str, Any] = Body(...), request: Re
     """Generate a tailored cover letter using AI."""
     resume_data = payload.get("resume") or payload.get("resumeData")
     job_role = payload.get("jobRole") or payload.get("job_role", "Software Engineer")
+    job_description = payload.get("jobDescription") or payload.get("job_description", "")
     authed_user_id = await _optional_user_id(authorization)
     
     _validate_payload_bytes(payload)
@@ -214,7 +252,10 @@ async def generate_cover_letter(payload: Dict[str, Any] = Body(...), request: Re
     await _enforce_rate_limit(request, authed_user_id)
     
     try:
-        content = await ai_service.generate_cover_letter(resume_data, job_role)
+        if job_description and len(job_description) > 100:
+            content = await ai_service.generate_smart_cover_letter(resume_data, job_description)
+        else:
+            content = await ai_service.generate_cover_letter(resume_data, job_role)
         return {"success": True, "content": content}
     except Exception as e:
         logger.error(f"Cover letter generation failed: {str(e)}", exc_info=True)
@@ -243,10 +284,15 @@ async def generate_referral_message(payload: Dict[str, Any] = Body(...), request
         raise HTTPException(status_code=500, detail=str(e))
 
 @resume_router.get("/domains")
-async def get_domains(q: str = ""):
+async def get_domains(q: str = "", request: Request = None):
     """Returns distinct domains from the job_postings table for autocomplete."""
     from app.db import engine
     from sqlalchemy import text
+    if request:
+        ip = await get_client_ip(request)
+        rl = rate_limiter.check("search", ip=ip)
+        if not rl.allowed:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
     q = _clean_query(q)
     try:
         with engine.connect() as conn:
@@ -265,10 +311,15 @@ async def get_domains(q: str = ""):
         raise HTTPException(status_code=500, detail="Failed to fetch domains")
 
 @resume_router.get("/locations")
-async def get_locations(q: str = ""):
+async def get_locations(q: str = "", request: Request = None):
     """Returns distinct locations from the job_postings table for autocomplete."""
     from app.db import engine
     from sqlalchemy import text
+    if request:
+        ip = await get_client_ip(request)
+        rl = rate_limiter.check("search", ip=ip)
+        if not rl.allowed:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
     q = _clean_query(q)
     try:
         with engine.connect() as conn:
@@ -288,6 +339,7 @@ async def get_locations(q: str = ""):
 
 @resume_router.get("/search-jobs")
 async def search_jobs(
+    request: Request,
     q: str = "",
     location: str = "",
     work_mode: str = "",
@@ -306,8 +358,13 @@ async def search_jobs(
     so a single filter catches every Indian city.
     """
     from app.db import engine
+    # Rate limit: search is IP-only (guests use this too)
+    ip = await get_client_ip(request)
+    rl = rate_limiter.check("search", ip=ip)
+    if not rl.allowed:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again shortly.")
     q = (q or "").strip()[:MAX_QUERY_LEN]
-    limit = max(1, min(int(limit), 50))
+    limit = max(1, min(int(limit), 200))
     offset = max(0, int(offset))
     # 0 = "any time"; avoid the 25-day default by using a far window.
     days = max(1, min(int(days_old), 3650)) if days_old else 3650
