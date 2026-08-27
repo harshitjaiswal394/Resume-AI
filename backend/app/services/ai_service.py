@@ -15,8 +15,8 @@ class AIService:
     def __init__(self):
         self.models = {
             "primary": os.getenv("NIM_MODEL_REASONING", "nvidia/nemotron-3-super-120b-a12b"),
-            "fallback": "meta/llama-3.1-70b-instruct",
-            "parsing": os.getenv("NIM_MODEL_PARSING", "meta/llama-3.1-8b-instruct")
+            "fallback": os.getenv("NIM_MODEL_FALLBACK", "nvidia/nemotron-3-nano-30b-a3b"),
+            "parsing": os.getenv("NIM_MODEL_PARSING", "nvidia/nemotron-3-nano-30b-a3b")
         }
         logger.info("AIService initialized with NVIDIA NIM Pipeline Engine and Tiered Fallback")
 
@@ -78,6 +78,19 @@ class AIService:
         text = '\n'.join(result_lines)
         # Clean up multiple blank lines
         text = _re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
+
+    @staticmethod
+    def _extract_letter(text: str) -> str:
+        """Keep only the actual letter body, discarding leaked reasoning/analysis."""
+        if not text:
+            return text
+        import re as _re
+        # If the model dumped a plan/analysis before the greeting, cut to the
+        # first greeting. Case-insensitive so "dear"/"Dear" both match.
+        m = _re.search(r'(?i)Dear [Hh]iring [Mm]anager', text)
+        if m:
+            text = text[m.start():]
         return text.strip()
 
     async def _call_ai_with_fallback(self, prompt: str, system_prompt: str = None, temperature: float = 0.5) -> str:
@@ -499,14 +512,15 @@ class AIService:
         """Generate a professional cover letter from resume data and job role."""
         try:
             from app.services.nvidia_service import nvidia_service
-            
+
+            resume_data = resume_data or {}
             pruned = {
                 "name": resume_data.get("name", resume_data.get("fullName", "Candidate")),
                 "summary": resume_data.get("summary", ""),
-                "skills": resume_data.get("skills", [])[:15],
+                "skills": (resume_data.get("skills") or [])[:15],
                 "experience": [
-                    {"title": e.get("title", ""), "company": e.get("company", ""), "description": e.get("description", [])[:3]}
-                    for e in resume_data.get("experience", [])[:3]
+                    {"title": (e or {}).get("title", ""), "company": (e or {}).get("company", ""), "description": ((e or {}).get("description", []) or [])[:3]}
+                    for e in (resume_data.get("experience") or [])[:3]
                 ],
             }
 
@@ -522,18 +536,24 @@ CANDIDATE:
 Start with "Dear Hiring Manager," and end with "Sincerely," plus the candidate name.
 No bullet points. No labels. No thinking or planning text. Just the letter itself."""
 
-            response = await asyncio.to_thread(
-                nvidia_service.client.chat.completions.create,
-                model="meta/llama-3.1-8b-instruct",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.3,
-                max_tokens=2048
+            # Primary: Vertex AI Gemini (fast, high-quality). Fallback: NVIDIA.
+            content = await nvidia_service.generate_text_via_vertex(
+                user_prompt, system_prompt=system_prompt, temperature=0.3, max_tokens=8192
             )
-            content = self._get_completion_content(response)
+            if not content:
+                response = await asyncio.to_thread(
+                    nvidia_service.client.chat.completions.create,
+                    model=os.getenv("NIM_MODEL_PARSING", "nvidia/nemotron-3-nano-30b-a3b"),
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=2048
+                )
+                content = self._get_completion_content(response)
             content = self._strip_reasoning(content)
+            content = self._extract_letter(content)
             return content.strip() if content else "Failed to generate cover letter."
         except Exception as e:
             logger.error(f"Cover letter failed: {str(e)}")
@@ -542,23 +562,29 @@ No bullet points. No labels. No thinking or planning text. Just the letter itsel
     async def generate_smart_cover_letter(self, resume_data: Dict[str, Any], jd_text: str) -> str:
         """Generates a tailored letter matching candidate skills with JD using 8B model for speed."""
         
+        resume_data = resume_data or {}
         # Optimization: Prune payload to only include essentials (fullName, summary, top skills, top 2 exp)
         pruned_resume = {
             "name": resume_data.get("name", resume_data.get("fullName", "Candidate")),
             "summary": resume_data.get("summary", ""),
-            "skills": resume_data.get("skills", [])[:15],
+            "skills": (resume_data.get("skills") or [])[:15],
             "experience": [
                 {
-                    "title": exp.get("title", ""),
-                    "company": exp.get("company", ""),
-                    "description": exp.get("description", [])[:3]
-                } for exp in resume_data.get("experience", [])[:3]
+                    "title": (exp or {}).get("title", ""),
+                    "company": (exp or {}).get("company", ""),
+                    "description": ((exp or {}).get("description", []) or [])[:3]
+                } for exp in (resume_data.get("experience") or [])[:3]
             ]
         }
 
         system_prompt = (
-            "You write professional cover letters. "
-            "Return ONLY the finished letter. No planning, no analysis, no reasoning, no step-by-step thinking, no commentary."
+            "You are a professional cover letter writer. "
+            "Write the cover letter directly as your final answer. "
+            "CRITICAL: Your entire response must be ONLY the finished cover letter text — "
+            "start immediately with \"Dear Hiring Manager,\". "
+            "Do NOT show any analysis, mapping, reasoning, planning, lists, headings, "
+            "or commentary before or after the letter. No labels. Do not repeat the "
+            "job description back."
         )
         
         user_prompt = f"""Write a professional cover letter (250-350 words) tailored to this specific job.
@@ -580,30 +606,40 @@ Rules:
 - End with "Sincerely," followed by the candidate name from the profile.
 - Professional, confident tone. No bullet points. No generic filler.
 - Every sentence must reference something specific from either the resume or the JD.
-- Do NOT invent skills or experiences not present in the candidate profile."""
+- Do NOT invent skills or experiences not present in the candidate profile.
+- You MUST NOT write any planning, analysis, or reasoning. Output the letter only, starting directly with "Dear Hiring Manager,"."""
         
         try:
             start_time = time.time()
             from app.services.nvidia_service import nvidia_service
-            response = await asyncio.to_thread(
-                nvidia_service.client.chat.completions.create,
-                model="meta/llama-3.1-70b-instruct",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.3,
-                max_tokens=2048
+
+            # Primary: Vertex AI Gemini (fast, high-quality). Fallback: NVIDIA.
+            content = await nvidia_service.generate_text_via_vertex(
+                user_prompt, system_prompt=system_prompt, temperature=0.3, max_tokens=8192
             )
-            content = self._get_completion_content(response)
+            if not content:
+                response = await asyncio.to_thread(
+                    nvidia_service.client.chat.completions.create,
+                    model=os.getenv("NIM_MODEL_PARSING", "nvidia/nemotron-3-nano-30b-a3b"),
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=2048
+                )
+                content = self._get_completion_content(response)
             content = self._strip_reasoning(content)
+            # Guard against leaked thinking/analysis: keep only the letter body
+            # from the greeting onward.
+            content = self._extract_letter(content)
             latency = time.time() - start_time
-            
+
             if content:
-                logger.info(f"AI_COVER_LETTER_SUCCESS - Model: 8B - Latency: {latency:.2f}s")
+                logger.info(f"AI_COVER_LETTER_SUCCESS - Model: vertex-gemini - Latency: {latency:.2f}s")
                 return content.strip().strip('"').strip('`').strip()
             
-            # Fallback to standard pipeline if 8B returns nothing
+            # Fallback to standard pipeline if Vertex returns nothing
             content = await self._call_ai_with_fallback(user_prompt, system_prompt=system_prompt, temperature=0.1)
             return content or "Professional Cover Letter: [Generation error]"
         except Exception as e:
@@ -657,7 +693,7 @@ Rules:
             from app.services.nvidia_service import nvidia_service
             response = await asyncio.to_thread(
                 nvidia_service.client.chat.completions.create,
-                model="meta/llama-3.1-8b-instruct",
+                model=os.getenv("NIM_MODEL_PARSING", "nvidia/nemotron-3-nano-30b-a3b"),
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -699,7 +735,7 @@ Rules:
             from app.services.nvidia_service import nvidia_service
             response = await asyncio.to_thread(
                 nvidia_service.client.chat.completions.create,
-                model="meta/llama-3.1-8b-instruct",
+                model=os.getenv("NIM_MODEL_PARSING_JD", "nvidia/nemotron-3-nano-30b-a3b"),
                 messages=[
                     {"role": "system", "content": "You are a professional recruiting assistant specialized in JD cleaning. Extract core details only."},
                     {"role": "user", "content": prompt}
@@ -765,7 +801,7 @@ Rules:
             from app.services.nvidia_service import nvidia_service
             response = await asyncio.to_thread(
                 nvidia_service.client.chat.completions.create,
-                model="meta/llama-3.1-70b-instruct",
+                model=os.getenv("NIM_MODEL_PARSING", "nvidia/nemotron-3-nano-30b-a3b"),
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -800,13 +836,16 @@ Rules:
         """
         try:
             from app.services.nvidia_service import nvidia_service
+            # Use the configured parsing model (available on NVIDIA NIM). Only
+            # request json_object for llama-3.1 family models that support it.
+            parsing_model = os.getenv("NIM_MODEL_PARSING_JD", "nvidia/nemotron-3-nano-30b-a3b")
             response = await asyncio.to_thread(
                 nvidia_service.client.chat.completions.create,
-                model="meta/llama-3.1-8b-instruct",
+                model=parsing_model,
                 messages=[{"role": "system", "content": "You are a job data extraction API. Output ONLY JSON."},
                          {"role": "user", "content": prompt}],
                 temperature=0.1,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"} if "llama-3.1" in parsing_model else None
             )
             content = self._get_completion_content(response)
             return nvidia_service._clean_json(content) if content else {}

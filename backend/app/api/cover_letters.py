@@ -10,6 +10,7 @@ import logging
 import json
 import uuid
 import time
+import asyncio
 
 router = APIRouter()
 logger = logging.getLogger("resumatch-api.cover_letters")
@@ -90,6 +91,23 @@ async def generate_smart_cover_letter(payload: Dict[str, Any] = Body(...), reque
     if not resume_data and not resume_id:
         raise HTTPException(status_code=400, detail="Resume data or ID is required")
 
+    # If the client didn't supply the parsed resume, fall back to the saved one.
+    if not resume_data and resume_id and user_id != "guest":
+        try:
+            def _load_resume():
+                with engine.begin() as conn:
+                    row = conn.execute(
+                        text("SELECT parsed_data FROM resumes WHERE id = :rid AND user_id = :uid"),
+                        {"rid": resume_id, "uid": user_id}
+                    ).fetchone()
+                    return row
+            row = await asyncio.get_event_loop().run_in_executor(None, _load_resume)
+            if row and row.parsed_data:
+                resume_data = row.parsed_data if isinstance(row.parsed_data, dict) else json.loads(row.parsed_data)
+        except Exception as e:
+            logger.warning(f"Failed to load resume from DB for cover letter: {e}")
+
+    resume_data = resume_data or {}
     await _check_rate_limit(request, user_id)
     
     target_jd = jd_text

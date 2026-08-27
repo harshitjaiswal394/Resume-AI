@@ -168,7 +168,7 @@ If the request clearly targets resume analysis and no resume exists, the backend
 
 Model selection logic in `backend/app/api/chat_routes.py`:
 
-- `NIM_MODEL_CHAT` configures the NVIDIA model name, defaulting to `meta/llama-3.1-70b-instruct`
+- `NVIDIA_LLM_MODEL` configures the NVIDIA/Llama model name, defaulting to `meta/llama-3.3-70b-instruct` (the current meta/llama-3.1-* family is end-of-life on NIM)
 - `NIM_CHAT_FIRST` controls preference for NVIDIA
 - if `GEMINI_API_KEY` or `NEXT_PUBLIC_GEMINI_API_KEY` is present, Gemini models are added to the fallback list:
   - `gemini-1.5-flash-latest`

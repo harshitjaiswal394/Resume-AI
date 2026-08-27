@@ -9,7 +9,7 @@ from collections import OrderedDict
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 
-from app.services.json_utils import normalize_placeholders
+from app.services.json_utils import normalize_placeholders, parse_json_response
 
 logger = logging.getLogger("nvidia-service")
 
@@ -242,11 +242,31 @@ class NvidiaService:
 
     async def parse_resume(self, text: str) -> Dict[str, Any]:
         """
-        Parse raw resume text into structured JSON. Uses system/user message split
-        for reliable JSON output, with retry logic and smart fallback.
+        Parse raw resume text into structured JSON using a multi-provider chain.
+
+        PRIMARY:  Vertex AI Gemini (actively available, excellent JSON output).
+        FALLBACK: NVIDIA NIM (nemotron-3-nano, nemotron-3-super). The old
+                  meta/llama-3.1-* family is end-of-life (410 Gone) on NIM, so
+                  it was replaced by currently-available models.
+        LAST:     regex extraction.
         """
-        logger.info("Parsing resume using meta/llama-3.1-70b-instruct")
-        
+        # NVIDIA NIM fallback chain (only reached if Vertex fails). Uses models
+        # confirmed available/callable on the NVIDIA key — the old meta/llama-3.1
+        # family is end-of-life (410 Gone) and nemotron variants are 404 here.
+        model_chain = [
+            m.strip()
+            for m in os.getenv(
+                "NIM_MODEL_PARSING_CHAIN",
+                "nvidia/nemotron-3-nano-30b-a3b,"
+                "nvidia/nemotron-3-super-120b-a12b",
+            ).split(",")
+            if m.strip()
+        ]
+        if not model_chain:
+            model_chain = ["nvidia/nemotron-3-nano-30b-a3b", "nvidia/nemotron-3-super-120b-a12b"]
+
+        logger.info("Parsing resume (primary: Vertex AI Gemini)")
+
         system_msg = """You are a JSON-only data extraction API. You MUST respond with ONLY a valid JSON object representing the parsed resume. 
 No explanations, no markdown, no commentary. Do not cut off or truncate the response."""
         
@@ -280,56 +300,195 @@ Required JSON format:
 IMPORTANT: Use JSON null (no quotes) for missing values. Never output the literal string "null", "N/A", or "None". Empty text fields should use "".
 
 Respond with ONLY the JSON object:"""
-        
-        for attempt in range(2):
-            try:
-                messages = [
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": user_msg}
-                ]
-                
-                # On retry, use an even more forceful prompt
-                if attempt == 1:
-                    logger.warning("Retry attempt: using ultra-strict prompt")
-                    messages = [
-                        {"role": "system", "content": "You are a JSON API. Output ONLY valid JSON. No other text."},
-                        {"role": "user", "content": f'Convert to JSON: {{"fullName":"","email":"","phone":"","summary":"","skills":[],"experience":[],"education":[]}}\n\nResume:\n{text[:6000]}\n\nFill in the JSON fields from the resume above. Output ONLY the JSON:'}
-                    ]
-                
-                # First attempt: Use fast model (Llama 8B or Nano)
-                # Second attempt (retry): Use powerful model (Llama 70b)
-                current_model = "meta/llama-3.1-8b-instruct" if attempt == 0 else "meta/llama-3.1-70b-instruct"
-                
-                # Run the blocking SDK call in a thread so the event loop stays
-                # responsive (critical for SSE heartbeats during long parses).
-                response = await asyncio.to_thread(
-                    self.client.chat.completions.create,
-                    model=current_model,
-                    messages=messages,
-                    temperature=0.05,
-                    max_tokens=2048,
-                    response_format={"type": "json_object"} if "llama-3.1" in current_model else None
+
+        # ---- 1. PRIMARY: Vertex AI Gemini ----
+        vertex_model = os.getenv("VERTEX_PARSING_MODEL", "gemini-2.5-flash")
+        try:
+            if await self._ensure_vertex_client():
+                from google.genai import types as genai_types
+                # High output budget so detailed resumes aren't truncated
+                # (2048 tokens cut the JSON off mid-string, which then fails
+                # JSON cleaning).
+                response = await asyncio.wait_for(
+                    self._vertex_client.aio.models.generate_content(
+                        model=vertex_model,
+                        contents=user_msg,
+                        config=genai_types.GenerateContentConfig(
+                            system_instruction=system_msg,
+                            response_mime_type="application/json",
+                            temperature=0.05,
+                            max_output_tokens=8192,
+                        ),
+                    ),
+                    timeout=90.0,
                 )
-                
-                content = response.choices[0].message.content
-                logger.info(f"Parse attempt {attempt+1} response length: {len(content)} chars")
-                
-                parsed = normalize_placeholders(self._clean_json(content))
-                
+                content = (response.text or "").strip()
+                logger.info("Vertex parse response length: %d chars", len(content))
+                parsed = parse_json_response(content)
                 if parsed and parsed.get("fullName") and parsed.get("fullName") != "string":
-                    logger.info(f"Successfully parsed resume for: {parsed.get('fullName')}")
+                    logger.info(
+                        f"Successfully parsed resume for: {parsed.get('fullName')} "
+                        f"(model=vertex:{vertex_model})"
+                    )
                     return parsed
-                elif parsed:
-                    logger.warning(f"Parsed JSON has placeholder values, retrying...")
-                else:
-                    logger.warning(f"Empty JSON on attempt {attempt+1}, retrying...")
+
+                # ---- Vertex retry: ultra-strict prompt (forbid placeholders) ----
+                logger.info(
+                    "Vertex parse returned unusable JSON "
+                    "(fullName missing or literal placeholder) — retrying with "
+                    "ultra-strict prompt"
+                )
+                strict_prompt = (
+                    "Extract structured data from this resume into JSON.\n\n"
+                    "CRITICAL RULES:\n"
+                    "1. Only output real values found in the resume text.\n"
+                    "2. NEVER output the literal placeholder strings like \"string\", "
+                    "\"null\", \"none\", \"n/a\". If a value is missing, omit the key "
+                    "entirely or set it to real JSON null (not the word null).\n"
+                    "3. fullName MUST be the actual name from the resume. If no name "
+                    "is found, output \"Unknown Candidate\".\n"
+                    "4. Output a single valid JSON object. Do not truncate.\n\n"
+                    "RESUME TEXT:\n"
+                    f"{text[:10000]}\n\n"
+                    "Return ONLY valid JSON."
+                )
+                response = await asyncio.wait_for(
+                    self._vertex_client.aio.models.generate_content(
+                        model=vertex_model,
+                        contents=strict_prompt,
+                        config=genai_types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.05,
+                            max_output_tokens=8192,
+                        ),
+                    ),
+                    timeout=90.0,
+                )
+                content = (response.text or "").strip()
+                parsed = parse_json_response(content)
+                if parsed and parsed.get("fullName") and parsed.get("fullName") != "string":
+                    logger.info(
+                        f"Successfully parsed resume for: {parsed.get('fullName')} "
+                        f"(model=vertex:{vertex_model})"
+                    )
+                    return parsed
+
+                logger.warning("Vertex parse still unusable after retry — falling back")
+        except asyncio.TimeoutError:
+            logger.warning("Vertex parse timed out after 90s — falling back")
+        except Exception as e:
+            logger.warning(f"Vertex parse failed: {e} — falling back to NVIDIA")
+
+        # ---- 2. FALLBACK: NVIDIA NIM models ----
+        for current_model in model_chain:
+            for attempt in range(2):
+                try:
+                    messages = [
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": user_msg}
+                    ]
                     
-            except Exception as e:
-                logger.error(f"Parse attempt {attempt+1} failed: {str(e)}")
+                    # On retry, use an even more forceful prompt
+                    if attempt == 1:
+                        logger.warning("Retry attempt (%s): using ultra-strict prompt", current_model)
+                        messages = [
+                            {"role": "system", "content": "You are a JSON API. Output ONLY valid JSON. No other text."},
+                            {"role": "user", "content": f'Convert to JSON: {{"fullName":"","email":"","phone":"","summary":"","skills":[],"experience":[],"education":[]}}\n\nResume:\n{text[:6000]}\n\nFill in the JSON fields from the resume above. Output ONLY the JSON:'}
+                        ]
+                    
+                    # Only request json_object for models known to support it.
+                    supports_json_object = "llama-3.1" in current_model
+                    
+                    # Run the blocking SDK call in a thread so the event loop stays
+                    # responsive (critical for SSE heartbeats during long parses).
+                    response = await asyncio.to_thread(
+                        self.client.chat.completions.create,
+                        model=current_model,
+                        messages=messages,
+                        temperature=0.05,
+                        max_tokens=2048,
+                        response_format={"type": "json_object"} if supports_json_object else None
+                    )
+                    
+                    content = response.choices[0].message.content
+                    logger.info(
+                        f"Parse (%s, attempt %d) response length: %d chars",
+                        current_model, attempt + 1, len(content or "")
+                    )
+                    
+                    parsed = parse_json_response(content)
+                    
+                    if parsed and parsed.get("fullName") and parsed.get("fullName") != "string":
+                        logger.info(
+                            f"Successfully parsed resume for: {parsed.get('fullName')} (model={current_model})"
+                        )
+                        return parsed
+                    elif parsed:
+                        logger.warning(
+                            f"Parsed JSON has placeholder values (%s), retrying...", current_model
+                        )
+                    else:
+                        logger.warning(
+                            f"Empty JSON on attempt {attempt+1} (%s), retrying...", current_model
+                        )
+                        
+                except Exception as e:
+                    logger.error(f"Parse attempt {attempt+1} failed on {current_model}: {str(e)}")
+                    # A 410 (model EOL) or explicit "end of life" error won't be
+                    # fixed by retrying the same model — move to the next one.
+                    err = str(e)
+                    if "410" in err or "end of life" in err.lower() or "gone" in err.lower():
+                        break
         
-        # All attempts failed — use smart regex fallback
+        # ---- 3. LAST: regex fallback ----
         logger.warning("All AI parsing attempts failed, using regex fallback")
         return self._extract_fallback_data(text)
+
+    async def generate_text_via_vertex(
+        self,
+        prompt: str,
+        system_prompt: str = None,
+        temperature: float = 0.4,
+        max_tokens: int = 8192,
+    ) -> Optional[str]:
+        """Generate free-form text via Vertex AI Gemini (no JSON mode).
+
+        Returns the raw text, or None if Vertex is unavailable/fails so callers
+        can fall back to NVIDIA. Uses the same pre-warmed Vertex client as the
+        embedding/parsing paths.
+        """
+        model = os.getenv("VERTEX_GEN_MODEL", "gemini-2.5-flash")
+        try:
+            if await self._ensure_vertex_client():
+                from google.genai import types as genai_types
+                contents = prompt
+                config = {
+                    "temperature": temperature,
+                    "max_output_tokens": max_tokens,
+                }
+                if system_prompt:
+                    config["system_instruction"] = system_prompt
+                response = await asyncio.wait_for(
+                    self._vertex_client.aio.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        config=genai_types.GenerateContentConfig(**config),
+                    ),
+                    timeout=90.0,
+                )
+                text = (response.text or "").strip()
+                if text:
+                    logger.info(
+                        "Vertex text generation success (model=vertex:%s, %d chars)",
+                        model, len(text),
+                    )
+                    return text
+                logger.warning("Vertex text generation returned empty — falling back")
+        except asyncio.TimeoutError:
+            logger.warning("Vertex text generation timed out after 90s — falling back")
+        except Exception as e:
+            logger.warning(f"Vertex text generation failed: {e} — falling back")
+        return None
 
     async def generate_embedding(self, text: str) -> List[float]:
         """

@@ -44,7 +44,7 @@ def test_router_prefers_configured_provider_without_fallback():
 
 def test_router_keeps_provider_order_for_fallback_chain():
     primary = FakeProvider("vertex-gemini", "vertex", fail=True, model="gemini-2.5-flash")
-    fallback = FakeProvider("nvidia", "llama", fail=False, model="meta/llama-3.1-70b-instruct")
+    fallback = FakeProvider("nvidia", "llama", fail=False, model="meta/llama-3.3-70b-instruct")
     router = GatewayRouter(providers=[primary, fallback])
 
     response = asyncio.run(
@@ -52,5 +52,5 @@ def test_router_keeps_provider_order_for_fallback_chain():
     )
 
     assert response.provider == "nvidia"
-    assert response.model == "meta/llama-3.1-70b-instruct"
+    assert response.model == "meta/llama-3.3-70b-instruct"
     assert response.metadata["fallback_used"] is True

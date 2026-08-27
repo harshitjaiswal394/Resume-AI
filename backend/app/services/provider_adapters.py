@@ -14,7 +14,7 @@ logger = logging.getLogger("resumatch-ai.providers")
 
 DEFAULT_VERTEX_MODEL = os.getenv("VERTEX_GEMINI_MODEL", "gemini-2.5-flash")
 DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
-DEFAULT_LLAMA_MODEL = os.getenv("NVIDIA_LLM_MODEL", "meta/llama-3.1-70b-instruct")
+DEFAULT_LLAMA_MODEL = os.getenv("NVIDIA_LLM_MODEL", "nvidia/nemotron-3-super-120b-a12b")
 
 
 def _try_json(text: Any) -> Any:
