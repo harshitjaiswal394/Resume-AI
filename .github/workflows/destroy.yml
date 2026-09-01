@@ -11,6 +11,8 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-east1
+  REPOSITORY: resumatches-official
+  DOMAIN: jaiswal.shop
 
 # Required permissions for Workload Identity Federation
 permissions:
@@ -19,11 +21,11 @@ permissions:
 
 jobs:
   terraform-destroy:
-    name: "Terraform Destroy"
+    name: "Terraform Destroy (Root + Cloudflare)"
     if: ${{ github.event.inputs.confirm_destroy == 'DESTROY' }}
     runs-on: ubuntu-latest
     environment: dev
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -37,18 +39,45 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
+      # --- Destroy root stack (Cloud Run + LB + VPC + DNS, prefix=dev-state) ---
+      - name: Terraform Init (Root)
         run: terraform init
         working-directory: ./terraform
 
-      - name: Terraform Destroy
+      - name: Terraform Destroy (Root)
         run: |
           terraform destroy -auto-approve \
             -var="project_id=${{ env.PROJECT_ID }}" \
-            -var="domain_name=jaiswal.shop" \
+            -var="region=${{ env.REGION }}" \
+            -var="domain_name=${{ env.DOMAIN }}" \
             -var="database_url=${{ secrets.DATABASE_URL }}" \
             -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
             -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
             -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
-            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}"
+            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
+            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -var="image_tag=${{ github.sha }}"
         working-directory: ./terraform
+
+      # --- Destroy Cloudflare-managed stack (prefix=cloudflare-prod) ---
+      - name: Terraform Init (Cloudflare)
+        run: terraform init
+        working-directory: ./terraform/cloudflare
+
+      - name: Terraform Destroy (Cloudflare)
+        run: |
+          terraform destroy -auto-approve \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="region=${{ env.REGION }}" \
+            -var="repository=${{ env.REPOSITORY }}" \
+            -var="domain_name=${{ env.DOMAIN }}" \
+            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="nvidia_api_key_reasoning=${{ secrets.NVIDIA_API_KEY_REASONING }}" \
+            -var="nvidia_api_key_parsing=${{ secrets.NVIDIA_API_KEY_PARSING }}" \
+            -var="nvidia_api_key_embedding=${{ secrets.NVIDIA_API_KEY_EMBEDDING }}" \
+            -var="nvidia_api_key_reranking=${{ secrets.NVIDIA_API_KEY_RERANKING }}" \
+            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
+            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -var="image_tag=${{ github.sha }}"
+        working-directory: ./terraform/cloudflare
